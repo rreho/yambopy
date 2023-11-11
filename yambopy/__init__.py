@@ -122,3 +122,4 @@ from yambopy.data import *
 from yambopy.wannier import *
 from yambopy.wannier.w90io import *
 from yambopy.wannier.w90model import *
+from yambopy.wannier.coulombpot import *
