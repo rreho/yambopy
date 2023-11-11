@@ -165,3 +165,45 @@ class FortranFileR(fortio.FortranFile):
         except ValueError:
             print("File '{}' contains subrecords - using header_dtype='int32'".format(filename))
             super().__init__(filename, mode='r', header_dtype='int32', auto_endian=True, check_file=True)
+
+class HR():
+    """
+    HR.data[nrpts, num_wann,num_wann] = h_{Rmn}
+    """
+
+    def __init__(self, seedname, npar=multiprocessing.cpu_count()):
+        t0 = time()
+        f_hr_in = open(seedname + "_hr.dat", "r")
+        f_hr_in.readline()
+        self.num_wann = int(f_hr_in.readline())
+        self.nrpts = int(f_hr_in.readline())
+        # Skip degeneracy of Wigner-Seitz cell
+        for i in range(0,int(np.ceil(self.nrpts/15))):
+            f_hr_in.readline()
+        self.data = np.zeros((self.nrpts, self.num_wann,self.num_wann), dtype=complex)
+        block = self.num_wann**2
+        data = []
+        mult = 1
+        # FIXME: npar = 0 does not work
+        if npar > 0:
+            pool = multiprocessing.Pool(npar)
+        for j in range(0, self.nrpts, npar * mult):
+            x = list(islice(f_hr_in, int(block * npar * mult)))
+            if len(x) == 0: break
+            y = [x[i * block :(i + 1) * block] for i in range(npar * mult) if (i + 1) * block <= len(x)]
+            if npar > 0:
+                data += pool.map(convert, y)
+            else:
+                data += [convert(z) for z in y]
+
+        if npar > 0:
+            pool.close()
+            pool.join()
+        f_hr_in.close()
+        t1 = time()
+        HR_mn = [d[:, 5] + 1j * d[:, 6] for d in data]
+        iHR_mn = [d[:,0:5] for d in data]
+        self.HR_mn = np.array(HR_mn).reshape(self.nrpts, self.num_wann, self.num_wann)
+        self.iHR_mn = np.array(iHR_mn).reshape(self.nrpts,self.num_wann,self.num_wann,5)
+        t2 = time()
+        print("Time for MMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))

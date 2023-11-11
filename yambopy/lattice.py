@@ -196,3 +196,6 @@ def bravais_types(lats,alat_0):
          
             if np.allclose(lats_[2],[0.,0.,lats_[2,2] ]): return bravais_types[1]
 
+def modvec(kpt1, kpt2):
+    # Compute the modulus of the vector difference between kpt1 and kpt2
+    return np.linalg.norm(np.array(kpt1) - np.array(kpt2))
