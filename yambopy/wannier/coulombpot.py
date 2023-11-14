@@ -15,7 +15,7 @@ class CoulombPotentials:
     pi = np.pi
 
     def __init__(self, ngrid, lattice, tolr=0.001, ediel=[1.0,1.0,1.0]):
-        print('''Warning! CoulombPotentials works with atomic units and return energy in Hartree \n
+        print('''Warning! CoulombPotentials works with atomic units and return energy in eV \n
                 Check consistency of units in the methods, they have not been properly tested
               ''')
         #lattice is an instance of YamboLatticeDb
@@ -23,7 +23,8 @@ class CoulombPotentials:
         self.lattice = lattice
         self.rlat = lattice.lat
         self.tolr = tolr
-        self.r_vol = lattice.rlat_vol
+        self.dir_vol = lattice.lat_vol
+        self.rec_vol = lattice.rlat_vol
         self.ediel = ediel # ediel(1) Top substrate, ediel(2) \eps_d, ediel(3) Bot substrate     
 
     def v2dk(self, kpt1, kpt2, lc, tolr):
@@ -36,7 +37,8 @@ class CoulombPotentials:
         ediel = self.ediel
         a0 = self.lattice.alat[0]/2+self.lattice.alat[1]/2
         modk = modvec(kpt1, kpt2)
-        vc = self.r_vol
+        #compute area of unit cell
+        vc = np.linalg.norm(np.cross(self.lattice.alat[0],self.lattice.alat[1]))
 
         r0 = ((ediel[1] - 1.0) * lc) / (ediel[0] + ediel[2])
         vbz = 1.0 / (np.prod(self.ngrid) * vc)
@@ -46,26 +48,26 @@ class CoulombPotentials:
 
         if modk < tolr:
             # here factor 2.0*self.pi gets divided by 2*pi
-            v2dk = vbz * (ed) * (a0 * np.sqrt(gridaux1) ) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2)
+            v2dk = vbz * (a0 * np.sqrt(gridaux1)/ed ) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2)
         else:
             v2dk = vbz * (2.0*self.pi/ed) * (1.0 / (modk * (1.0 + r0 * modk)))
 
-        return v2dk
+        return v2dk*ha2ev
 
     def vcoul(self, kpt1, kpt2):
         modk = modvec(kpt1, kpt2)
-        vbz = 1.0 / (np.prod(self.ngrid) * self.r_vol)
+        vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
         ed = self.ediel(2)  # The dielectric constant is set to 1.0
 
         if modk < self.tolr:
             vcoul = 0.0
         else:
-            vcoul = vbz * (4*self.pi / ed) * (1.0 / (modk ** 2))
+            vcoul = vbz * (2*self.pi / ed) * (1.0 / (modk ** 2))
 
-        return vcoul
+        return vcoul*ha2ev
 
     def v2dt(self, kpt1, kpt2):
-        vc = self.r_vol
+        vc = self.dir_vol
         vbz = 1.0 / (np.prod(self.ngrid) * vc)
         vkpt = np.array(kpt1) - np.array(kpt2)
         gz = abs(vkpt[2])
@@ -86,13 +88,13 @@ class CoulombPotentials:
             aux5 = np.cos(aux3)
             v2dt = (vbz * 2*self.pi) * (factor / modk**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
 
-        return v2dt
+        return v2dt*ha2ev
 
     def v2dt2(self, kpt1, kpt2, lc):
         modk = modvec(kpt1, kpt2)
         
         # Volume of the Brillouin zone
-        vbz = 1.0 / (np.prod(self.ngrid) * self.r_vol)
+        vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
         
         # Difference between k-points
         vkpt = np.array(kpt1) - np.array(kpt2)
@@ -109,14 +111,14 @@ class CoulombPotentials:
         else:
             v2dt2 = (vbz * 2*self.pi) * (factor / modk**2) * (1.0 - np.exp(-0.5 * qxy * lc) * np.cos(0.5 * lc * vkpt[2]))
         
-        return v2dt2
+        return v2dt2*ha2ev
 
     def v2drk(self, kpt1, kpt2, lc, ez, w, r0):
         
         # Compute the volume of the cell and modulus of the k-point difference
         modk = modvec(kpt1, kpt2)
 
-        vbz = 1.0 / (np.prod(self.ngrid) * self.r_vol)
+        vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
 
         epar = self.ediel[1]
         et = self.ediel[0]
@@ -139,4 +141,4 @@ class CoulombPotentials:
 
             v2drk = (vbz * 2.0 * self.pi) * np.exp(-modk * w) * (1.0 / ew) * (1.0 / modk)
 
-        return v2drk
+        return v2drk*ha2ev
