@@ -166,7 +166,7 @@ class FortranFileR(fortio.FortranFile):
             print("File '{}' contains subrecords - using header_dtype='int32'".format(filename))
             super().__init__(filename, mode='r', header_dtype='int32', auto_endian=True, check_file=True)
 
-class HR():
+class HR(W90_data):
     """
     HR.data[nrpts, num_wann,num_wann] = h_{Rmn}
     """
@@ -177,9 +177,12 @@ class HR():
         f_hr_in.readline()
         self.num_wann = int(f_hr_in.readline())
         self.nrpts = int(f_hr_in.readline())
-        # Skip degeneracy of Wigner-Seitz cell
+        # degeneracy of Wigner-Seitz cell
+        ws_deg = []
         for i in range(0,int(np.ceil(self.nrpts/15))):
-            f_hr_in.readline()
+            ws_deg = np.append(ws_deg, f_hr_in.readline().split())
+        self.ws_deg = list(map(int,ws_deg))
+
         self.data = np.zeros((self.nrpts, self.num_wann,self.num_wann), dtype=complex)
         block = self.num_wann**2
         data = []
@@ -205,5 +208,7 @@ class HR():
         iHR_mn = [d[:,0:5] for d in data]
         self.HR_mn = np.array(HR_mn).reshape(self.nrpts, self.num_wann, self.num_wann)
         self.iHR_mn = np.array(iHR_mn).reshape(self.nrpts,self.num_wann,self.num_wann,5)
+        newhop = self.iHR_mn[:,:,:,0:3].reshape(self.nrpts*self.num_wann**2,3)
+        self.hop = newhop[::self.num_wann**2]
         t2 = time()
         print("Time for MMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))

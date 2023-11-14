@@ -120,6 +120,10 @@ from yambopy.data import *
 
 #wannier files
 from yambopy.wannier import *
-from yambopy.wannier.w90io import *
-from yambopy.wannier.w90model import *
+from yambopy.wannier.wann_tb_mp import *
+from yambopy.wannier.wann_Gfuncs import *
+from yambopy.wannier.wann_utils import *
+from yambopy.wannier.wann_io import *
 from yambopy.wannier.coulombpot import *
+from yambopy.wannier.wann_model import *
+from yambopy.wannier.wann_dipoles import *
