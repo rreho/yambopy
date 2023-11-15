@@ -127,3 +127,4 @@ from yambopy.wannier.wann_io import *
 from yambopy.wannier.coulombpot import *
 from yambopy.wannier.wann_model import *
 from yambopy.wannier.wann_dipoles import *
+from yambopy.wannier.wann_H2p import *

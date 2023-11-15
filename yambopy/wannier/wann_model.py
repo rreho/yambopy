@@ -12,7 +12,7 @@ from time import time
 import typing as ty
 from yambopy.wannier.wann_tb_mp import tb_Monkhorst_Pack
 from yambopy.wannier.wann_Gfuncs import GreensFunctions
-from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T
+from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T, sort_eig
 from yambopy.wannier.wann_dipoles import TB_dipoles
 class TBMODEL(tbmodels.Model):
     '''
@@ -43,7 +43,7 @@ class TBMODEL(tbmodels.Model):
         self.eigvec = np.zeros((self.nk,self.nb,self.nb),dtype=np.complex128)
         for ik in range(self.nk):
             (self.eigv[ik], self.eigvec[ik]) = np.linalg.eigh(self.H_k[ik])
-            (self.eigv[ik],self.eigvec[ik]) = self._sort_eig(self.eigv[ik],self.eigvec[ik])
+            (self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
         # transpose to have eigvec[:,i] associated with eval[i]
         # one could transpose it to have the opposite, for now commented out bcs I don't like it
         #self.eig = self.eig.T
@@ -76,7 +76,7 @@ class TBMODEL(tbmodels.Model):
         self.eigvec = np.zeros((self.nk,self.nb,self.nb),dtype=np.complex128)
         for ik in range(self.nk):
             (self.eigv[ik], self.eigvec[ik]) = np.linalg.eigh(self.H_k[ik])
-            (self.eigv[ik],self.eigvec[ik]) = self._sort_eig(self.eigv[ik],self.eigvec[ik])
+            #(self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
         
         self._get_occupations(self.nk, self.nb, self.eigv, fermie)
         self._reshape_eigvec(self.nk, self.nb, self.f_kn, self.eigv, self.eigvec)
@@ -90,7 +90,7 @@ class TBMODEL(tbmodels.Model):
         # To-do should I check for the spin case?
 
         t1 = time()
-        print(f'Diagonalization took {t1-t0:.3f} sec')
+        print(f'Diagonalization took {t1-t0:.3f} s')
 
     @classmethod
     def get_pos_from_ham(self, lat, hr, from_hr = True):
@@ -205,20 +205,6 @@ class TBMODEL(tbmodels.Model):
         ''' 
         pass
     
-
-
-    @classmethod
-    def _sort_eig(cls,eigv,eigvec=None):
-        "Sort eigenvaules and eigenvectors, if given, and convert to real numbers"
-        # first take only real parts of the eigenvalues
-        eigv=np.array(eigv.real,dtype=float)
-        # sort energies
-        args=eigv.argsort()
-        eigv=eigv[args]
-        if not (eigvec is None):
-            eigvec=eigvec[args]
-            return (eigv,eigvec)
-        return eigv
     
     @classmethod
     def _reshape_eigvec(cls, nk, nb, f_kn, eigv, eigvec):
@@ -253,47 +239,50 @@ class TBMODEL(tbmodels.Model):
                 for ic in range(0,self.nc):
                         T_table[t_index] = [ik, iv, self.nv+ic]
                         t_index += 1
+        self.ntransitions = ntransitions
         self.T_table = T_table
 
-    def get_eps_0(self, hlm, emin, emax, estep, eta, eigvecv, eigvecc):
-        w = np.arange(emin,emax,estep,dtype=np.float32)
-        chi = np.zeros(len(w), dtype=np.complex128)
-        F_kcv = np.zeros((3,3), dtype=np.complex128)
-        eps_0 = np.zeros((len(w),3,3), dtype=np.complex128)
-        E_0 = np.min(np.min(self.eigvc)-np.max(self.eigvv))
-        for i in range(eps_0.shape[0]):
-            np.fill_diagonal(eps_0[i,:,:], 1)
-        # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
-        dipoles = TB_dipoles(self.nk*self.nv*self.nc, self.nc, self.nv, self.nk,self.eigv,self.eigvec, eta, hlm, self.T_table).dipoles
-        for ik in range(0,self.nk):
-            for iv in range(self.nv):
-                for ic in range(self.nv,self.nc+self.nv):
-                    #E = self.eigv[k,c] - self.eigv[k,v]
-                    #GFs = GreensFunctions(w,E,eta)
-                    #GR = GFs.G_retarded()
-                    #GA = GFs.G_advanced()
-                    factorRx = dipoles[ik,ic,iv,0]#1/(E +1j*eta)*np.dot(eigvecc[k,:,c].conj().T,np.dot(hlm[k,:,:,0],eigvecv[k,:,v]))
-                    factorLx = factorRx.conj() 
-                    factorRy = dipoles[ik,ic,iv,1]#1/(E +1j*eta)*np.dot(eigvecc[k,:,c].conj().T,np.dot(hlm[k,:,:,1],eigvecv[k,:,v]))
-                    factorLy = factorRy.conj() 
-                    factorRz = dipoles[ik,ic,iv,2]#1/(E +1j*eta)*np.dot(eigvecc[k,:,c].conj().T,np.dot(hlm[k,:,:,2],eigvecv[k,:,v]))
-                    factorLz = factorRz.conj() 
-                    F_kcv[0,0] = F_kcv[0,0] + factorRx*factorLx
-                    F_kcv[0,1] = F_kcv[0,1] + factorRx*factorLy
-                    F_kcv[0,2] = F_kcv[0,2] + factorRx*factorLz
-                    F_kcv[1,0] = F_kcv[1,0] + factorRy*factorLx
-                    F_kcv[1,1] = F_kcv[1,1] + factorRy*factorLy
-                    F_kcv[1,2] = F_kcv[1,2] + factorRy*factorLz                    
-                    F_kcv[2,0] = F_kcv[2,0] + factorRz*factorLx
-                    F_kcv[2,1] = F_kcv[2,1] + factorRz*factorLy
-                    F_kcv[2,2] = F_kcv[2,2] + factorRz*factorLz  
-        for ies, es in enumerate(w):
-            eps_0[ies,:,:] += 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[:,:]*(E_0-es)/(np.abs(es-E_0)**2+eta**2) \
-                           + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[:,:]*(eta)/(np.abs(es-E_0)**2+eta**2) 
-        print('Direct Ground state: ',E_0, ' [eV]')
-        # self.w = w
-        # self.eps_0 = eps_0
-        return w, eps_0
+    # def get_eps_0(self, hlm, emin, emax, estep, eta):
+    #     '''
+    #     Compute microscopic dielectric function at the IP level (no exc weights)
+    #     dipole_left/right = l/r_residuals.
+    #     \eps_{\alpha\beta} = 1 + \sum_{kcv} dipole_left*dipole_right*(GR + GA)
+    #     '''        
+    #     w = np.arange(emin,emax,estep,dtype=np.float32)
+    #     F_kcv = np.zeros((self.ntransitions,3,3), dtype=np.complex128)
+    #     eps_0 = np.zeros((len(w),3,3), dtype=np.complex128)
+    #     E_0 = np.min(np.min(self.eigvc)-np.max(self.eigvv))
+    #     for i in range(eps_0.shape[0]):
+    #         np.fill_diagonal(eps_0[i,:,:], 1)
+    #     # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
+    #     dipoles = TB_dipoles(self.nk*self.nv*self.nc, self.nc, self.nv, self.nk,self.eigv,self.eigvec, eta, hlm, self.T_table).dipoles
+    #     for t in range(0,self.ntransitions):
+    #         ik = self.T_table[t][0]
+    #         iv = self.T_table[t][1]
+    #         ic = self.T_table[t][2]
+    #         factorRx = dipoles[ik,ic,iv,0]#1/(E +1j*eta)*np.dot(eigvecc[k,:,c].conj().T,np.dot(hlm[k,:,:,0],eigvecv[k,:,v]))
+    #         factorLx = factorRx.conj() 
+    #         factorRy = dipoles[ik,ic,iv,1]#1/(E +1j*eta)*np.dot(eigvecc[k,:,c].conj().T,np.dot(hlm[k,:,:,1],eigvecv[k,:,v]))
+    #         factorLy = factorRy.conj() 
+    #         factorRz = dipoles[ik,ic,iv,2]#1/(E +1j*eta)*np.dot(eigvecc[k,:,c].conj().T,np.dot(hlm[k,:,:,2],eigvecv[k,:,v]))
+    #         factorLz = factorRz.conj() 
+    #         F_kcv[t,0,0] = F_kcv[t,0,0] + factorRx*factorLx
+    #         F_kcv[t,0,1] = F_kcv[t,0,1] + factorRx*factorLy
+    #         F_kcv[t,0,2] = F_kcv[t,0,2] + factorRx*factorLz
+    #         F_kcv[t,1,0] = F_kcv[t,1,0] + factorRy*factorLx
+    #         F_kcv[t,1,1] = F_kcv[t,1,1] + factorRy*factorLy
+    #         F_kcv[t,1,2] = F_kcv[t,1,2] + factorRy*factorLz                    
+    #         F_kcv[t,2,0] = F_kcv[t,2,0] + factorRz*factorLx
+    #         F_kcv[t,2,1] = F_kcv[t,2,1] + factorRz*factorLy
+    #         F_kcv[t,2,2] = F_kcv[t,2,2] + factorRz*factorLz  
+    #     for ies, es in enumerate(w):
+    #         for t in range(0,self.dimbse):
+    #             eps_0[ies,:,:] += 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(E_0-es)/(np.abs(E_0-self.h2peigv[t])**2+eta**2) \
+    #                 + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-E_0)**2+eta**2) 
+    #     print('Direct Ground state: ',E_0, ' [eV]')
+    #     # self.w = w
+    #     # self.eps_0 = eps_0
+    #     return w, eps_0
 
     @classmethod
     def _get_occupations(cls, nk, nb, eigv, fermie):
