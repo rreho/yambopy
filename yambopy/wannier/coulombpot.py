@@ -27,7 +27,7 @@ class CoulombPotentials:
         self.rec_vol = lattice.rlat_vol
         self.ediel = ediel # ediel(1) Top substrate, ediel(2) \eps_d, ediel(3) Bot substrate     
 
-    def v2dk(self, kpt1, kpt2, lc, tolr):
+    def v2dk(self, kpt1, kpt2, lc):
         pass
         #TO-DO implement alat2D
         #constants -> See paper in WantiBexos doc
@@ -46,7 +46,7 @@ class CoulombPotentials:
         auxi = (2.0 * self.pi * r0) / (a0 * np.sqrt(gridaux1))
         ed = (ediel[0] + ediel[2]) / 2.0
 
-        if modk < tolr:
+        if modk < self.tolr:
             # here factor 2.0*self.pi gets divided by 2*pi
             v2dk = vbz * (a0 * np.sqrt(gridaux1)/ed ) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2)
         else:
@@ -113,7 +113,7 @@ class CoulombPotentials:
         
         return v2dt2*ha2ev
 
-    def v2drk(self, kpt1, kpt2, lc, ez, w, r0):
+    def v2drk(self, kpt1, kpt2, lc, w, r0):
         
         # Compute the volume of the cell and modulus of the k-point difference
         modk = modvec(kpt1, kpt2)
@@ -121,9 +121,9 @@ class CoulombPotentials:
         vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
 
         epar = self.ediel[1]
-        et = self.ediel[0]
-        eb = self.ediel[2]
-
+        et = self.ediel[1]
+        eb = self.ediel[0]
+        ez = self.ediel[2]
         eta = np.sqrt(epar / ez)
         kappa = np.sqrt(epar * ez)
 
@@ -142,7 +142,34 @@ class CoulombPotentials:
             v2drk = (vbz * 2.0 * self.pi) * np.exp(-modk * w) * (1.0 / ew) * (1.0 / modk)
 
         return v2drk*ha2ev
+    
+    def v0dt(self,kpt1,ktp2):
 
+        vbz = 1.0/(np.prod(self.ngrid)*self.dir_vol)
+        modk = modvec(kpt1,kpt2)
+        rmin = np.min(np.linalg.norm(self.lattice.lat,axis=1))
+        cr = 0.5 * rmin
+
+        factor = 1.0
+
+        if modk < self.tolr:
+            v0dt = 2*self.pi*vbz*cr**2
+        else:
+            v0dt = 2*self.pi*vbz*factor/(modk**2)*(1-np.cos(cr*modk))
+        return v0dt
+
+    def v2doh(self, kpt1, kpt2, w):
+
+        vbz = 1.0/(np.prod(self.ngrid)*self.dir_vol)
+        modk = modvec(kpt1,kpt2)
+        ez = self.ediel[2]
+
+        if modk < self.tolr:
+            v2doh = 0.0
+        else :
+            v2doh = 2*self.pi*vbz*np.exp(-w*modk)*(1.0/(ez*modk))
+        return v2doh
+    
     def v2dt_vectorized(self, k_diffs):
         # this function might be useful to avoid do loops
         vc = self.dir_vol
