@@ -242,58 +242,9 @@ class TBMODEL(tbmodels.Model):
         self.ntransitions = ntransitions
         self.T_table = T_table
 
-    # def get_eps_0(self, hlm, emin, emax, estep, eta):
-    #     '''
-    #     Compute microscopic dielectric function at the IP level (no exc weights)
-    #     dipole_left/right = l/r_residuals.
-    #     \eps_{\alpha\beta} = 1 + \sum_{kcv} dipole_left*dipole_right*(GR + GA)
-    #     '''        
-    #     w = np.arange(emin,emax,estep,dtype=np.float32)
-    #     F_kcv = np.zeros((self.ntransitions,3,3), dtype=np.complex128)
-    #     eps_0 = np.zeros((len(w),3,3), dtype=np.complex128)
-    #     E_0 = np.min(np.min(self.eigvc)-np.max(self.eigvv))
-    #     for i in range(eps_0.shape[0]):
-    #         np.fill_diagonal(eps_0[i,:,:], 1)
-    #     # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
-    #     dipoles = TB_dipoles(self.nk*self.nv*self.nc, self.nc, self.nv, self.nk,self.eigv,self.eigvec, eta, hlm, self.T_table).dipoles
-    #     for t in range(0,self.ntransitions):
-    #         ik = self.T_table[t][0]
-    #         iv = self.T_table[t][1]
-    #         ic = self.T_table[t][2]
-    #         factorRx = dipoles[ik,ic,iv,0]#1/(E +1j*eta)*np.dot(eigvecc[k,:,c].conj().T,np.dot(hlm[k,:,:,0],eigvecv[k,:,v]))
-    #         factorLx = factorRx.conj() 
-    #         factorRy = dipoles[ik,ic,iv,1]#1/(E +1j*eta)*np.dot(eigvecc[k,:,c].conj().T,np.dot(hlm[k,:,:,1],eigvecv[k,:,v]))
-    #         factorLy = factorRy.conj() 
-    #         factorRz = dipoles[ik,ic,iv,2]#1/(E +1j*eta)*np.dot(eigvecc[k,:,c].conj().T,np.dot(hlm[k,:,:,2],eigvecv[k,:,v]))
-    #         factorLz = factorRz.conj() 
-    #         F_kcv[t,0,0] = F_kcv[t,0,0] + factorRx*factorLx
-    #         F_kcv[t,0,1] = F_kcv[t,0,1] + factorRx*factorLy
-    #         F_kcv[t,0,2] = F_kcv[t,0,2] + factorRx*factorLz
-    #         F_kcv[t,1,0] = F_kcv[t,1,0] + factorRy*factorLx
-    #         F_kcv[t,1,1] = F_kcv[t,1,1] + factorRy*factorLy
-    #         F_kcv[t,1,2] = F_kcv[t,1,2] + factorRy*factorLz                    
-    #         F_kcv[t,2,0] = F_kcv[t,2,0] + factorRz*factorLx
-    #         F_kcv[t,2,1] = F_kcv[t,2,1] + factorRz*factorLy
-    #         F_kcv[t,2,2] = F_kcv[t,2,2] + factorRz*factorLz  
-    #     for ies, es in enumerate(w):
-    #         for t in range(0,self.dimbse):
-    #             eps_0[ies,:,:] += 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(E_0-es)/(np.abs(E_0-self.h2peigv[t])**2+eta**2) \
-    #                 + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-E_0)**2+eta**2) 
-    #     print('Direct Ground state: ',E_0, ' [eV]')
-    #     # self.w = w
-    #     # self.eps_0 = eps_0
-    #     return w, eps_0
-
     @classmethod
     def _get_occupations(cls, nk, nb, eigv, fermie):
         occupations = np.zeros((nk, nb))
         occupations = fermi_dirac(eigv,fermie)
         cls.f_kn = np.real(occupations)
     
-    def get_eps(self):
-        '''
-        Compute microscopic dielectric function 
-        dipole_left/right = l/r_residuals.
-        \eps_{\alpha\beta} = 1 + \sum_{kcv} dipole_left*dipole_right*(GR + GA)
-        '''
-

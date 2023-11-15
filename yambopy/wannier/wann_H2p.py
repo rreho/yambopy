@@ -121,8 +121,35 @@ class H2P():
         print(f'\n Diagonalization of H2P in {t1-t0:.3f} s')
     
     def _getKd(self,ik,iv,ic,ikp,ivp,icp):
-        K_direct = self.cpot.v2dt2(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:], lc = 8.0*ANG2BOHR )\
-                    *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])
+        if (self.ctype=='v2dt2'):
+            print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
+            K_direct = self.cpot.v2dt2(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:], lc = self.lc )\
+                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])
+        
+        elif(self.ctype == 'v2dk'):
+            print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
+            K_direct = self.cpot.v2dk(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:], lc = self.lc )\
+                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])
+        
+        elif(self.ctype == 'vcoul'):
+            print('''\n Kernel built from screened Coulomb potential.\n
+               Screening should be set via the instance of the Coulomb Potential class.\n
+               ''')
+            K_direct = self.cpot.vcoul(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:])\
+                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])             
+        
+        elif(self.ctype == 'v2dt'):
+            print('''\n Kernel built from v2dt Coulomb potential.\n
+               ''')
+            K_direct = self.cpot.v2dt(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:])\
+                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])             
+        
+        elif(self.ctype == 'v2drk'):
+            print('''\n Kernel built from v2drk Coulomb potential.\n
+               lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
+               ''')
+            K_direct = self.cpot.v2dt(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:])\
+                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])             
         return K_direct
 
     def get_eps(self, hlm, emin, emax, estep, eta):
