@@ -142,3 +142,40 @@ class CoulombPotentials:
             v2drk = (vbz * 2.0 * self.pi) * np.exp(-modk * w) * (1.0 / ew) * (1.0 / modk)
 
         return v2drk*ha2ev
+
+    def v2dt_vectorized(self, k_diffs):
+        # this function might be useful to avoid do loops
+        vc = self.dir_vol
+        vbz = 1.0 / (np.prod(self.ngrid) * vc)
+        gz = np.abs(k_diffs[:, 2])
+        gpar = np.sqrt(k_diffs[:, 0]**2 + k_diffs[:, 1]**2)
+        rc = 0.5 * self.rlat[2, 2]
+        factor = 1.0 
+
+        modk = self.modvec_vectorized(k_diffs)
+
+        v2dt = np.zeros_like(gz)
+
+        # Case where gpar and gz are below tolerance
+        mask_tol = (gpar < self.tolr) & (gz < self.tolr)
+        v2dt[mask_tol] = (vbz * 2 * self.pi) * (1/8.0 * rc * rc)
+
+        # Case where gpar is below tolerance and gz is above tolerance
+        mask_gpar_tol = (gpar < self.tolr) & (gz >= self.tolr)
+        v2dt[mask_gpar_tol] = (vbz * 2 * self.pi) * (factor / modk[mask_gpar_tol]**2) * (1.0 - np.cos(gz[mask_gpar_tol] * rc) - (gz[mask_gpar_tol] * rc * np.sin(gz[mask_gpar_tol] * rc)))
+
+        # General case
+        # ~ stands for NOT and | for OR in mask numpy arrays
+        mask_general = ~(mask_tol | mask_gpar_tol)
+        aux1 = gz[mask_general] / gpar[mask_general]
+        aux2 = gpar[mask_general] * rc
+        aux3 = gz[mask_general] * rc
+        aux4 = aux1 * np.sin(aux3)
+        aux5 = np.cos(aux3)
+        v2dt[mask_general] = (vbz * 2 * self.pi) * (factor / modk[mask_general]**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
+
+        return v2dt * ha2ev
+
+    def modvec_vectorized(self, k_diffs):
+        # Vectorized modvec function 
+            return np.sqrt(np.sum(k_diffs**2, axis=1))
