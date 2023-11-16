@@ -14,7 +14,7 @@ class CoulombPotentials:
     alpha = -(0.0904756) * 10 ** 3
     pi = np.pi
 
-    def __init__(self, ngrid, lattice, tolr=0.001, ediel=[1.0,1.0,1.0]):
+    def __init__(self, ngrid, lattice, lc = 15.0, w=1.0, r0=1.0, tolr=0.001, ediel=[1.0,1.0,1.0]):
         print('''Warning! CoulombPotentials works with atomic units and return energy in eV \n
                 Check consistency of units in the methods, they have not been properly tested
               ''')
@@ -26,14 +26,18 @@ class CoulombPotentials:
         self.dir_vol = lattice.lat_vol
         self.rec_vol = lattice.rlat_vol
         self.ediel = ediel # ediel(1) Top substrate, ediel(2) \eps_d, ediel(3) Bot substrate     
+        self.lc = lc
+        self.w = w
+        self.r0 = r0
 
-    def v2dk(self, kpt1, kpt2, lc):
+    def v2dk(self, kpt1, kpt2):
         pass
         #TO-DO implement alat2D
         #constants -> See paper in WantiBexos doc
         alpha1 = 1.76
         alpha2 = 1.0
         alpha3 = 0.0
+        lc = self.lc
         ediel = self.ediel
         a0 = self.lattice.alat[0]/2+self.lattice.alat[1]/2
         modk = modvec(kpt1, kpt2)
@@ -90,12 +94,12 @@ class CoulombPotentials:
 
         return v2dt*ha2ev
 
-    def v2dt2(self, kpt1, kpt2, lc):
+    def v2dt2(self, kpt1, kpt2):
         modk = modvec(kpt1, kpt2)
         
         # Volume of the Brillouin zone
         vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
-        
+        lc = self.lc        
         # Difference between k-points
         vkpt = np.array(kpt1) - np.array(kpt2)
         
@@ -113,8 +117,11 @@ class CoulombPotentials:
         
         return v2dt2*ha2ev
 
-    def v2drk(self, kpt1, kpt2, lc, w, r0):
+    def v2drk(self, kpt1, kpt2):
         
+        w = self.w
+        r0 = self.r0
+        lc = self.lc
         # Compute the volume of the cell and modulus of the k-point difference
         modk = modvec(kpt1, kpt2)
 
@@ -143,7 +150,7 @@ class CoulombPotentials:
 
         return v2drk*ha2ev
     
-    def v0dt(self,kpt1,ktp2):
+    def v0dt(self,kpt1,kpt2):
 
         vbz = 1.0/(np.prod(self.ngrid)*self.dir_vol)
         modk = modvec(kpt1,kpt2)
@@ -158,8 +165,9 @@ class CoulombPotentials:
             v0dt = 2*self.pi*vbz*factor/(modk**2)*(1-np.cos(cr*modk))
         return v0dt
 
-    def v2doh(self, kpt1, kpt2, w):
+    def v2doh(self, kpt1, kpt2):
 
+        w = self.w
         vbz = 1.0/(np.prod(self.ngrid)*self.dir_vol)
         modk = modvec(kpt1,kpt2)
         ez = self.ediel[2]

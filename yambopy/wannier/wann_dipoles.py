@@ -28,6 +28,7 @@ class TB_dipoles():
         if (h2peigvec is not None):
             self.h2peigvec = h2peigvec
             self.dipoles_bse = self._get_dipoles_bse(method)
+            self.F_kcv = self._get_osc_strength(method)
 
     def _get_dipoles(self, method):
         if (method == 'real'):
@@ -73,3 +74,35 @@ class TB_dipoles():
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
         return dipoles                        
+    
+    def _get_osc_strength(self,method):
+        '''computes osc strength from dipoles'''
+        F_kcv = np.zeros((self.ntransitions,3,3), dtype=np.complex128)    
+        dipoles = self.dipoles_bse
+        if (method == 'real'):
+            for t in range(0,self.ntransitions):
+                ik = self.T_table[t][0]
+                iv = self.T_table[t][1]
+                ic = self.T_table[t][2]
+                factorRx = dipoles[ik,ic,iv,0]
+                factorLx = factorRx.conj() 
+                factorRy = dipoles[ik,ic,iv,1]
+                factorLy = factorRy.conj() 
+                factorRz = dipoles[ik,ic,iv,2]
+                factorLz = factorRz.conj() 
+                F_kcv[t,0,0] = F_kcv[t,0,0] + factorRx*factorLx
+                F_kcv[t,0,1] = F_kcv[t,0,1] + factorRx*factorLy
+                F_kcv[t,0,2] = F_kcv[t,0,2] + factorRx*factorLz
+                F_kcv[t,1,0] = F_kcv[t,1,0] + factorRy*factorLx
+                F_kcv[t,1,1] = F_kcv[t,1,1] + factorRy*factorLy
+                F_kcv[t,1,2] = F_kcv[t,1,2] + factorRy*factorLz                    
+                F_kcv[t,2,0] = F_kcv[t,2,0] + factorRz*factorLx
+                F_kcv[t,2,1] = F_kcv[t,2,1] + factorRz*factorLy
+                F_kcv[t,2,2] = F_kcv[t,2,2] + factorRz*factorLz
+        if (method== 'v-gauge'):
+            print('Warning! velocity gauge not implemented yet')
+        if (method== 'r-gauge'):
+            print('Warning! position gauge not implemented yet')
+        if (method== 'covariant'):
+            print('Warning! covariant approach not implemented yet')
+        return F_kcv        
