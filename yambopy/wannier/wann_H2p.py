@@ -3,11 +3,14 @@ from yambopy.wannier.wann_tb_mp import tb_Monkhorst_Pack
 from yambopy.wannier.wann_utils import *
 from yambopy.wannier.wann_utils import HA2EV, sort_eig
 from yambopy.wannier.wann_dipoles import TB_dipoles
+from yambopy.wannier.wann_occupations import TB_occupations
 from time import time
+
 class H2P():
     '''Build the 2-particle resonant Hamiltonian H2P'''
     def __init__(self, nk, nb, nc, nv,eigv, eigvec, T_table, latdb, kmpgrid, qmpgrid,excitons=None, \
-                  kernel=None,cpot=None,ctype='v2dt2',ktype='direct', method='model',f_kn=None): 
+                  kernel=None,cpot=None,ctype='v2dt2',ktype='direct', method='model',f_kn=None, \
+                  TD=False,  TBos=300): 
         self.nk = nk
         self.nb = nb
         self.nc = nc
@@ -28,10 +31,12 @@ class H2P():
         self.T_table = T_table
         self.ctype = ctype
         self.ktype = ktype
+        self.TD = TD #Tahm-Dancoff
+        self.TBos = TBos
         self.method = method
         # consider to build occupations here in H2P with different occupation functions
-        if(f_kn = None):
-            self.f_kn = np.zeros((self.nk,self.nv),dtype=np.float128)
+        if (f_kn == None):
+            self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float128)
             self.f_kn[:,:nv] = 1.0
         else:
             self.f_kn = f_kn
@@ -87,7 +92,10 @@ class H2P():
                     if (t==tp):
                         H2P[t,tp] = self.eigv[ik,ic]-self.eigv[ik,iv] + (self.f_kn[ik,iv]-self.f_kn[ik,ic])*K_direct
                     else:
-                        H2P[t,tp] = K_direct                
+                        if (self.TD==True):
+                            H2P[t,tp] = 0.0
+                        else:
+                            H2P[t,tp] = K_direct                
             return H2P
         else:
             H2P = np.zeros((self.nq,self.dimbse,self.dimbse),dtype=np.complex128)
@@ -109,7 +117,10 @@ class H2P():
                         if (t==tp):
                             H2P[iq,t,tp] = self.eigv[ikplusq,ic]-self.eigv[ik,iv] + (self.f_kn[ik,iv]-self.f_kn[ikplusq,ic])*(K_direct - K_Ex)
                         else:
-                            H2P[iq,t,tp] = K_direct - K_Ex
+                            if (self.TD==True):
+                                H2P[iq,t,tp] = 0.0
+                            else:
+                                H2P[iq,t,tp] = K_direct - K_Ex
             return H2P
 
 
@@ -307,19 +318,24 @@ class H2P():
         # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
         if(self.nq != 0): 
             self.h2peigvec_vck=self.h2peigvec_vck[self.q0index]
-            self.h2peigv_vck = self.h2peigv[self.q0index]
+            self.h2peigv_vck = self.h2peigv_vck[self.q0index]
             self.h2peigvec = self.h2peigvec[self.q0index]
             self.h2peigv = self.h2peigv[self.q0index]
 
         tb_dipoles = TB_dipoles(self.nk*self.nv*self.nc, self.nc, self.nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table,h2peigvec=self.h2peigvec_vck)
         # compute osc strength
         F_kcv = tb_dipoles.F_kcv
-        # compute eps
+        # compute eps and pl
+        f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
+        pl = eps
         for ies, es in enumerate(w):
             for t in range(0,self.dimbse):
                 eps[ies,:,:] += 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(self.h2peigv[t]-es)/(np.abs(es-self.h2peigv[t])**2+eta**2) \
                     + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-self.h2peigv[t])**2+eta**2) 
+                pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(self.h2peigv[t]-es)/(np.abs(es-self.h2peigv[t])**2+eta**2) \
+                    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-self.h2peigv[t])**2+eta**2) 
         print('Excitonic Direct Ground state: ', self.h2peigv[0], ' [eV]')
+        self.pl = pl
         # self.w = w
         # self.eps_0 = eps_0
         return w, eps
