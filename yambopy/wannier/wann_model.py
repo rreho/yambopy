@@ -60,8 +60,9 @@ class TBMODEL(tbmodels.Model):
         for i in range(0,nkpt):
             H_k[i] = self._get_h_k(self.mpgrid.car_kpoints[i], latdb.lat, hr, fermie, from_hr=True)
         
+        self.hr = hr
         self.H_k = H_k
-
+        self.fermie = fermie
         self.nk = int(self.H_k.shape[0]) # number of k-points
         self.nb = int(self.H_k.shape[1]) # number of bands
         # check hermiticity
@@ -81,6 +82,7 @@ class TBMODEL(tbmodels.Model):
         self._get_occupations(self.nk, self.nb, self.eigv, fermie)
         self._reshape_eigvec(self.nk, self.nb, self.f_kn, self.eigv, self.eigvec)
         self._get_T_table()
+        #self.r_mnk = self.pos_operator_matrix(self.eigvec, )
         
 
         # transpose to have eig[:,i] associated with eval[i]
@@ -92,7 +94,6 @@ class TBMODEL(tbmodels.Model):
         t1 = time()
         print(f'Diagonalization took {t1-t0:.3f} s')
 
-    @classmethod
     def get_pos_from_ham(self, lat, hr, from_hr = True):
         'get positions from Hamiltonian, first the indices and then cartesian coordinates of hoppings'
         # get tuple of irpos
@@ -105,9 +106,10 @@ class TBMODEL(tbmodels.Model):
             return self.pos
         else:
             self.lat = lat
-            self.pos = np.dot(self.lat, hr.hop.T).T
+            pos = np.dot(self.lat, hr.hop.T).T
             self.nrpos = hr.nrpts
-            return self.pos
+            self.pos = pos
+            return pos
 
     def get_hlm (self ,lat, hr, from_hr=True):
         ''' computes light mater interaction hamiltonian for grid of points
@@ -133,10 +135,12 @@ class TBMODEL(tbmodels.Model):
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
         if (not from_hr):
-            pos = self.get_pos_from_ham(lat)
+            pos = self.get_pos_from_ham(lat, hr, from_hr)
         else:
             pos = self.get_pos_from_ham(lat, hr, from_hr=True)
             irpos = hr.hop
+            self.pos = pos
+            self.irpos = irpos
 
         hlm_k = np.zeros((self.nb, self.nb, 3), dtype=np.complex128)
         kvecs = np.zeros(self.nrpos, dtype=np.complex128)
@@ -155,19 +159,19 @@ class TBMODEL(tbmodels.Model):
             if (np.array_equal(irpos[i],[0.0,0.0,0.0])):
                 hr_mn_p = hr.HR_mn[i,:,:]
                 np.fill_diagonal(hr_mn_p,complex(0.0))
-                hlm_k[:,:,0] = hlm_k[:,:,0] +kvecsx[i]*np.exp(kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] = hlm_k[:,:,1] +kvecsy[i]*np.exp(kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] = hlm_k[:,:,2] +kvecsz[i]*np.exp(kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,0] = hlm_k[:,:,0] +kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] = hlm_k[:,:,1] +kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] = hlm_k[:,:,2] +kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
             else:
                 hr_mn_p = hr.HR_mn[i,:,:]
-                hlm_k[:,:,0] = hlm_k[:,:,0] +kvecsx[i]*np.exp(kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] = hlm_k[:,:,1] +kvecsy[i]*np.exp(kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] = hlm_k[:,:,2] +kvecsz[i]*np.exp(kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,0] = hlm_k[:,:,0] +kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] = hlm_k[:,:,1] +kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] = hlm_k[:,:,2] +kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
         
         return hlm_k
 
-    @classmethod
-    def _get_h_k(cls, k, lat, hr,fermie, from_hr=True):
+
+    def _get_h_k(self, k, lat, hr, fermie, from_hr=True):
         ''' computes hamiltonian at k from real space hamiltonian
         k is one k-point in cartesian coordinates
         '''
@@ -175,37 +179,55 @@ class TBMODEL(tbmodels.Model):
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
         if (not from_hr):
-            cls.get_pos_from_ham(lat)
+            pos = self.get_pos_from_ham(lat, hr, from_hr)
         else:
-            cls.get_pos_from_ham(lat=lat,hr=hr, from_hr=True)
+            pos = self.get_pos_from_ham(lat=lat,hr=hr, from_hr=True)
             irpos = hr.hop
         
-        pos = cls.pos
-
         hk = np.zeros((hr.num_wann, hr.num_wann), dtype=np.complex128)
-        kvecs = np.zeros(cls.nrpos, dtype=np.complex128)
+        kvecs = np.zeros(self.nrpos, dtype=np.complex128)
         #pos has shape (nrpts,3)
+        print('pos',pos)
         kvecs[:] = 1j*np.dot(pos, k)
-
+        print('kvecs', kvecs.shape)
 
         # len(pos) = nrpts
-        for i in range(0,cls.nrpos):
+        for i in range(0,self.nrpos):
             hr_mn_p = hr.HR_mn[i,:,:]
-            hk[:,:] = hk[:,:] +np.exp(kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+            hk[:,:] = hk[:,:] + np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
         
         hk = hk #+ fermie
         return hk
+    
+    def get_eigenval(self, k, from_hr=True):
+        """
+        Returns the eigenvalues at a given k point, or list of k-points.
 
-    @classmethod
-    def pos_operator_matrix(cls, eigvec, dir, cartesian = True):
+        Parameters
+        ----------
+        k :
+            The k-point at which the Hamiltonian is evaluated. If a list
+            of k-points is given, a corresponding list of eigenvalue
+            arrays is returned.
+        """
+        H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
+        for i in range(0, k.shape[0]):
+            H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
+        return [np.linalg.eigvalsh(ham) for ham in H_k]
+        
+    def pos_operator_matrix(self, eigvec, cartesian = True):
         ''' Computes the position operator along a direction dir at a k-point
             position operator is returned cartesian coordinates by default
             X_{m n {\bf k}}^{\alpha} = \langle u_{m {\bf k}} \vert
             r^{\alpha} \vert u_{n {\bf k}} \rangle            
         ''' 
         pass
-    
-    
+        # r_mnk = np.zeros((self.nb, self.nb,3), dtype=np.complex128)
+        # for i in range(self.nb):
+        #     for j in range(self.nb):
+        #         r_mnk[i,j] = np.vdot(eigvec[:,i], np.dot(self.pos*eigvec[:,j])) 
+        
+        # return r_mnk    
     @classmethod
     def _reshape_eigvec(cls, nk, nb, f_kn, eigv, eigvec):
         nv = np.count_nonzero(f_kn[0])

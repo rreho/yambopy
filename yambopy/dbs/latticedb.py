@@ -208,6 +208,7 @@ class YamboLatticeDB(object):
 
         # Store original kpoints in iku coordinates
         self.ibz_kpoints = self.iku_kpoints
+        self.ibz_kpoints_standard = car_red(np.array([k/self.alat for k in self.ibz_kpoints]), self.rlat)
 
         #kpoints in the full brillouin zone organized per index
         kpoints_full_i = {}
