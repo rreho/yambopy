@@ -1,11 +1,11 @@
 import numpy as np
 from yambopy.wannier.wann_Gfuncs import GreensFunctions
-
+from yambopy.wannier.wann_io import RMN
 
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self , ntransitions, nc, nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, h2peigvec = None, method = 'real'):
+                 eta, hlm, T_table, h2peigvec = None, method = 'real', rmn = None):
         # hk, hlm are TBMODEL hamiltonians
         self.ntransitions = ntransitions
         self.nc = nc
@@ -21,6 +21,9 @@ class TB_dipoles():
         self.eta = eta
         self.hlm = hlm
         self.method = method
+        if(rmn is not None):
+            self.rmn = rmn
+            self.method = 'position'
         #T_table = [transition, ik, iv, ic] 
         self.T_table = T_table
         #[nkpoints,3,nbands,nbands]
