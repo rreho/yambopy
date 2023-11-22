@@ -82,6 +82,7 @@ class TBMODEL(tbmodels.Model):
         self._get_occupations(self.nk, self.nb, self.eigv, fermie)
         self._reshape_eigvec(self.nk, self.nb, self.f_kn, self.eigv, self.eigvec)
         self._get_T_table()
+        self._build_Umn()
         #self.r_mnk = self.pos_operator_matrix(self.eigvec, )
         
 
@@ -183,13 +184,12 @@ class TBMODEL(tbmodels.Model):
         else:
             pos = self.get_pos_from_ham(lat=lat,hr=hr, from_hr=True)
             irpos = hr.hop
+            self.irpos = irpos
         
         hk = np.zeros((hr.num_wann, hr.num_wann), dtype=np.complex128)
         kvecs = np.zeros(self.nrpos, dtype=np.complex128)
         #pos has shape (nrpts,3)
-        print('pos',pos)
         kvecs[:] = 1j*np.dot(pos, k)
-        print('kvecs', kvecs.shape)
 
         # len(pos) = nrpts
         for i in range(0,self.nrpos):
@@ -232,7 +232,6 @@ class TBMODEL(tbmodels.Model):
     def _reshape_eigvec(cls, nk, nb, f_kn, eigv, eigvec):
         nv = np.count_nonzero(f_kn[0])
         nc = nb -nv
-        print(nv,nc)
         eigvecv = np.zeros((nk, nb, nv),dtype=np.complex128)
         eigvecc = np.zeros((nk, nb, nc), dtype=np.complex128)
         eigvv = np.zeros((nk,nv),dtype=np.complex128)
@@ -270,3 +269,14 @@ class TBMODEL(tbmodels.Model):
         occupations = fermi_dirac(eigv,fermie)
         cls.f_kn = np.real(occupations)
     
+    def _build_Umn(self):
+        '''A = PDA^\dagger where D is a diagonal matrix but then D = P\daggerA P. The eigenvectors obtained via numpy diagonalization
+        should be the columns of P. I checked this and indeed I get P where P is U_nm(k).
+        Where |mR_e> = \sum_nk  e^-ikRe U_nmk | nk> . Since in this formalism n is running in the first index I need to tranpose the result.
+        I put k on the first index for convenience.
+        '''
+        Umn = np.zeros(shape=(self.nk, self.nb, self.nb), dtype = np.complex128)
+        Umn[:,:, :self.nv] = self.eigvecv
+        Umn[:,:, self.nv:self.nb] = self.eigvecc
+        Uknm = Umn.transpose(0,2,1)
+        self.Uknm = Uknm

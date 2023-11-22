@@ -36,3 +36,53 @@ def sort_eig(eigv,eigvec=None):
         eigvec=eigvec[args]
         return (eigv,eigvec)
     return eigv
+
+class ChangeBasis():
+    '''
+    Handles change of basis from Wannier to Bloch and viceversa.
+    Np = Nk (number of supercell = number of k-points)
+    '''
+    def __init__(self, model):
+        self.irpos = model.irpos
+        self.nrpos = model.nrpos
+        self.nb = model.nb
+        self.Uknm = model.Uknm
+        self.eigvec = model.eigvec
+        self.nk = model.nk
+        self.kmpgrid = model.mpgrid
+        self.k = self.kmpgrid.k
+        self.car_kpoints = self.kmpgrid.car_kpoints
+
+    #works don't know why. Probably becuase I am storing each component of the term withn the sum
+    def _bloch_to_wann_factor(self, ik,  m, ire):
+        k_dot_r = np.dot(self.mpgrid.k, self.irpos.T)
+        phase_Uknm_nk = np.zeros((self.nb, self.nb, self.nk),dtype=np.complex128)
+        for n in range(0,self.nb):
+            phase_Uknm_nk[:,n,ik] =  np.exp(-1j*2*np.pi*k_dot_r[ik, ire])*self.Uknm[ik,n,m]*self.eigvec[ik,:,n]#
+        return phase_Uknm_nk
+
+    def bloch_to_wann(self):
+        mRe = np.zeros((self.nb, self.nb, self.nrpos),dtype=np.complex128)
+        for m in range(0,self.nb):
+            for ip in range(0,self.nrpos):
+                for n in range(0,self.nb):
+                    for ik,k in enumerate(self.mpgrid.k):
+                        mRe[:,m,ip] += self._bloch_to_wann_factor(self, ik, m, ip)[:,n,ik]
+        return mRe
+
+    def _wann_to_bloch_factor(self,mRe, ik,  n, ire):
+        k_dot_r = np.dot(self.mpgrid.k, self.irpos.T)
+        phase_Uknm_mRe = np.zeros((self.nb, self.nb, self.nrpos),dtype=np.complex128)
+        for m in range(0,self.nb):
+            phase_Uknm_mRe[:,m,ire] =  np.exp(1j*2*np.pi*k_dot_r[ik, ire]) *self.Uknm[ik,m,n]*mRe[:,m,ire]#
+        return phase_Uknm_mRe
+
+    def wann_to_bloch(self, mRe):
+        nk_vec = np.zeros((self.nb, self.nb, self.nk),dtype=np.complex128)
+        for ik, k in enumerate(self.mpgrid.k):
+            for n in range(0,self.nb):
+                for m in range(0, self.nb):
+                    for p in range(0,self.nrpos):
+                        nk_vec[:,n,ik] += 1/self.nk*self._wann_to_bloch_factor(self, mRe, ik, n, p)[:,m,p]
+        nk_vec = nk_vec.transpose(1,0,2)
+        return nk_vec
