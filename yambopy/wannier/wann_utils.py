@@ -37,6 +37,31 @@ def sort_eig(eigv,eigvec=None):
         return (eigv,eigvec)
     return eigv
 
+def find_kpoint_index(klist, kpoint):
+    """
+    Find the index of a kpoint in a list of kpoints.
+    
+    Parameters:
+    - klist: A list or a NumPy array of kpoints.
+    - kpoint: A single kpoint to find in the list.
+    
+    Returns:
+    - Index of the kpoint in the list, or a message if the kpoint is not found.
+    """
+    # Convert klist to a NumPy array for efficient comparison
+    klist_np = np.array(klist)
+    kpoint_np = np.array(kpoint)
+
+    # Find the index where kpoint matches in klist
+    # We use np.all and np.where to compare each kpoint
+    indices = np.where(np.all(klist_np == kpoint_np, axis=1))[0]
+
+    if indices.size > 0:
+        return indices[0]
+    else:
+        print('k-point not found')
+        return None
+
 class ChangeBasis():
     '''
     Handles change of basis from Wannier to Bloch and viceversa.

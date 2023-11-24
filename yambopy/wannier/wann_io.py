@@ -253,3 +253,65 @@ class RMN(W90_data):
         self.ir_mn = np.array(ir_mn).reshape(self.nrpts,self.num_wann,self.num_wann,5)
         t2 = time()
         print("Time for MMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))
+
+class NNKP():
+    """
+    read nnkp data file. 
+    Store reciprocal lattice vectors, neighbouring points and b-vectors
+    """
+    def __init__(self, seedname):
+        t0 = time()
+        f_hr_in = open(seedname + ".nnkp", "r")
+        real_lattice = []
+        reciprocal_lattice = []
+        kpoints = []
+        num_kpoints = 0 
+        nnkpts = 0
+        b_grid = []
+        data = []
+
+        lines = f_hr_in.readlines()
+        current_block = None
+
+        for line in lines:
+            if line.startswith('begin'):
+                current_block = line.split()[1]
+            elif line.startswith('end'):
+                current_block = None
+            else:
+                if current_block == 'real_lattice':
+                    real_lattice.append([float(x) for x in line.split()])
+                elif current_block == 'recip_lattice':
+                    reciprocal_lattice.append([float(x) for x in line.split()])
+                elif current_block == 'kpoints':
+                    if num_kpoints == 0:
+                        num_kpoints = int(line.strip())
+                    else:
+                        kpoints.append([float(x) for x in line.split()])
+                elif current_block == 'nnkpts':
+                    if nnkpts == 0:
+                        nnkpts = int(line.strip())
+                    else:
+                        data.append([float(x) for x in line.split()])
+
+        self.real_lattice = np.array(real_lattice)
+        self.reciprocal_lattice = np.array(reciprocal_lattice)
+        self.kpoints = np.array(kpoints)
+        self.num_kpoints = num_kpoints
+        self.data = np.array(data)
+        self.ik = self.data[:,0].astype(int)-1
+        self.ikpb = self.data[:,1].astype(int)-1
+        self.iG = self.data[:,2:5].astype(int)
+        self.nnkpts = nnkpts
+
+        Gvec = np.zeros((self.data.shape[0],3), dtype = np.float128)
+        
+        for ikkp in range(0, len(self.ik)):
+            Gvec[ikkp] = np.dot(reciprocal_lattice, self.iG[ikkp] )
+            tmpb = self.kpoints[self.ikpb[ikkp]] - self.kpoints[self.ik[ikkp]] + Gvec[ikkp]
+            b_grid.append(tmpb)
+
+        self.b_grid = np.array(b_grid)
+
+        t2 = time()
+        print("Time for NNKP.__init__() : {}".format(t2 - t0))
