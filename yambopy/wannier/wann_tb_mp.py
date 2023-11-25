@@ -39,10 +39,6 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack):
         closest_indices = np.argmin(distances, axis=1)
         return closest_indices
 
-    def fold_into_bz(self,points):
-        'Fold a point in the first BZ defined in the range [-0.5,0.5]'
-        folded_points = np.mod(points+0.5, 1.0) - 0.5
-        return folded_points
 
     def get_kq_tables(self,qmpgrid):
         kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
@@ -66,12 +62,13 @@ class NNKP_Grids(NNKP):
         super().__init__(seedname)
        
     def get_kmq_grid(self, qmpgrid):
+
         #qmpgrid is meant to be an nnkp object
-        kmq_grid = np.zeros((self.num_kpoints, qmpgrid.num_kpoints, 3))
-        kmq_grid_table = np.zeros((self.num_kpoints, qmpgrid.num_kpoints, 5),dtype= int)
-        for ik, k in enumerate(self.kpoints):
-            for iq, q in enumerate(qmpgrid.kpoints):
-                tmp_kmq, tmp_Gvec = self.fold_into_bz(k-q)
+        kmq_grid = np.zeros((self.nkpoints, qmpgrid.nkkpoints, 3))
+        kmq_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, 5),dtype= int)
+        for ik, k in enumerate(self.k):
+            for iq, q in enumerate(qmpgrid.k):
+                tmp_kmq, tmp_Gvec = self.fold_into_bz_Gs(k-q)
                 kmq_grid[ik,iq] = tmp_kmq
                 idxkmq = self.find_closest_kpoint(k-q)
                 kmq_grid_table[ik,iq] = [ik, idxkmq, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
@@ -79,9 +76,67 @@ class NNKP_Grids(NNKP):
         self.kmq_grid = kmq_grid
         self.kmq_grid_table = kmq_grid_table
 
+    def get_qpb_grid(self, qmpgrid: 'NNKP_Grids'):
+        '''
+        For each q belonging to the Qgrid return Q+B and a table with indices
+        containing the q index the q+b folded into the BZ and the G-vectors
+        '''
+        if not isinstance(qmpgrid, NNKP_Grids):
+            raise TypeError('Argument must be an instance of NNKP_Grids')
+        
+        # here I should work only with qmpgrid and its qmpgrid.b_grid
+        qpb_grid = np.zeros((qmpgrid.nkpoints, qmpgrid.nnkpts, 3))
+        qpb_grid_table = np.zeros((qmpgrid.nkpoints, qmpgrid.nnkpts, 5), dtype = int)
+        for iq, q in enumerate(qmpgrid.k):
+            for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
+                tmp_qpb, tmp_Gvec = qmpgrid.fold_into_bz_Gs(q+b)
+                ib = ib
+                qpb_grid[iq, ib] = tmp_qpb
+                idxqpb = qmpgrid.find_closest_kpoint(q+b)
+                qpb_grid_table[iq,ib] = [iq, idxqpb, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
+        
+        qmpgrid.qpb_grid = qpb_grid
+        qmpgrid.qpb_grid_table = qpb_grid_table
+
+    def get_kpbover2_grid(self, qmpgrid: 'NNKP_Grids'):
+
+        if not isinstance(qmpgrid, NNKP_Grids):
+            raise TypeError('Argument must be an instance of NNKP_Grids')  
+        
+        #qmpgrid is meant to be an nnkp object
+        kpbover2_grid = np.zeros((self.nkpoints, qmpgrid.nnkpts, 3))
+        kpbover2_grid_table = np.zeros((self.nkpoints, qmpgrid.nnkpts, 5),dtype= int)
+        for ik, k in enumerate(self.k):
+            for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*ik:qmpgrid.nnkpts*(ik+1)]):
+                tmp_kpbover2, tmp_Gvec = self.fold_into_bz_Gs(k+b/2)
+                kpbover2_grid[ik,ib] = tmp_kpbover2
+                idxkpbover2 = self.find_closest_kpoint(k+b/2)
+                kpbover2_grid_table[ik,ib] = [ik, idxkpbover2, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
+
+        self.kpbover2_grid = kpbover2_grid
+        self.kpbover2_grid_table = kpbover2_grid_table
+
+    def get_kmqmbover2_grid(self, qmpgrid: 'NNKP_Grids'):
+
+        if not isinstance(qmpgrid, NNKP_Grids):
+            raise TypeError('Argument must be an instance of NNKP_Grids') 
+        #here I need to use the k-q grid and then apply -b/2
+        kmqmbover2_grid = np.zeros((self.nkpoints, qmpgrid.nkpoints, qmpgrid.nnkpts,3))
+        kmqmbover2_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, qmpgrid.nnkpts,5))
+        for ik, k in enumerate(self.k):
+            for iq, q in enumerate(qmpgrid.k):
+                for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
+                    tmp_kmqmbover2, tmp_Gvec = self.fold_into_bz_Gs(k -q - b/2)
+                    kmqmbover2_grid[ik, iq, ib] = tmp_kmqmbover2
+                    idxkmqmbover2 = self.find_closest_kpoint(k-q-b/2)
+                    kmqmbover2_grid_table[ik, iq, ib] = [ik, idxkmqmbover2, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
+
+        self.kmqmbover2_grid = kmqmbover2_grid
+        self.kmqmbover2_grid_table = kmqmbover2_grid_table
 
 
-    def fold_into_bz(self, k_point, bz_range=(-0.5, 0.5), reciprocal_vectors=None):
+
+    def fold_into_bz_Gs(self, k_point, bz_range=(-0.5, 0.5), reciprocal_vectors=None):
         """
         Fold a k-point into the first Brillouin Zone and determine the reciprocal lattice vector G needed.
         
@@ -113,10 +168,32 @@ class NNKP_Grids(NNKP):
         return folded_k_point, G_vector
 
     def find_closest_kpoint(self, point):
-        distances = np.linalg.norm(self.kpoints-point,axis=1)
+        distances = np.linalg.norm(self.k-point,axis=1)
         closest_idx = np.argmin(distances)
         return closest_idx
-    
+
+    def get_kq_tables(self,qmpgrid):
+        kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
+        
+        for ik, k in enumerate(self.k):
+            for iq, q in enumerate(qmpgrid.k):
+                kplusq = k+q
+                kminusq = k-q
+                kplusq = self.fold_into_bz(kplusq)
+                kminusq = self.fold_into_bz(kminusq)
+                idxkplusq = self.find_closest_kpoint(kplusq)
+                idxkminusq = self.find_closest_kpoint(kminusq)
+                kplusq_table[ik,iq] = idxkplusq
+                kminusq_table[ik,iq] = idxkminusq
+
+        return kplusq_table, kminusq_table
+
+    def fold_into_bz(self,points):
+        'Fold a point in the first BZ defined in the range [-0.5,0.5]'
+        folded_points = np.mod(points+0.5, 1.0) - 0.5
+        return folded_points
+            
 class tb_symm_grid():
     def __init__(self, latdb, mesh, is_shift=[0.0,0.0,0.0]):
         self.latdb = latdb
