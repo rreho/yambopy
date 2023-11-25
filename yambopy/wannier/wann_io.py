@@ -264,8 +264,8 @@ class NNKP():
         f_hr_in = open(seedname + ".nnkp", "r")
         real_lattice = []
         reciprocal_lattice = []
-        kpoints = []
-        num_kpoints = 0 
+        k = []
+        nkpoints = 0 
         nnkpts = 0
         b_grid = []
         data = []
@@ -284,10 +284,10 @@ class NNKP():
                 elif current_block == 'recip_lattice':
                     reciprocal_lattice.append([float(x) for x in line.split()])
                 elif current_block == 'kpoints':
-                    if num_kpoints == 0:
-                        num_kpoints = int(line.strip())
+                    if nkpoints == 0:
+                        nkpoints = int(line.strip())
                     else:
-                        kpoints.append([float(x) for x in line.split()])
+                        k.append([float(x) for x in line.split()])
                 elif current_block == 'nnkpts':
                     if nnkpts == 0:
                         nnkpts = int(line.strip())
@@ -296,8 +296,8 @@ class NNKP():
 
         self.real_lattice = np.array(real_lattice)
         self.reciprocal_lattice = np.array(reciprocal_lattice)
-        self.kpoints = np.array(kpoints)
-        self.num_kpoints = num_kpoints
+        self.k = np.array(k)
+        self.nkpoints = nkpoints
         self.data = np.array(data)
         self.ik = self.data[:,0].astype(int)-1
         self.ikpb = self.data[:,1].astype(int)-1
@@ -308,7 +308,7 @@ class NNKP():
         
         for ikkp in range(0, len(self.ik)):
             Gvec[ikkp] = np.dot(reciprocal_lattice, self.iG[ikkp] )
-            tmpb = self.kpoints[self.ikpb[ikkp]] - self.kpoints[self.ik[ikkp]] + Gvec[ikkp]
+            tmpb = self.k[self.ikpb[ikkp]] - self.k[self.ik[ikkp]] + Gvec[ikkp]
             b_grid.append(tmpb)
 
         self.b_grid = np.array(b_grid)
