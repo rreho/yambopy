@@ -15,7 +15,7 @@ class H2P():
         self.nb = nb
         self.nc = nc
         self.nv = nv
-        self.nq = len(qmpgrid)
+        self.nq = len(qmpgrid.k)
         self.eigv = eigv
         self.eigvec = eigvec
         self.kmpgrid = kmpgrid
@@ -192,32 +192,32 @@ class H2P():
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_direct = self.cpot.v2dt2(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:] )\
-                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])
+                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])
         
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_direct = self.cpot.v2dk(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:] )\
-                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])
+                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])
         
         elif(self.ctype == 'vcoul'):
             #print('''\n Kernel built from screened Coulomb potential.\n
             #   Screening should be set via the instance of the Coulomb Potential class.\n
             #   ''')
             K_direct = self.cpot.vcoul(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:])\
-                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])             
+                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
         
         elif(self.ctype == 'v2dt'):
             #print('''\n Kernel built from v2dt Coulomb potential.\n
             #   ''')
             K_direct = self.cpot.v2dt(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:])\
-                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])             
+                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
         
         elif(self.ctype == 'v2drk'):
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
             K_direct = self.cpot.v2dt(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:])\
-                        *np.vdot(self.eigvec[ik,ic],self.eigvec[ikp,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])             
+                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
         return K_direct
 
     def _getKdq(self,ik,iv,ic,ikp,ivp,icp,iq):
@@ -234,32 +234,32 @@ class H2P():
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_direct = self.cpot.v2dt2(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:] )\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ikpplusq,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])
+                        *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ikpplusq,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])
         
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_direct = self.cpot.v2dk(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:] )\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ikpplusq,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])
+                        *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ikpplusq,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])
         
         elif(self.ctype == 'vcoul'):
             #print('''\n Kernel built from screened Coulomb potential.\n
             #   Screening should be set via the instance of the Coulomb Potential class.\n
             #   ''')
             K_direct = self.cpot.vcoul(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:])\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ikpplusq,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])             
+                        *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ikpplusq,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
         
         elif(self.ctype == 'v2dt'):
             #print('''\n Kernel built from v2dt Coulomb potential.\n
             #   ''')
             K_direct = self.cpot.v2dt(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:])\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ikpplusq,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])             
+                        *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ikpplusq,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
         
         elif(self.ctype == 'v2drk'):
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
             K_direct = self.cpot.v2dt(self.latdb.car_kpoints[ikp,:],self.latdb.car_kpoints[ik,:])\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ikpplusq,icp])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ik,iv])             
+                        *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ikpplusq,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
         return K_direct
     
     def _getKEx(self,ik,iv,ic,ikp,ivp,icp,iq):
@@ -276,32 +276,32 @@ class H2P():
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ik,iv])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ikpplusq,icp])
+                        *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ik,:, iv])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ikpplusq,: ,icp])
         
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_ex = self.cpot.v2dk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ik,iv])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ikpplusq,icp])
+                        *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ik,:, iv])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ikpplusq,:, icp])
         
         elif(self.ctype == 'vcoul'):
             #print('''\n Kernel built from screened Coulomb potential.\n
             #   Screening should be set via the instance of the Coulomb Potential class.\n
             #   ''')
             K_ex = self.cpot.vcoul(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ik,iv])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ikpplusq,icp])
+                        *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ik,:, iv])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ikpplusq,:, icp])
         
         elif(self.ctype == 'v2dt'):
             #print('''\n Kernel built from v2dt Coulomb potential.\n
             #   ''')œ
             K_ex = self.cpot.v2dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ik,iv])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ikpplusq,icp])
+                        *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ik,:, iv])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ikpplusq,:, icp])
         
         elif(self.ctype == 'v2drk'):
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
             K_ex = self.cpot.v2dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ikplusq,ic],self.eigvec[ik,iv])*np.vdot(self.eigvec[ikp,ivp],self.eigvec[ikpplusq,icp])
+                        *np.vdot(self.eigvec[ikplusq, : ,ic],self.eigvec[ik,:, iv])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ikpplusq,:, icp])
         return K_ex
         
     def get_eps(self, hlm, emin, emax, estep, eta):
@@ -339,3 +339,30 @@ class H2P():
         # self.w = w
         # self.eps_0 = eps_0
         return w, eps
+
+    def _get_exc_overlap_ttp(self, t, tp , iq, ib):
+        '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
+        # missing the case of degenerate transitions. The summation seems to hold only for degenerate transitions.
+        # Otherwise it's simply a product
+        ik = self.T_table[t][0]
+        iv = self.T_table[t][1]
+        ic = self.T_table[t][2] - self.nv
+        ikp = self.T_table[tp][0]
+        ivp = self.T_table[tp][1]
+        icp = self.T_table[tp][2] -self.nv
+        iqpb = self.qmpgrid.qpb_grid_table[iq, ib][1]
+        ikmq = self.kmpgrid.kmq_grid_table[ik,ib][1]
+        ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib][1]
+        ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib][1]
+        Mssp_ttp = np.conjugate(self.h2peigv_vck[iq,ic,iv,ik])*self.h2peigv_vck[iqpb,icp,ivp, ikpbover2]*\
+                        np.vdot(self.eigvec[ik,:, ic], self.eigvec[ikpbover2,:, icp])*np.vdot(self.eigvec[ikmqmbover2,:,ivp], self.eigvec[ikmq,:,iv]) 
+        return Mssp_ttp
+    
+    def get_exc_overlap(self, trange= [0], tprange = [0]):
+        Mssp = np.zeros((self.qmpgrid.nkpoints, self.qmpgrid.nnkpts), dtype=np.complex128)
+        for it, t in enumerate(trange):
+            for itp, tp in enumerate(tprange):   
+                for iq in range(self.qmpgrid.nkpoints):
+                    for ib in range(self.qmpgrid.nnkpts):
+                        Mssp[iq, ib] = self._get_exc_overlap_ttp(t,tp,iq,ib)
+        self.Mssp = Mssp     
