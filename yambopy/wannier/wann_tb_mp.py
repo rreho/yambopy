@@ -58,13 +58,17 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack):
         return kplusq_table, kminusq_table
     
 class NNKP_Grids(NNKP):
-    def __init__(self, seedname):
+    def __init__(self, seedname, latdb):
         super().__init__(seedname)
-       
+        self.latdb = latdb
+        self.lat = latdb.lat
+        self.rlat = latdb.rlat
+        self.car_kpoints = red_car(self.k, self.rlat)
+        
     def get_kmq_grid(self, qmpgrid):
 
         #qmpgrid is meant to be an nnkp object
-        kmq_grid = np.zeros((self.nkpoints, qmpgrid.nkkpoints, 3))
+        kmq_grid = np.zeros((self.nkpoints, qmpgrid.nkpoints, 3))
         kmq_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, 5),dtype= int)
         for ik, k in enumerate(self.k):
             for iq, q in enumerate(qmpgrid.k):
@@ -170,7 +174,7 @@ class NNKP_Grids(NNKP):
     def find_closest_kpoint(self, point):
         distances = np.linalg.norm(self.k-point,axis=1)
         closest_idx = np.argmin(distances)
-        return closest_idx
+        return int(closest_idx)
 
     def get_kq_tables(self,qmpgrid):
         kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
