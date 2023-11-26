@@ -126,7 +126,7 @@ class NNKP_Grids(NNKP):
             raise TypeError('Argument must be an instance of NNKP_Grids') 
         #here I need to use the k-q grid and then apply -b/2
         kmqmbover2_grid = np.zeros((self.nkpoints, qmpgrid.nkpoints, qmpgrid.nnkpts,3))
-        kmqmbover2_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, qmpgrid.nnkpts,5))
+        kmqmbover2_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, qmpgrid.nnkpts,5),dtype=int)
         for ik, k in enumerate(self.k):
             for iq, q in enumerate(qmpgrid.k):
                 for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
