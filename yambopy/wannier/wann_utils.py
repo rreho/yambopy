@@ -15,13 +15,13 @@ def fermi_dirac(e, fermie):
     """ Vectorized Fermi-Dirac function. """
     # Create a boolean mask for conditions
     greater_than_fermie = e > fermie
-    less_or_equal_minus_fermie = e <= -fermie
+    less_or_equal_fermie = e <= fermie
 
     # Initialize the result array with zeros (default case when e > fermie)
     result = np.zeros_like(e)
 
     # Apply conditions
-    result[less_or_equal_minus_fermie] = 1
+    result[less_or_equal_fermie] = 1
 
     return result
 

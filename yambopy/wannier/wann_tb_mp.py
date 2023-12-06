@@ -62,7 +62,7 @@ class NNKP_Grids(NNKP):
         super().__init__(seedname)
         self.latdb = latdb
         self.lat = latdb.lat
-        self.rlat = latdb.rlat
+        self.rlat = latdb.rlat*2*np.pi
         self.car_kpoints = red_car(self.k, self.rlat)
         
     def get_kmq_grid(self, qmpgrid):
@@ -74,7 +74,7 @@ class NNKP_Grids(NNKP):
             for iq, q in enumerate(qmpgrid.k):
                 tmp_kmq, tmp_Gvec = self.fold_into_bz_Gs(k-q)
                 kmq_grid[ik,iq] = tmp_kmq
-                idxkmq = self.find_closest_kpoint(k-q)
+                idxkmq = self.find_closest_kpoint(tmp_kmq)
                 kmq_grid_table[ik,iq] = [ik, idxkmq, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
 
         self.kmq_grid = kmq_grid
@@ -96,11 +96,11 @@ class NNKP_Grids(NNKP):
                 tmp_qpb, tmp_Gvec = qmpgrid.fold_into_bz_Gs(q+b)
                 ib = ib
                 qpb_grid[iq, ib] = tmp_qpb
-                idxqpb = qmpgrid.find_closest_kpoint(q+b)
+                idxqpb = qmpgrid.find_closest_kpoint(tmp_qpb)
                 qpb_grid_table[iq,ib] = [iq, idxqpb, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
         
-        qmpgrid.qpb_grid = qpb_grid
-        qmpgrid.qpb_grid_table = qpb_grid_table
+        self.qpb_grid = qpb_grid
+        self.qpb_grid_table = qpb_grid_table
 
     def get_kpbover2_grid(self, qmpgrid: 'NNKP_Grids'):
 
@@ -114,7 +114,7 @@ class NNKP_Grids(NNKP):
             for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*ik:qmpgrid.nnkpts*(ik+1)]):
                 tmp_kpbover2, tmp_Gvec = self.fold_into_bz_Gs(k+b/2)
                 kpbover2_grid[ik,ib] = tmp_kpbover2
-                idxkpbover2 = self.find_closest_kpoint(k+b/2)
+                idxkpbover2 = self.find_closest_kpoint(tmp_kpbover2)
                 kpbover2_grid_table[ik,ib] = [ik, idxkpbover2, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
 
         self.kpbover2_grid = kpbover2_grid
@@ -132,7 +132,7 @@ class NNKP_Grids(NNKP):
                 for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
                     tmp_kmqmbover2, tmp_Gvec = self.fold_into_bz_Gs(k -q - b/2)
                     kmqmbover2_grid[ik, iq, ib] = tmp_kmqmbover2
-                    idxkmqmbover2 = self.find_closest_kpoint(k-q-b/2)
+                    idxkmqmbover2 = self.find_closest_kpoint(tmp_kmqmbover2)
                     kmqmbover2_grid_table[ik, iq, ib] = [ik, idxkmqmbover2, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
 
         self.kmqmbover2_grid = kmqmbover2_grid
@@ -158,7 +158,6 @@ class NNKP_Grids(NNKP):
         
         # Determine the G-vector multiplier for folding
         G_multiplier = np.floor((k_point - bz_range[0]) / (bz_range[1] - bz_range[0]))
-        
         # Calculate the G_vector
         if reciprocal_vectors is not None:
             G_vector = np.dot(G_multiplier, reciprocal_vectors)
@@ -168,7 +167,13 @@ class NNKP_Grids(NNKP):
 
         # Fold the k_point into the BZ
         folded_k_point = k_point - G_vector
-        
+        # Correct for the case when the point is exactly on the upper bound of the BZ
+        for i in range(len(folded_k_point)):
+            if folded_k_point[i] == bz_range[0] and G_vector[i] >= 1.0:
+                folded_k_point[i] += (bz_range[1] - bz_range[0])
+                G_vector[i] -= (bz_range[1] - bz_range[0])
+            G_vector[i] = -G_vector[i]
+
         return folded_k_point, G_vector
 
     def find_closest_kpoint(self, point):
