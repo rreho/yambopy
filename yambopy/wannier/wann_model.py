@@ -242,8 +242,8 @@ class TBMODEL(tbmodels.Model):
                     eigvv[k,n] = eigv[k,n]
                     eigvecv[k,:,n] = eigvec[k,:,n]
                 else:
-                    eigvc[k,n-nc] = eigv[k,n]
-                    eigvecc[k,:,n-nc] = eigvec[k,:,n]
+                    eigvc[k,n-nv] = eigv[k,n]
+                    eigvecc[k,:,n-nv] = eigvec[k,:,n]
         cls.eigvecv = eigvecv
         cls.eigvecc = eigvecc
         cls.eigvv = eigvv

@@ -307,8 +307,8 @@ class NNKP():
         Gvec = np.zeros((self.data.shape[0],3), dtype = np.float128)
         
         for ikkp in range(0, len(self.ik)):
-            Gvec[ikkp] = np.dot(reciprocal_lattice, self.iG[ikkp] )
-            tmpb = self.k[self.ikpb[ikkp]] - self.k[self.ik[ikkp]] + Gvec[ikkp]
+            #Gvec[ikkp] = np.dot(reciprocal_lattice, self.iG[ikkp] )
+            tmpb = self.k[self.ikpb[ikkp]] - self.k[self.ik[ikkp]] - self.iG[ikkp]
             b_grid.append(tmpb)
 
         self.b_grid = np.array(b_grid)
