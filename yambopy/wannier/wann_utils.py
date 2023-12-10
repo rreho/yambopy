@@ -3,7 +3,15 @@ import numpy as np
 
 HA2EV  = 27.211396132
 BOHR2ANG = 0.52917720859
+BOHR2M = 5.29177210903e-11  # Bohr radius in meters
 ANG2BOHR = 1./BOHR2ANG
+HBAR = 1.054571817e-34# J*s => w = E/hbar
+EVTOJ = 1.60218e-19  # Conversion factor from eV to J
+C = 1/137.035999084  # Speed of light
+HA2J = 4.3597482e-18 # Hartree to Joule
+AU2FS =  0.02418884254 # atomic unit of time
+
+
 
 def fermi_dirac_T(e, T, fermie):
     # atomic units
@@ -61,6 +69,33 @@ def find_kpoint_index(klist, kpoint):
     else:
         print('k-point not found')
         return None
+
+class ElectricField():
+    '''
+        Creates a time dependent electric-field
+    '''  
+    def __init__(self, E0, delta = 0.0235, type ='gaussian', Edir=[1.0,1.0,0.0], omega_light = 1.0 , phi=0, \
+                 t0=0):
+        # delta is related to the FWHM: full width half maximum with relationship FWHM = 2np.sqrt(2ln(2))/delta
+        self.E0 = E0 #amplitude electric field
+        self.omega_light = omega_light*EVTOJ/HBAR*1e-15 # Convert to 1/s omega_light is supposed to be in eV and then in femtoseconds
+        self.phi = phi # phase
+        self.Edir = Edir
+        self.type = type
+        self.delta = delta
+        self.t0 = t0
+
+
+    def E_t(self, t):
+        if (self.type == 'monochromatic'):
+            return np.dot(self.Edir,self.E0*np.cos(self.omega_light * t + self.phi))
+        if (self.type == 'delta'):
+            if (t == self.t0):
+                return np.dot(self.Edir,self.E0)
+            else:
+                return np.dot(self.Edir,0.0)
+        if (self.type == 'gaussian'):
+            return np.dot(self.Edir, self.E0 * np.sin(self.omega_light * t) * np.exp(-self.delta**2 * (t - self.t0)**2 / 2))
 
 class ChangeBasis():
     '''

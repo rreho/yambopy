@@ -1,7 +1,7 @@
 import numpy as np
 from yambopy.wannier.wann_Gfuncs import GreensFunctions
 from yambopy.wannier.wann_io import RMN
-
+from yambopy.wannier.wann_utils import *
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self , nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
@@ -33,11 +33,29 @@ class TB_dipoles():
         self.BSE_table = BSE_table
         #[nkpoints,3,nbands,nbands]
         self.dipoles = self._get_dipoles(method)
+        self.d_knm = self._get_dipoles_nm(method)
         if (h2peigvec is not None):
             self.h2peigvec = h2peigvec
             self.dipoles_bse = self._get_dipoles_bse(method)
             self.F_kcv = self._get_osc_strength(method)
 
+    # full dipoles matrix, not only cv 
+    def _get_dipoles_nm(self, method):
+        if (method == 'real'):
+            dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
+            for n in range(0, self.nb):
+                for m in range(0,self.nb):
+                    for ik in range(0,self.nkpoints):
+                        # E = self.eigv[ik, n]-self.eigv[ik, m]
+                        # GR = GreensFunctions(E,0,self.eta).GR
+                        #GA = GreensFunctions(E,0,self.eta).GA
+                        # hlm is Bohr*eV
+                        dipoles[ik, n, m,0] = np.vdot(self.eigvec[ik,:,n],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,m]))
+                        dipoles[ik, n, m,1] = np.vdot(self.eigvec[ik,:,n],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,m]))
+                        dipoles[ik, n, m,2] = np.vdot(self.eigvec[ik,:,n],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,m]))
+
+        return dipoles/(HA2EV**3)
+    
     def _get_dipoles(self, method):
         if (method == 'real'):
             dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
@@ -59,7 +77,7 @@ class TB_dipoles():
             print('Warning! position gauge not implemented yet')
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
-        return dipoles     
+        return dipoles/(HA2EV**3)     
 
     def _get_dipoles_bse(self, method):
         if (method == 'real'):
@@ -81,7 +99,7 @@ class TB_dipoles():
             print('Warning! position gauge not implemented yet')
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
-        return dipoles                        
+        return dipoles/(HA2EV**3)                        
     
     def _get_osc_strength(self,method):
         '''computes osc strength from dipoles'''
