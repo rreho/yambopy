@@ -129,3 +129,5 @@ from yambopy.wannier.wann_model import *
 from yambopy.wannier.wann_dipoles import *
 from yambopy.wannier.wann_H2p import *
 from yambopy.wannier.wann_lifetimes import *
+from yambopy.wannier.wann_ode import *
+from yambopy.wannier.wann_realtime import *
