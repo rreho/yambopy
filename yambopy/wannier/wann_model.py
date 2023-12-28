@@ -14,6 +14,7 @@ from yambopy.wannier.wann_tb_mp import tb_Monkhorst_Pack
 from yambopy.wannier.wann_Gfuncs import GreensFunctions
 from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T, sort_eig
 from yambopy.wannier.wann_dipoles import TB_dipoles
+import matplotlib.pyplot as plt
 class TBMODEL(tbmodels.Model):
     '''
     Class that inherits from tbmodels.Model for TB-model Hamiltonians
@@ -21,6 +22,7 @@ class TBMODEL(tbmodels.Model):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.Mmn = None
     
     @classmethod
     def set_mpgrid(cls,mpgrid):
@@ -198,7 +200,44 @@ class TBMODEL(tbmodels.Model):
         
         hk = hk #+ fermie
         return hk
+
+    def _get_h_R(self, lat, hr, fermie, from_hr=True):
+        ''' get hamiltonian at R from real space hamiltonian
+        R is one lattice vector in cartesian coordinates
+        '''
+        #ws_deg is needed for fourier factor
+        #to do, make it work also for hr from tbmodels
+        # I started but I do not have ffactor from tbmodels.
+        if (not from_hr):
+            pos = self.get_pos_from_ham(lat, hr, from_hr)
+        else:
+            pos = self.get_pos_from_ham(lat=lat,hr=hr, from_hr=True)
+            irpos = hr.hop
+            self.irpos = irpos        
+        # len(pos) = nrpts
+        hr_mn_p = hr.HR_mn[:,:,:]
+        return hr_mn_p    
     
+    def decay_R(self, lat, hr ,fermie, from_hr = True):
+        hr_mn_p = self._get_h_R(lat, hr, fermie, from_hr)
+        #calculate distances
+        max_hr_p = np.zeros(hr.nrpts, dtype= float)
+        R_dist = np.zeros(hr.nrpts, dtype= float)
+        for i in range(self.nrpos):
+            R_dist[i] = np.linalg.norm(self.pos[i])
+            max_hr_p[i] = np.max(np.abs(hr_mn_p[i]))
+        fig, ax = plt.subplots()
+        ax.set_xlabel('R [Bohr]')
+        ax.set_ylabel(r'max $H_{MN}(R)$')
+        #sorting and unique
+        tmpidx = np.argsort(R_dist)
+        R_dist = R_dist[tmpidx]
+        max_hr_p = max_hr_p[tmpidx]
+        
+        ax.plot(R_dist, max_hr_p)
+
+        return R_dist, max_hr_p
+
     def get_eigenval(self, k, from_hr=True):
         """
         Returns the eigenvalues at a given k point, or list of k-points.
@@ -280,3 +319,35 @@ class TBMODEL(tbmodels.Model):
         Umn[:,:, self.nv:self.nb] = self.eigvecc
         Uknm = Umn.transpose(0,2,1)
         self.Uknm = Uknm
+
+    def _get_overlap(self):
+        Mmn = np.zeros((self.nb, self.nb,self.nk, self.nk), dtype=complex)
+        # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
+        for n in range(self.nb):
+            for m in range(self.nb):   
+                for ik in range(self.nk):
+                    for ikp in range(self.nk):
+                        Mmn[n,m,ik, ikp] = np.vdot(self.eigvec[ik,:,n],self.eigvec[ikp,:,m])
+        self.Mmn = Mmn
+
+    def write_overlap(self,seedname='wannier90',):
+        if (self.Mmn is None):
+            self._get_overlap()
+
+        from datetime import datetime
+        
+        current_datetime = datetime.now()
+        date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
+        f_out = open(f'{seedname}.mmn', 'w')
+        f_out.write(f'Created on {date_time_string}\n')
+        f_out.write(f'\t{self.nb}\t{self.nk}\t{self.nk}\n')  
+        (self.kplusq_table, self.kminusq_table) = self.mpgrid.get_kq_tables(self.mpgrid)      
+        for ik in range(self.nk):
+            for ikp in range(self.nk):
+                # +1 is for Fortran counting, assume all Gs are 0 for WanTIBEXOS (to be discussed)
+                f_out.write(f'\t{self.kplusq_table[ik,ikp]+1}\t{self.kplusq_table[ik,ikp]+1}\t{0}\t{0}\t{0}\n')
+                for n in range(self.nb):
+                    for m in range(self.nb):
+                        f_out.write(f'\t{np.real(self.Mmn[m,n,ik,ikp]):.14f}\t{np.imag(self.Mmn[m,n,ik,ikp]):.14f}\n')
+        
+        f_out.close()

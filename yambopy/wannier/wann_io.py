@@ -211,7 +211,7 @@ class HR(W90_data):
         newhop = self.iHR_mn[:,:,:,0:3].reshape(self.nrpts*self.num_wann**2,3)
         self.hop = newhop[::self.num_wann**2]
         t2 = time()
-        print("Time for MMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))
+        print("Time for HR.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))
 
 class RMN(W90_data):
     """
@@ -252,7 +252,7 @@ class RMN(W90_data):
         self.r_mn = np.array(r_mn).reshape(self.nrpts, self.num_wann, self.num_wann,3)
         self.ir_mn = np.array(ir_mn).reshape(self.nrpts,self.num_wann,self.num_wann,5)
         t2 = time()
-        print("Time for MMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))
+        print("Time for RMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))
 
 class NNKP():
     """

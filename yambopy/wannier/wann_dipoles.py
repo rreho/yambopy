@@ -70,6 +70,19 @@ class TB_dipoles():
                 dipoles[ik, ic, iv,0] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
                 dipoles[ik, ic, iv,1] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
                 dipoles[ik, ic, iv,2] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
+        if (method == 'yambo'):
+            dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
+            for t in range(0,self.ntransitions):
+                ik = self.T_table[t][0]
+                iv = self.T_table[t][1]
+                ic = self.T_table[t][2]
+                # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
+                E = self.eigv[ik, ic]-self.eigv[ik, iv]
+                GR = GreensFunctions(E,0,self.eta).GR
+                GA = GreensFunctions(E,0,self.eta).GA
+                dipoles[ik, ic, iv,0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                dipoles[ik, ic, iv,1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                dipoles[ik, ic, iv,2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
 
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')
@@ -89,17 +102,30 @@ class TB_dipoles():
                 # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
                 E = self.eigv[ik, ic]-self.eigv[ik, iv]
                 GR = GreensFunctions(E,0,self.eta).GR
-                #GA = GreensFunctions(E,0,self.eta).GA
+                GA = GreensFunctions(E,0,self.eta).GA
                 dipoles[ik, ic-self.nv, self.bse_nv-self.nv+iv,0] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
                 dipoles[ik, ic-self.nv, self.bse_nv-self.nv+iv,1] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
                 dipoles[ik, ic-self.nv, self.bse_nv-self.nv+iv,2] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
+        if (method == 'yambo'):
+            dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
+            for t in range(0,self.ntransitions):
+                ik = self.T_table[t][0]
+                iv = self.T_table[t][1]
+                ic = self.T_table[t][2]
+                # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
+                E = self.eigv[ik, ic]-self.eigv[ik, iv]
+                GR = GreensFunctions(E,0,self.eta).GR
+                GA = GreensFunctions(E,0,self.eta).GA
+                dipoles[ik, ic, iv,0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                dipoles[ik, ic, iv,1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                dipoles[ik, ic, iv,2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))      
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')
         if (method== 'r-gauge'):
             print('Warning! position gauge not implemented yet')
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
-        return dipoles/(HA2EV**3)                        
+        return dipoles                        
     
     def _get_osc_strength(self,method):
         '''computes osc strength from dipoles'''
