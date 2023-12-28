@@ -57,9 +57,44 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack):
 
         return kplusq_table, kminusq_table
     
+    def get_plaquette(self, nx, ny, nz, dir = 2):
+        if (dir == 2):
+            dir1 = np.array([1,0,0])
+            dq1 = 1/nx
+            dir2 = np.array([0,1,0])
+            dq2 = 1/ny
+            nps = nx*ny
+        if (dir == 0):
+            dir1 = np.array([0,1,0])
+            dq1 = 1/ny
+            dir2 = np.array([0,0,1])
+            dq2 = 1/nz
+            nps = ny*nz
+        if (dir == 1):
+            dir1 = np.array([1,0,0])
+            dq1 = 1/nx
+            dir2 = np.array([0,0,1])            
+            dq2 = 1/nz
+            nps = nx*nz
+        counter = 0
+        #here I need to use the q grid and then apply -b/2
+        qplaquette_grid = np.zeros((nps, 4), dtype=int)
+        for iq, q in enumerate(self.k):
+            if (q[dir]==0.0):
+                tmp_qp1 = self.fold_into_bz(q + dq1*dir1)
+                tmp_qp1p2 = self.fold_into_bz(q + dq1*dir1+ dq2*dir2)
+                tmp_qp2 = self.fold_into_bz(q + dq2*dir2)  
+                idxqp1 = self.find_closest_kpoint(tmp_qp1)
+                idxqp1p2 = self.find_closest_kpoint(tmp_qp1p2)
+                idxqp2 = self.find_closest_kpoint(tmp_qp2)
+                qplaquette_grid[counter] = [iq, idxqp1, idxqp1p2, idxqp2]
+                counter +=1            
+        self.qplaquette_grid = qplaquette_grid
 class NNKP_Grids(NNKP):
-    def __init__(self, seedname, latdb):
+    def __init__(self, seedname, latdb, yambo_grid=False):
         super().__init__(seedname)
+        if(yambo_grid):
+            self.k = np.array([self.fold_into_bz(k) for ik,k in enumerate(self.k)])
         self.latdb = latdb
         self.lat = latdb.lat
         self.rlat = latdb.rlat*2*np.pi
@@ -94,10 +129,10 @@ class NNKP_Grids(NNKP):
         for iq, q in enumerate(qmpgrid.k):
             for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
                 tmp_qpb, tmp_Gvec = qmpgrid.fold_into_bz_Gs(q+b)
-                ib = ib
                 qpb_grid[iq, ib] = tmp_qpb
-                idxqpb = qmpgrid.find_closest_kpoint(tmp_qpb)
-                qpb_grid_table[iq,ib] = [iq, idxqpb, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
+                idxqpb = self.find_closest_kpoint(tmp_qpb)
+                # here it should be tmp_Gvec, but with yambo grid I have inconsistencies because points are at 0.75
+                qpb_grid_table[iq,ib] = [iq, idxqpb, int(qmpgrid.iG[ib+qmpgrid.nnkpts*iq,0]), int(qmpgrid.iG[ib+qmpgrid.nnkpts*iq,1]), int(qmpgrid.iG[ib+qmpgrid.nnkpts*iq,2])]
         
         self.qpb_grid = qpb_grid
         self.qpb_grid_table = qpb_grid_table
@@ -173,7 +208,9 @@ class NNKP_Grids(NNKP):
                 folded_k_point[i] += (bz_range[1] - bz_range[0])
                 G_vector[i] -= (bz_range[1] - bz_range[0])
             G_vector[i] = -G_vector[i]
-
+            if folded_k_point[i] == bz_range[1]:
+                folded_k_point[i] -= (bz_range[1]-bz_range[0])
+                G_vector[i] = 0
         return folded_k_point, G_vector
 
     def find_closest_kpoint(self, point):
@@ -182,8 +219,8 @@ class NNKP_Grids(NNKP):
         return int(closest_idx)
 
     def get_kq_tables(self,qmpgrid):
-        kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
-        kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
+        kplusq_table = np.zeros((self.nkpoints,self.nkpoints),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,self.nkpoints), dtype=int)
         
         for ik, k in enumerate(self.k):
             for iq, q in enumerate(qmpgrid.k):
@@ -202,7 +239,40 @@ class NNKP_Grids(NNKP):
         'Fold a point in the first BZ defined in the range [-0.5,0.5]'
         folded_points = np.mod(points+0.5, 1.0) - 0.5
         return folded_points
-            
+    
+    def get_plaquette(self, nx, ny, nz, dir = 2):
+        if (dir == 2):
+            dir1 = np.array([1,0,0])
+            dq1 = 1/nx
+            dir2 = np.array([0,1,0])
+            dq2 = 1/ny
+            nps = nx*ny
+        if (dir == 0):
+            dir1 = np.array([0,1,0])
+            dq1 = 1/ny
+            dir2 = np.array([0,0,1])
+            dq2 = 1/nz
+            nps = ny*nz
+        if (dir == 1):
+            dir1 = np.array([1,0,0])
+            dq1 = 1/nx
+            dir2 = np.array([0,0,1])            
+            dq2 = 1/nz
+            nps = nx*nz
+        counter = 0
+        #here I need to use the q grid and then apply -b/2
+        qplaquette_grid = np.zeros((nps, 4), dtype=int)
+        for iq, q in enumerate(self.k):
+            if (q[dir]==0.0):
+                tmp_qp1, tmp_qp1Gvec = self.fold_into_bz_Gs(q + dq1*dir1)
+                tmp_qp1p2, tmp_qp1p2Gvec = self.fold_into_bz_Gs(q + dq1*dir1+ dq2*dir2)
+                tmp_qp2, tmp_qp2Gvec = self.fold_into_bz_Gs(q + dq2*dir2)  
+                idxqp1 = self.find_closest_kpoint(tmp_qp1)
+                idxqp1p2 = self.find_closest_kpoint(tmp_qp1p2)
+                idxqp2 = self.find_closest_kpoint(tmp_qp2)
+                qplaquette_grid[counter] = [iq, idxqp1, idxqp1p2, idxqp2]
+                counter +=1            
+        self.qplaquette_grid = qplaquette_grid
 class tb_symm_grid():
     def __init__(self, latdb, mesh, is_shift=[0.0,0.0,0.0]):
         self.latdb = latdb

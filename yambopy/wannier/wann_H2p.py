@@ -9,7 +9,7 @@ from time import time
 class H2P():
     '''Build the 2-particle resonant Hamiltonian H2P'''
     def __init__(self, nk, nb, nc, nv,eigv, eigvec,bse_nv, bse_nc, T_table, latdb, kmpgrid, qmpgrid,excitons=None, \
-                  kernel=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
+                  kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
                   TD=False,  TBos=300): 
         '''Build H2P:
             bsetype = 'full' build H2P resonant + antiresonant + coupling
@@ -22,6 +22,7 @@ class H2P():
         self.nv = nv
         self.bse_nv = bse_nv
         self.bse_nc = bse_nc
+        self.nq_double = len(kmpgrid.k)
         self.nq = len(qmpgrid.k)
         self.eigv = eigv
         self.eigvec = eigvec
@@ -58,10 +59,10 @@ class H2P():
             print('\n Building H2P from model YamboKernelDB\n')
             #Remember that the BSEtable in Yambopy start counting from 1 and not to 0
             try:
-                self.kernel = kernel
+                self.kernel_path = kernel_path
+                self.excitons_path = excitons_path
             except  TypeError:
-                print('Error Kernel is None')
-            self.excitons = excitons
+                print('Error Kernel is None or Path Not found')
             self.H2P = self._buildH2P()
         else:
             print('\nWarning! Kernel can be built only from Yambo database or model Coulomb potential\n')
@@ -70,22 +71,60 @@ class H2P():
     def _buildH2P(self):
         # to-do fix inconsistencies with table
         # inconsistencies are in the k-points in mpgrid and lat.red_kpoints in Yambo
-        H2P = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
-        for t in range(self.dimbse):
-            for tp in range(self.dimbse):
-                ik = self.BSE_table[t][0]
-                iv = self.BSE_table[t][1]
-                ic = self.BSE_table[t][2]
-                ikp = self.BSE_table[tp][0]
-                ivp = self.BSE_table[tp][1]
-                icp = self.BSE_table[tp][2]
-                #plus one needed in kernel for fortran counting
-                # W_cvkc'v'k'
-                if (t == tp):
-                    H2P[t,tp] = self.eigv[ik,ic]-self.eigv[ik,iv] + self.kernel.get_kernel_value_bands(self.excitons,[iv+1,ic+1])[ik,ikp]*HA2EV 
-                else:
-                    H2P[t,tp] = self.kernel.get_kernel_value_bands(self.excitons,[iv+1,ic+1])[ik,ikp]*HA2EV
-        return H2P
+        if (self.nq_double ==1):
+            H2P = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
+            t0 = time()
+            yexc_atq = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q1')
+            kernel_atq = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}')                
+            v_band = np.min(yexc_atq.table[:,1])
+            c_band = np.min(yexc_atq.table[:,2])
+            for t in range(self.dimbse):
+                for tp in range(self.dimbse):
+                    ik = self.BSE_table[t][0]
+                    iv = self.BSE_table[t][1]
+                    ic = self.BSE_table[t][2]
+                    ikp = self.BSE_table[tp][0]
+                    ivp = self.BSE_table[tp][1]
+                    icp = self.BSE_table[tp][2]
+                    # True power of Object oriented programming displayed in the next line
+                    ikplusq = self.kplusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]+self.qmpgrid.k[iq]))
+                    ikminusq = self.kminusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]-self.qmpgrid.k[iq]))
+                    K = kernel_atq.kernel[t,tp]*HA2EV
+                    if(t == tp):
+                        H2P[t,tp] = self.eigv[ikminusq,ic]-self.eigv[ik,iv] + (self.f_kn[ik,iv]-self.f_kn[ikminusq,ic])*(K)
+                        # if (self.TD==True):
+                        #     H2P[iq,t,tp] = 0.0
+                    else:
+                        H2P[t,tp] =  (self.f_kn[ik,iv]-self.f_kn[ikminusq,ic])*(K)
+            return H2P      
+        else:
+            H2P = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
+            t0 = time()
+            for iq in range(self.nq_double):
+                yexc_atq = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q{iq+1}')
+                kernel_atq = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}')                
+                v_band = np.min(yexc_atq.table[:,1])
+                c_band = np.min(yexc_atq.table[:,2])                         
+                for t in range(self.dimbse):
+                    for tp in range(self.dimbse):
+                        ik = self.BSE_table[t][0]
+                        iv = self.BSE_table[t][1]
+                        ic = self.BSE_table[t][2]
+                        ikp = self.BSE_table[tp][0]
+                        ivp = self.BSE_table[tp][1]
+                        icp = self.BSE_table[tp][2]
+                        # True power of Object oriented programming displayed in the next line
+                        ikplusq = self.kplusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]+self.qmpgrid.k[iq]))
+                        ikminusq = self.kminusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]-self.qmpgrid.k[iq]))
+                        K = kernel_atq.kernel[t,tp]*HA2EV
+                        if(t == tp):
+                            H2P[iq,t,tp] = self.eigv[ikminusq,ic]-self.eigv[ik,iv] + (self.f_kn[ik,iv]-self.f_kn[ikminusq,ic])*(K)
+                            # if (self.TD==True):
+                            #     H2P[iq,t,tp] = 0.0
+                        else:
+                            H2P[iq,t,tp] =   (self.f_kn[ik,ivp]-self.f_kn[ikminusq,icp])*(K)
+            return H2P            
+
     
     def _buildH2P_fromcpot(self):
         'build resonant h2p from model coulomb potential'
@@ -141,7 +180,7 @@ class H2P():
         pass
         
     def solve_H2P(self):
-        if(self.nq == 1):
+        if(self.nq_double == 1):
             print(f'\nDiagonalizing the H2P matrix with dimensions: {self.dimbse}\n')
             t0 = time()
             self.h2peigv = np.zeros((self.dimbse), dtype=np.complex128)
@@ -163,12 +202,12 @@ class H2P():
 
             print(f'\n Diagonalization of H2P in {t1-t0:.3f} s')
         else:
-            h2peigv = np.zeros((self.nq,self.dimbse), dtype=np.complex128)
-            h2peigvec = np.zeros((self.nq,self.dimbse,self.dimbse),dtype=np.complex128)
-            h2peigv_vck = np.zeros((self.nq,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
-            h2peigvec_vck = np.zeros((self.nq,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
+            h2peigv = np.zeros((self.nq_double,self.dimbse), dtype=np.complex128)
+            h2peigvec = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
+            h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
+            h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
             deg_h2peigvec = np.array([])        
-            for iq in range(0,self.nq):
+            for iq in range(0,self.nq_double):
                 print(f'\nDiagonalizing the H2P matrix with dimensions: {self.dimbse} for q-point: {iq}\n')
                 t0 = time()
                 tmph2peigv = np.zeros((self.dimbse), dtype=np.complex128)
@@ -341,6 +380,47 @@ class H2P():
         # compute osc strength
         F_kcv = tb_dipoles.F_kcv
         self.F_kcv = F_kcv
+        self.dipoles_bse = tb_dipoles.dipoles_bse
+        self.dipoles = tb_dipoles.dipoles
+        # compute eps and pl
+        #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
+        #pl = eps
+        for ies, es in enumerate(w):
+            for t in range(0,self.dimbse):
+                eps[ies,:,:] += 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+                #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+        print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
+        #self.pl = pl
+        # self.w = w
+        # self.eps_0 = eps_0
+        return w, eps
+    
+    def get_eps_yambo(self, hlm, emin, emax, estep, eta):
+        '''
+        Compute microscopic dielectric function 
+        dipole_left/right = l/r_residuals.
+        \eps_{\alpha\beta} = 1 + \sum_{kcv} dipole_left*dipole_right*(GR + GA)
+        '''        
+        w = np.arange(emin,emax,estep,dtype=np.float32)
+        F_kcv = np.zeros((self.dimbse,3,3), dtype=np.complex128)
+        eps = np.zeros((len(w),3,3), dtype=np.complex128)
+        for i in range(eps.shape[0]):
+            np.fill_diagonal(eps[i,:,:], 1)
+        # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
+        if(self.nq != 1): 
+            h2peigvec_vck=self.h2peigvec_vck[self.q0index]
+            h2peigv_vck = self.h2peigv_vck[self.q0index]
+            h2peigvec = self.h2peigvec[self.q0index]
+            h2peigv = self.h2peigv[self.q0index]
+
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=h2peigvec_vck, method='yambo')
+        # compute osc strength
+        F_kcv = tb_dipoles.F_kcv
+        self.F_kcv = F_kcv
+        self.dipoles_bse = tb_dipoles.dipoles_bse
+        self.dipoles = tb_dipoles.dipoles
         # compute eps and pl
         #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
         #pl = eps
@@ -370,7 +450,7 @@ class H2P():
                 ikp = self.BSE_table[tp][0]
                 ivp = self.BSE_table[tp][1] 
                 icp = self.BSE_table[tp][2] 
-                iqpb = self.qmpgrid.qpb_grid_table[iq, ib][1]
+                iqpb = self.kmpgrid.qpb_grid_table[iq, ib][1]
                 ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
                 ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib][1]
                 ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib][1]
@@ -407,7 +487,7 @@ class H2P():
                     Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq)        
         self.Amn = Amn
 
-    def write_exc_overlap(self,seedname='wannier90_exc', trange=[0], tprange=[0]):
+    def write_exc_overlap(self,seedname='wannier90_exac', trange=[0], tprange=[0]):
         if (self.Mssp is None):
             self.get_exc_overlap(trange, tprange)
 

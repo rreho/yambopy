@@ -80,6 +80,7 @@ class YamboBSEKernelDB(YamboSaveDB):
 
     def get_kernel_value_bands(self,excitons,bands):
         """ Get value of kernel matrix elements 
+        
             as a function of k in BZ for fixed c,v bands:
             
                 K_cv(k,p) = <ck,vk-q|K|cp,vp-q>
