@@ -1119,7 +1119,7 @@ class YamboExcitonDB(YamboSaveDB):
         #print(len(lattice.kpoints_indexes))
 
         # Kpoints indexes must be read from a SAVEDB Class
-        k1,k2,k3 = energies.expand_kpoints()
+        k1,k2,k3 = energies.expand_kpts()
         kpoints_indexes = k2
 
         # Fijar este error
