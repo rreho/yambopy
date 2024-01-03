@@ -118,6 +118,7 @@ class H2P():
                         ikminusq = self.kminusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]-self.qmpgrid.k[iq]))
                         K = kernel_atq.kernel[t,tp]*HA2EV
                         if(t == tp):
+                            print(ikminusq, iq, t ,tp ,H2P.shape, self.eigv.shape)
                             H2P[iq,t,tp] = self.eigv[ikminusq,ic]-self.eigv[ik,iv] + (self.f_kn[ik,iv]-self.f_kn[ikminusq,ic])*(K)
                             # if (self.TD==True):
                             #     H2P[iq,t,tp] = 0.0
