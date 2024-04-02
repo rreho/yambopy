@@ -118,7 +118,7 @@ class H2P():
                         ikminusq = self.kminusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]-self.qmpgrid.k[iq]))
                         K = kernel_atq.kernel[t,tp]*HA2EV
                         if(t == tp):
-                            print(ikminusq, iq, t ,tp ,H2P.shape, self.eigv.shape)
+                            #print(ikminusq, iq, t ,tp ,H2P.shape, self.eigv.shape)
                             H2P[iq,t,tp] = self.eigv[ikminusq,ic]-self.eigv[ik,iv] + (self.f_kn[ik,iv]-self.f_kn[ikminusq,ic])*(K)
                             # if (self.TD==True):
                             #     H2P[iq,t,tp] = 0.0
@@ -488,7 +488,7 @@ class H2P():
                     Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq)        
         self.Amn = Amn
 
-    def write_exc_overlap(self,seedname='wannier90_exac', trange=[0], tprange=[0]):
+    def write_exc_overlap(self,seedname='wannier90_exc', trange=[0], tprange=[0]):
         if (self.Mssp is None):
             self.get_exc_overlap(trange, tprange)
 
