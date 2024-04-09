@@ -1,21 +1,34 @@
 # LiF tutorial - From ground state DFT to excited state MBPT via Wannerization methods
-In this tutorial, we will compute the electronic groud state properties of LiF via Density Functional Theory (DFT) [^1] using the Quantum Espresso code package [^6]. Afterwards, we will exploit a Wannerization procedure [^2] to compute the electronic band structure *via* Fourier interpolation, increasing the sampling grid at a reduced computational cost. 
-Pre- and post- processing of the data are done with [yambopy](https://github.com/rreho/yambopy/tree/devel-tbwannier). In particular, the branch **devel-tbwannier** contains useful routines for IO and interpolation of the electronic (and excitonic) Hamiltonian.
+This tutorial guides you through calculating the electronic ground state properties of Lithium Fluoride (LiF) using Density Functional Theory (DFT)[^1]. For our simulations, we'll be utilizing the Quantum Espresso code package[^6]. We'll further enhance the electronic band structure analysis by employing a Wannierization procedure[^2] via Fourier interpolation. This step aims to increase the sampling grid while minimizing computational expenses.
 
-After the ground state properties are assessed, we will analyze the excited state with Yambo[^4][^5]. In particular, we will compute the absorption spectra and the exciton band structure.
-We apply a Wannierization procedure for the excitonic Hamiltonian $H^{2p}$ similar to the electronic case and compare our results with the literature [^3]. 
+## Advanced analysis with Yambo
 
-All simulation employ **LDA** pseudopotentials without Spin-Orbit coupling (SOC).
+Upon establishing the ground state properties, our attention shifts to excited state phenomena using Yambo[^4][^5]. Our focus here extends to assessing the absorption spectra and delineating the exciton band structure. The Wannierization procedure applied to the excitonic Hamiltonian mirrors that of the electronic scenario, providing a basis for comparison with existing literature findings[^3].
+
+## Tools and libraries
+For the effective pre- and post-processing of our data, we rely on [yambopy](https://github.com/rreho/yambopy/tree/devel-tbwannier), a robust tool available at yambopy GitHub repository. The specific branch `devel-tbwannier` is dedicated to the input/output (IO) and interpolation tasks related to both the electronic and excitonic Hamiltonians.
+
+## Computational details
+All simulations within this tutorial adhere to the use of LDA pseudopotentials, intentionally excluding Spin-Orbit coupling (SOC) to streamline our computational approach.
+
 ## Crystal structure LiF
-LiF has a face centered cubic (fcc) crystal structure with 48 symmetry operations.
+Lithium Fluoride (LiF) is an insualtor with a wide band-gap and the following characteristics:
+- FCC lattice with 48 symmetry operations
+- Two atoms per cell, Li and F (8 electrons)
+- Lattice constant 7.61 [a.u.]
+- Plane waves cutoff 80 Ry
+
+For the Yambo analysis we will see that any independent particle approximation drastically fails to describe the complex absorption structures that are observed experimentally.
+Indeed, the spectrum of bulk LiF is dominated by a strongly bound exciton (3 eV binding energy)
+
 <div style="text-align: center;">
     <img src="https://hackmd.io/_uploads/BJrSA7ZxA.png" alt="LiF" width="70%">
 </div>
 
-The high-symmetry band structure we employ is : $W-L-\Gamma-X-W$
 ## DFT
+This step is foundational, setting the stage for all subsequent analyses by establishing a precise understanding of the system's electronic distribution.
 ### self-consistent field calculation
-The first step consist in computing the electronic charge density of the auxiliary Kohn-Sham system via a self-consistent field calculation.
+The initial step involves calculating the electronic charge density, occupation, Fermi level, and so on. This is achieved through a self-consistent field (SCF) calculation on the auxiliary Kohn-Sham system. 
 1. Create an input file ```scf.in```:
 ```bash
   &control
@@ -51,9 +64,9 @@ K_POINTS automatic
 mpirun -np 4 pw.x < scf.in |tee log_scf.out
 ```
 ### non-self-consistent calculation
-We build the database for Yambo via a **non-self-consistent calculation (nscf)**.
-1. Create and go in a new directory `mkdir nscf`
-2. Copy the `.save` folder from the previous `scf` run `cp -r ../scf/LiF.save .` 
+A **non-self-consistent calculation (nscf)** generate a set of Kohn-Sham eigenvalues and eigenvectors for both occupied and unoccupied bands. The output of this calculation are needed for generating the Yambo databases accurately.
+1. Create and go in a new directory `$ mkdir nscf`
+2. Copy the `.save` folder from the previous `scf` run `$ cp -r ../scf/LiF.save .` 
 3. Create an `nscf.in` input file:
 ```bash
  &control
@@ -86,18 +99,19 @@ K_POINTS automatic
 ```
 4. run:
 ```
-mpirun -np 4 pw.x < nscf.in |tee log_nscf.out
+$ mpirun -np 4 pw.x < nscf.in |tee log_nscf.out
 ```
 ### Band structure
-We can get insight into the electronic states of the system computing the band structure along the high-symmetry Brillouin Zone (BZ) path $W-L-\Gamma-X-W$.
-In addition, we compute the wavefunctions projected to atomic orbitals via `projwfc.x` in order to inspect the orbital projected band structure.
+In order to gain a deeper understanding of the electronic states of the system, we proceed to compute the band structure along a path of high-symmetry points in the Brillouin Zone (BZ), specifically tracing the $W-L-\Gamma-X-W$ line.
+We detailed our analysis, employing the `projwfc.x` utility to compute wavefunctions projected onto atomic orbitals. This allows us to examine the band structure with an emphasis on orbital contributions, providing a more detailed view of the electronic states and their interactions with the atomic structure of the material.
 <div style="text-align: center;">
     <img src="https://hackmd.io/_uploads/r1EIqE-xC.png" alt="bz-path" width=40% pos=center>
 </div> 
 1. Create and move to a new `bands` folder
-2. Copy the `scf` `.save` folder in the current directory `cp -r ../scf/LiF.save .`
+2. Copy the `scf` `.save` folder in the current directory `$ cp -r ../scf/LiF.save .`
 3. create a new input file `nscf.in` (in QE a `bands` and `nscf` calculation are equivalent)
-```bash 
+
+```
   &control
     calculation = 'nscf',
     verbosity='high'
@@ -127,124 +141,7 @@ K_POINTS crystal_b
 121
 0.5    0.25    0.75    1
 0.5    0.25833333333333336    0.7416666666666667    1
-0.5    0.26666666666666666    0.7333333333333333    1
-0.5    0.275    0.725    1
-0.5    0.2833333333333333    0.7166666666666667    1
-0.5    0.2916666666666667    0.7083333333333334    1
-0.5    0.3    0.7    1
-0.5    0.30833333333333335    0.6916666666666667    1
-0.5    0.31666666666666665    0.6833333333333333    1
-0.5    0.325    0.675    1
-0.5    0.3333333333333333    0.6666666666666666    1
-0.5    0.3416666666666667    0.6583333333333333    1
-0.5    0.35    0.65    1
-0.5    0.35833333333333334    0.6416666666666666    1
-0.5    0.3666666666666667    0.6333333333333333    1
-0.5    0.375    0.625    1
-0.5    0.3833333333333333    0.6166666666666667    1
-0.5    0.39166666666666666    0.6083333333333334    1
-0.5    0.4    0.6    1
-0.5    0.4083333333333333    0.5916666666666667    1
-0.5    0.41666666666666663    0.5833333333333334    1
-0.5    0.425    0.575    1
-0.5    0.43333333333333335    0.5666666666666667    1
-0.5    0.44166666666666665    0.5583333333333333    1
-0.5    0.45    0.55    1
-0.5    0.45833333333333337    0.5416666666666666    1
-0.5    0.4666666666666667    0.5333333333333333    1
-0.5    0.475    0.525    1
-0.5    0.48333333333333334    0.5166666666666666    1
-0.5    0.4916666666666667    0.5083333333333333    1
-0.5    0.5    0.5    1
-0.48333333333333334    0.48333333333333334    0.48333333333333334    1
-0.4666666666666667    0.4666666666666667    0.4666666666666667    1
-0.45    0.45    0.45    1
-0.43333333333333335    0.43333333333333335    0.43333333333333335    1
-0.4166666666666667    0.4166666666666667    0.4166666666666667    1
-0.4    0.4    0.4    1
-0.3833333333333333    0.3833333333333333    0.3833333333333333    1
-0.3666666666666667    0.3666666666666667    0.3666666666666667    1
-0.35    0.35    0.35    1
-0.33333333333333337    0.33333333333333337    0.33333333333333337    1
-0.31666666666666665    0.31666666666666665    0.31666666666666665    1
-0.3    0.3    0.3    1
-0.2833333333333333    0.2833333333333333    0.2833333333333333    1
-0.26666666666666666    0.26666666666666666    0.26666666666666666    1
-0.25    0.25    0.25    1
-0.23333333333333334    0.23333333333333334    0.23333333333333334    1
-0.21666666666666667    0.21666666666666667    0.21666666666666667    1
-0.2    0.2    0.2    1
-0.18333333333333335    0.18333333333333335    0.18333333333333335    1
-0.16666666666666669    0.16666666666666669    0.16666666666666669    1
-0.15000000000000002    0.15000000000000002    0.15000000000000002    1
-0.13333333333333336    0.13333333333333336    0.13333333333333336    1
-0.11666666666666664    0.11666666666666664    0.11666666666666664    1
-0.09999999999999998    0.09999999999999998    0.09999999999999998    1
-0.08333333333333331    0.08333333333333331    0.08333333333333331    1
-0.06666666666666665    0.06666666666666665    0.06666666666666665    1
-0.04999999999999999    0.04999999999999999    0.04999999999999999    1
-0.033333333333333326    0.033333333333333326    0.033333333333333326    1
-0.016666666666666663    0.016666666666666663    0.016666666666666663    1
-0.0    0.0    0.0    1
-0.016666666666666666    0.0    0.016666666666666666    1
-0.03333333333333333    0.0    0.03333333333333333    1
-0.05    0.0    0.05    1
-0.06666666666666667    0.0    0.06666666666666667    1
-0.08333333333333333    0.0    0.08333333333333333    1
-0.1    0.0    0.1    1
-0.11666666666666667    0.0    0.11666666666666667    1
-0.13333333333333333    0.0    0.13333333333333333    1
-0.15    0.0    0.15    1
-0.16666666666666666    0.0    0.16666666666666666    1
-0.18333333333333332    0.0    0.18333333333333332    1
-0.2    0.0    0.2    1
-0.21666666666666667    0.0    0.21666666666666667    1
-0.23333333333333334    0.0    0.23333333333333334    1
-0.25    0.0    0.25    1
-0.26666666666666666    0.0    0.26666666666666666    1
-0.2833333333333333    0.0    0.2833333333333333    1
-0.3    0.0    0.3    1
-0.31666666666666665    0.0    0.31666666666666665    1
-0.3333333333333333    0.0    0.3333333333333333    1
-0.35    0.0    0.35    1
-0.36666666666666664    0.0    0.36666666666666664    1
-0.38333333333333336    0.0    0.38333333333333336    1
-0.4    0.0    0.4    1
-0.4166666666666667    0.0    0.4166666666666667    1
-0.43333333333333335    0.0    0.43333333333333335    1
-0.45    0.0    0.45    1
-0.4666666666666667    0.0    0.4666666666666667    1
-0.48333333333333334    0.0    0.48333333333333334    1
-0.5    0.0    0.5    1
-0.5    0.008333333333333333    0.5083333333333333    1
-0.5    0.016666666666666666    0.5166666666666667    1
-0.5    0.025    0.525    1
-0.5    0.03333333333333333    0.5333333333333333    1
-0.5    0.041666666666666664    0.5416666666666666    1
-0.5    0.05    0.55    1
-0.5    0.058333333333333334    0.5583333333333333    1
-0.5    0.06666666666666667    0.5666666666666667    1
-0.5    0.075    0.575    1
-0.5    0.08333333333333333    0.5833333333333334    1
-0.5    0.09166666666666666    0.5916666666666667    1
-0.5    0.1    0.6    1
-0.5    0.10833333333333334    0.6083333333333334    1
-0.5    0.11666666666666667    0.6166666666666667    1
-0.5    0.125    0.625    1
-0.5    0.13333333333333333    0.6333333333333333    1
-0.5    0.14166666666666666    0.6416666666666666    1
-0.5    0.15    0.65    1
-0.5    0.15833333333333333    0.6583333333333333    1
-0.5    0.16666666666666666    0.6666666666666666    1
-0.5    0.175    0.675    1
-0.5    0.18333333333333332    0.6833333333333333    1
-0.5    0.19166666666666668    0.6916666666666667    1
-0.5    0.2    0.7    1
-0.5    0.20833333333333334    0.7083333333333334    1
-0.5    0.21666666666666667    0.7166666666666667    1
-0.5    0.225    0.725    1
-0.5    0.23333333333333334    0.7333333333333334    1
-0.5    0.24166666666666667    0.7416666666666667    1
+...
 0.5    0.25    0.75    1
 ```
 Note that we created a list of k-points along the high-symmetry path using **yambopy**. After importing the correct libraries you can create an instance of the `Path` class along the given path with `npoints` between each high-symmetry point. 
@@ -258,7 +155,7 @@ path_kpoints = Path([[[  0.5,  0.250,  0.750],'W'],
               [[  0.5,  0.250,  0.750],'W']],[npoints,npoints,npoints,npoints] )
 ```
 2. run: 
-``` mpirun -np 4 pw.x < nscf.in |tee ```
+``` $ mpirun -np 4 pw.x < nscf.in |tee log_nscf.out```
 3. Compute the orbital projected wavefunction. Create a new `bands.in` file
 ```bash
 &projwfc
@@ -272,7 +169,7 @@ path_kpoints = Path([[[  0.5,  0.250,  0.750],'W'],
 ```
 an run 
 ```
-mpirun -np 4 projwfc.x < bands.in |tee projwfc.log
+$ mpirun -np 4 projwfc.x < bands.in |tee projwfc.log
 ```
 **Note** the output file has to be named `projwfc.log` for yambopy
 
@@ -353,22 +250,27 @@ You can play with the aesthetic and plotting options. The final result should lo
 <img src="https://hackmd.io/_uploads/ry-8Jr-lA.png" alt="orbbands" style="width: 48%;">
 
 
-From these two figure we can see that the three upmost valence bands are mainly composed of Fluorine p orbitals while the first conduction band has a mixed $Li_p$, $Li_s$, $F_s$, $F_p$ orbital. This information is important for Wannierization and it slightly differs from the analysis carried in the reference [^3], where they only considered $Li_s$ and $F_p$ orbitals.
+Examining the two figures reveals that the top three valence bands predominantly consist of Fluorine p orbitals, whereas the initial conduction band exhibits a composition of mixed orbitals, including $Li_p$, $Li_s$, $F_s$, and $F_p$. This detail is crucial for the Wannierization process and presents a slight deviation from the analysis conducted in reference [^3], which focused solely on $Li_s$ and $F_p$ orbitals.
 ### Wannierization
-**Requirement** go into the [nscf](#non-self-consistent-calculation) `.save` folder and initialize the yambo database with `p2y` and `yambo`.
+**Requirement**: Navigate to the `.save` directory within the [nscf](#non-self-consistent calculation) section and initialize the Yambo database using the `p2y` and `yambo` commands.
 
-In order to run a Wannier90 calculation we first need to run an [nscf](#non-self-consistent-calculation) with a uniform kgrid.
-We will consider two grids, a **k-grid = 8x8x8** and a **q-grid=4x4x4**. We report the steps for the q-grid.
-1. You can generate a uniform kgrid with the `kmesh.pl` utility provided by the `wannier90` package.
-However, in order to be ensure consistency between the k-grid employed by `Yambo` and `QE` we use `yambopy` to print the list of k-points in the `full BZ`
+Before the Wannier90 analysis, it's necessary to perform an [nscf](#non-self-consistent calculation) employing a uniform k-grid. We will explore calculations using two different grids: a k-grid of 8x8x8 and a q-grid of 4x4x4, focusing our discussion on the q-grid.
+
+1. To create a uniform k-grid, you could use the kmesh.pl utility available in the `wannier90` package. Yet, to maintain consistency in the k-grid utilized by both Yambo and QE, we opt for yambopy to generate a comprehensive list of k-points across the full Brillouin Zone (BZ).
 ```python=
 # 
-savedb_k = YamboSaveDB.from_db_file(f'./database/SAVE')
-for i in range (len(savedb_q.red_kpoints)):
-    print(f'{savedb_q.red_kpoints[i][0]:.10f}   {savedb_q.red_kpoints[i][1]:.10f}   {savedb_q.red_kpoints[i][2]:.10f} {1/len(savedb_q.red_kpoints):.10f}')
+savedb_q = YamboSaveDB.from_db_file(f'{YAMBO_TUT_PATH}/unshifted-grid/SAVE')
+lat_q = YamboLatticeDB.from_db_file(f'{YAMBO_TUT_PATH}/unshifted-grid/SAVE/ns.db1')
+full_kpoints, kpoints_indexes, symmetry_indexes=savedb_q.expand_kpts()
+full_kpoints_red = car_red(full_kpoints, lat_q.rlat)
+
+# Generate list of q-points with weights
+
+for i in range (len(full_kpoints_red)):
+    print(f'{full_kpoints_red[i][0]:.10f}   {full_kpoints_red[i][1]:.10f}   {full_kpoints_red[i][2]:.10f} {1/len(full_kpoints_red):.10f}')
 ```
 2. Create an `nscf.in` input file
-```bash=
+```
   &control
     calculation = 'nscf',
     verbosity='high'
@@ -587,14 +489,14 @@ end kpoints
 ```
 For the initial projections see the discussion in [Band structure](#Band-structure)
 
-3. Copy the `scf` `.save` folder `cp -r ../scf/LiF.save .` (for the k-grid you might want to run another scf run with an 8x8x8 grid to ensure consistency)
+3. Copy the `scf` `.save` folder `$ cp -r ../scf/LiF.save .` (for the k-grid you might want to run another scf run with an 8x8x8 grid to ensure consistency)
 4. Run an `nscf` calculation
 ```
-mpirun -np 4 pw.x < nscf.in |tee log_nscf.out
+$ mpirun -np 4 pw.x < nscf.in |tee log_nscf.out
 ```
 5. Run the pre-processing steps of Wannier90
 ```
-mpirun -np 1 wannier90.x -pp LiF
+$ mpirun -np 1 wannier90.x -pp LiF
 ```
 6. Create an input file `pw2wan.in` for `pw2wannier90.x` and run `pw2wannier90.x`:
 ```bash 
@@ -608,11 +510,11 @@ write_unk = .true. !optional
 /
 ```
 ```
-mpirun -np 1 pw2wannier90.x < pw2wan.in |tee log_pw2wan.out
+$ mpirun -np 1 pw2wannier90.x < pw2wan.in |tee log_pw2wan.out
 ```
 7. Finally run `wannier90.x`
 ```
-mpirun -np 1 wannier90.x LiF
+$ mpirun -np 1 wannier90.x LiF
 ```
 You should now have a `seedname_hr.dat` file containing the real-space Hamiltonian in the MLWF basis.
 We can compare the electronic band structure obtained with `Wannier90` and `QE` via the following Python scripting.
@@ -658,31 +560,31 @@ ax.set_ylim(-5,26)
 plt.savefig(f'{unshiftedgrid_path}/bands/DFTvsWann_q.pdf',bbox_inches='tight')
 
 ```
-We can now compare the results obtained Wannierizing the k- and q-grid with the DFT computed band structure
+We can now compare the results obtained Wannierizing the k- and q-grid with the DFT computed band structure.
 
 <img src="https://hackmd.io/_uploads/BJlrTvZxC.png" alt="dftvswann_k" style="width: 48%; margin-right: 2%;">
 <img src="https://hackmd.io/_uploads/ryiSaw-x0.png" alt="dftvswann_q" style="width: 48%;">
+
 The two plots are reasonable in agreement but not ideal. We recover the degeneracy at W in the valence bands manifold. 
-It is possible to increase the accurarcy of Wannier interpolation increasing the zie of the grid. Howver, I am not sure this is probelm for this case.
+It is possible to increase the accurarcy of Wannier interpolation increasing the size of the grid. 
+Notably, if I were to include only $Li_s$ and $F_p$ orbitals as in ref[^3] is difficult to achieve a reasonable band structure and it might be necesssary to increase the `num_iter=1000000`. From the orbital projected band structure it's evident that these orbitals are not enough to describe the first conduction band and upmost three valence band. 
 
 # Excited state - YAMBO
 **Requirements**: Run the DFT [scf and nscf](#DFT) calculations. You can download all input and references file [here](https://media.yambo-code.eu/educational/tutorials/files/LiF.tar.gz)
 
-We can move now the the excited state properties computed via *ab initio* Many Body Perturbation Theory (Ai-MBPT) code by Yambo.
-As opposite to what has been done [above](#DFT), we will work with *shifted* k-grids 
+Now, we transition to examining the excited state properties calculated via the ab initio Many-Body Perturbation Theory (Ai-MBPT) approach, facilitated by the Yambo code. Contrary to the approach detailed [previously](#DFT), here we employ shifted k-grids, as demonstrated below: 
 ```
 ...
 K_POINTS automatic
  4  4  4  1  1  1
 ```
-and compare the results obtained with *shifted* and *unshifted* grids.
-If you successfully followed the [previous steps][#DFT], you should have a `LiF.save` directory:
+This phase involves a comparative analysis between results derived from *shifted* and *unshifted* grids. Assuming the [preceding steps](#DFT) were executed without issues, you should now possess a `LiF.save` directory:
 ```
-ls LiF.save
+$ ls LiF.save
 charge-density.dat  data-file-schema.xml  F.LDA.cpi.UPF  Li.LDA.cpi.UPF  wfc10.dat  wfc1.dat  wfc2.dat	wfc3.dat  wfc4.dat  wfc5.dat  wfc6.dat	wfc7.dat 
 ```
 ## Conversion to Yambo format
-The PWscf `LiF.save` outpu is converted to the Yambo format using the `p2y` executable, found in the yambo `bin` directory. Enter `LiF.save` and launch `p2y`:
+The PWscf `LiF.save` output is converted to the Yambo format using the `p2y` executable, found in the yambo `bin` directory. Enter `LiF.save` and launch `p2y`:
 ```
 $ cd LiF.save
 $ p2y
@@ -724,10 +626,8 @@ and you will see:
 this run produced an `r_setup` file with a lot of useful information about your system, like the Fermi level, the crystal structure, the number of k-points, the gap etc...
 
 ## Random-Phase approximation
-Here, we compute the absorption spectrum for LiF with different level of approximations for the kernel.
-The simplest approximation that can be used to calculate the absorption spectrum of LiF is the independent particle approximation (`02_RPA_no_LF`).
-We can then include a kernel in the Hartree apporximation (`03_RPA_LF`), which correspond to the Random-Phase-Approximation (RPA).
-In addition, we can rigidly shift with a scissor the electronic states to match the experimental absorption peak (`03_RPA_LF_QP`)
+
+In this section, we calculate the absorption spectrum of LiF under various levels of approximation for the kernel. The most fundamental approach to estimating LiF's absorption spectrum is the independent particle approximation (`02_RPA_no_LF`). Following this, we introduce a kernel based on the Hartree approximation (`03_RPA_LF`), aligning with the Random-Phase-Approximation (RPA) framework. Moreover, to closely align with experimental absorption peak data, we employ a rigid scissor shift of the electronic states(`03_RPA_LF_QP`)
 1. Create an input file called `02_RPA_no_LF`
 ```
 optics                       # [R OPT] Optics
@@ -932,15 +832,135 @@ Note that in the unshifted case you have 64 k-points in the BZ, while in the shi
 
 The two results differ only slightly.
 
+**Notes for developers:**
+1. Question: In the `r_setup` files I can see that the K-grid has 10 IBZ points and 256 full BZ while the Q-grid has 19 IBZ and 256 points. Why this difference?
+
 # Exciton band structure
 In this section, we will try to reproduce the exciton band structure from *Neaton et al.* [^3]
 
 
+<a id="excbandsref"></a>
 <figure>
     <img src="https://hackmd.io/_uploads/r1zOnKWxA.png" alt="Alt text for the image" style="width:60%">
-    <figcaption>Figure 1: Caption for the image.</figcaption>
+    <figcaption>Singlet (left panel) and triplet (right panel) exciton dispersion for LiF. Linear interpolation of exciton eigenergeies explicitly explicitly obtained by diagonalizing the BSE at 72 Q points along the high-symmetry path (blue curve). Wannier-Fourier interpolated exciton dispersion starting from a centered 5 × 5 × 5 Q mesh (dotted red curve). The inset of the left panel shows how Wannier-Fourier interpolation performs without isolating the long-range contribution.
+    </figcaption>
 </figure>
 
+We will work with the 2 *unshifted-grids* a (`4 4 4 0 0 0`) and an (`8 8 8 0 0 0`).
+After solving the BSE equation for all 19 q-points in the BZ you will have a list of files `ndb.BS_diag_Q*` containing the eigenvalues and eigenvectors for each q-transferred momenta.
+In order to plot the exciton band structure:
+1. Create a `ypp` input file `ypp-excbands.in` for interpolation:
+```
+excitons                         # [R] Excitonic properties
+interpolate                      # [R] Interpolate
+INTERP_mode= "BOLTZ"                # Interpolation mode (NN=nearest point, BOLTZ=boltztrap aproach)
+INTERP_Shell_Fac= 20.00000       # The bigger it is a higher number of shells is used
+INTERP_NofNN= 1                  # Number of Nearest sites in the NN method
+BANDS_steps= 30                  # Number of divisions
+cooIn= "rlu"                     # Points coordinates (in) cc/rlu/iku/alat
+cooOut= "rlu"                    # Points coordinates (out) cc/rlu/iku/alat
+States= "1 - 4"                  # Index of the BS state(s)
+% INTERP_Grid
+-1 |-1 |-1 |                             # Interpolation BZ Grid
+%
+#PrtDOS                        # Print Exciton Density of States
+% DOSERange
+ 1.000000 |-1.000000 |         eV    # Energy range
+%
+DOSESteps=  500                  # Energy steps
+DOS_broad= 0.100000        eV    # Broadening of the DOS
+%BANDS_kpts                      # K points of the bands circuit
+0.5|0.5|0.5|
+0.0|0.0|0.0|
+0.5|0.0|0.5|
+0.5|0.250|0.750|
+0.5|0.50|0.50|
+%
+```
+Note that, in my experience the `NN` interpolation mode does not work.
+2. Run `ypp`
+```
+mpirun -np 4 ypp -F ypp-excbands.in -J 'bse-bands'
+```
+3. Plot the exciton band structure from the `o-bse-bands.excitons_interpolated` output file
+```python=
+...
+#data_excbands_shifted = np.loadtxt(f'{YAMBO_TUT_PATH}/shifted-grid/bse-bands/o-bse-bands.excitons_interpolated', usecols=(0,1,2,3,4,5,6))
+data_excbands_unshifted = np.loadtxt(f'{YAMBO_TUT_PATH}/unshifted-grid/bse-bands/o-bse-bands.excitons_interpolated', usecols=(0,1,2,3,4,5,6))
+fig,ax =plt.subplots()
+#ax.plot(data_excbands_shifted[:,0], data_excbands_shifted[:,1], label='06_BSE_shifted', c='blue')
+ax.plot(data_excbands_unshifted[:,0], data_excbands_unshifted[:,1], label='06_BSE_unshifted',c='orange')
+#ax.plot(data_excbands_shifted[:,0], data_excbands_shifted[:,2], c ='blue')
+ax.plot(data_excbands_unshifted[:,0], data_excbands_unshifted[:,2], c='orange')
+#ax.plot(data_excbands_shifted[:,0], data_excbands_shifted[:,3], c ='blue')
+ax.plot(data_excbands_unshifted[:,0], data_excbands_unshifted[:,3], c='orange')
+#ax.plot(data_excbands_shifted[:,0], data_excbands_shifted[:,4], c ='blue')
+ax.plot(data_excbands_unshifted[:,0], data_excbands_unshifted[:,4], c='orange')
+#ax.plot(data_excbands_shifted[:,0], data_excbands_shifted[:,5], c ='blue')
+ax.plot(data_excbands_unshifted[:,0], data_excbands_unshifted[:,5], c='orange')
+#ax.plot(data_excbands_shifted[:,0], data_excbands_shifted[:,6], c ='blue')
+ax.plot(data_excbands_unshifted[:,0], data_excbands_unshifted[:,6], c='orange')
+ticks, labels =list(zip(*path_kpoints.get_indexes()))
+kpoints_dists= np.array(kpoints_dists)
+ax.set_xticks(kpoints_dists[np.array(ticks)]/np.max(kpoints_dists[np.array(ticks)])*np.max(data_excbands_unshifted[:,0]), labels)
+ax.set_ylabel('Energy [eV]')
+ax.set_xlabel('$q_x$')
+ax.legend(loc='upper left', fontsize=8)
+plt.savefig(f'{YAMBO_TUT_PATH}/excbands_unshifted.pdf', bbox_inches='tight')
+```
+<figure>
+    <img src="https://hackmd.io/_uploads/rJ_gY_feC.png" alt="Alt text for the image" style="width:100%">
+    <figcaption>Exciton band structure computed starting with a k-grid = 4 4 4 0 0 0.
+    </figcaption>
+</figure>
+
+If we compare this plot with the one above from Haber et al[^3] we see that the result do not match. Notably, the degeneracy at W is not recovered.
+We can try to increase the `k-grid = 8 8 8 0 0 0` and plot the result as above
+<figure>
+    <img src="https://hackmd.io/_uploads/rybqcdMxC.png" alt="Alt text for the image" style="width:100%">
+    <figcaption>Exciton band structure computed starting with a k-grid = 8 8 8 0 0 0.
+    </figcaption>
+</figure>
+
+The result change noticeably and the degeneracy at W is almost recovered.
+These discrepancies might be due to underconverged parameters in the BSE calculation.
+We can compare the results obtained with shifted and unshifted grid
+
+<figure>
+    <img src="https://hackmd.io/_uploads/SyzkTOGeC.png" alt="Alt text for the image" style="width:100%">
+    <figcaption>Exciton band structure computed starting with a k-grid = 8 8 8 0 0 0 (orange) and k-grid = 4 4 4 1 1 1 (blue).
+    </figcaption>
+</figure>
+
+**Note for developers:** 
+1. **Error:** the distances computed with `yambopy` and `ypp` differs. As you note in line 19 of the script above I had to rescale the `$q_x$` distances.
+2. **Error:** Even though I asked in the `ypp` input for `BANDS_steps=30` I end up with 93 q-points instead of 121.
+
+## Exciton band structure: singlets vs triplets
+Yambo, by defaults, cmomputes singlets. In order to plot triplets we can set to "0 RL" the cutoff of the ex exchange in the BSE kernel.
+1. Change the <span style="color: red;"> BSENGexx=  0 RL</span> input flag in the `06_BSE` input file and run again the BSE calculation
+2. Compute the exciton band structure with `ypp` as above
+3. Plot the exciton band structure, comparing singlets vs triplets results.
+
+<figure>
+    <img src="https://hackmd.io/_uploads/r1TBaFGeR.png" alt="Alt text for the image" style="width:100%">
+    <figcaption>Exciton band structure for singlets (blue) and triplets(orange) components. The plots were generated computed starting with a k-grid = 4 4 4 1 1 1 (orange) and k-grid = 4 4 4 1 1 1 (blue).
+    </figcaption>
+</figure>
+
+Note that now we recover the degenercy at $W$ and the result is not so different from the [reference](#excbandsref). There is still some discrepancy on the first two bands between $L$ and $\Gamma$ that should be degenerate.
+
+# Useful Link
+1. Download input files QE + Yambo [here](https://media.yambo-code.eu/educational/tutorials/files/LiF.tar.gz):
+2. Access additional input files for Wannierization and Python notebook from branch `devel tb-wannier` of [this repo](https://github.com/rreho/yambopy/tree/master)
+
+# TB-wannier
+
+<figure>
+    <img src="https://hackmd.io/_uploads/rkbDh9zlA.png" alt="Alt text for the image" style="width:100%">
+    <figcaption> Utilities implemented in yambopy for exciton Wannierization.
+    </figcaption>
+</figure>
 
 # Bibliography
 [^1]: Kohn, W. (2019). Density functional theory. Introductory quantum mechanics with MATLAB: for atoms, molecules, clusters, and nanocrystals.
