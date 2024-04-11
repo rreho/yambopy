@@ -60,7 +60,7 @@ class TBMODEL(tbmodels.Model):
         nkpt = self.mpgrid.nkpoints
         H_k = np.zeros((nkpt, hr.num_wann, hr.num_wann), dtype=np.complex128)
         for i in range(0,nkpt):
-            H_k[i] = self._get_h_k(self.mpgrid.car_kpoints[i], latdb.lat, hr, fermie, from_hr=True)
+            H_k[i] = self._get_h_k(self.mpgrid.k[i], latdb.lat, hr, fermie, from_hr=True)
         
         self.hr = hr
         self.H_k = H_k
@@ -98,39 +98,39 @@ class TBMODEL(tbmodels.Model):
         print(f'Diagonalization took {t1-t0:.3f} s')
 
     def get_pos_from_ham(self, lat, hr, from_hr = True):
-        'get positions from Hamiltonian, first the indices and then cartesian coordinates of hoppings'
+        'get positions from Hamiltonian, first the indices and then reduced coordinates of hoppings'
         # get tuple of irpos
         if (not from_hr):
             self.irpos = np.array(list(self.hop.keys())) 
             self.nrpos = len(self.irpos)
             self.lat = lat
             # pos[i,3] position of i unit cells. Store only the upper triangular matrix
-            self.pos = np.dot(self.lat, self.irpos.T).T
+            self.pos = self.irpos
             return self.pos
         else:
             self.lat = lat
-            pos = np.dot(self.lat, hr.hop.T).T
+            pos = hr.hop
             self.nrpos = hr.nrpts
             self.pos = pos
             return pos
 
     def get_hlm (self ,lat, hr, from_hr=True):
         ''' computes light mater interaction hamiltonian for grid of points
-        k is one k-point in cartesian coordinates
+        k is one k-point in reduced coordinates
         hrx = P_\alpha = dH(k)\dk_\alpha = \sum_{R=1}^N e^{ikR}iR_\alpha H_{R}
         here we get iR_\alpha*H_{R} as h_x,hy,hz
         ''' 
   
         hlm = np.zeros((self.mpgrid.nkpoints,hr.num_wann, hr.num_wann,3), dtype=np.complex128)       
   
-        for i,k in enumerate(self.mpgrid.car_kpoints):
+        for i,k in enumerate(self.mpgrid.red_kpoints):
             hlm[i] = self._get_hlm_k(k,lat,hr,from_hr=True)          
 
         self.hlm = hlm
 
     def _get_hlm_k(self, k, lat, hr, from_hr=True):
         ''' computes light mater interaction hamiltonian at k
-        k is one k-point in cartesian coordinates
+        k is one k-point in reduced coordinates
         hrx = P_\alpha = dH(k)\dk_\alpha = \sum_{R=1}^N e^{ikR}iR_\alpha H_{R}
         here we get iR_\alpha*H_{R} as h_x,hy,hz
         '''
@@ -176,7 +176,7 @@ class TBMODEL(tbmodels.Model):
 
     def _get_h_k(self, k, lat, hr, fermie, from_hr=True):
         ''' computes hamiltonian at k from real space hamiltonian
-        k is one k-point in cartesian coordinates
+        k is one k-point in reduced coordinates
         '''
         #ws_deg is needed for fourier factor
         #to do, make it work also for hr from tbmodels
@@ -203,7 +203,7 @@ class TBMODEL(tbmodels.Model):
 
     def _get_h_R(self, lat, hr, fermie, from_hr=True):
         ''' get hamiltonian at R from real space hamiltonian
-        R is one lattice vector in cartesian coordinates
+        R is one lattice vector in reduced coordinates
         '''
         #ws_deg is needed for fourier factor
         #to do, make it work also for hr from tbmodels
