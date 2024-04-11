@@ -99,6 +99,7 @@ class NNKP_Grids(NNKP):
         self.lat = latdb.lat
         self.rlat = latdb.rlat*2*np.pi
         self.car_kpoints = red_car(self.k, self.rlat)
+        self.red_kpoints = self.k
         
     def get_kmq_grid(self, qmpgrid):
 
