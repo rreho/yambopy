@@ -8,7 +8,7 @@ from time import time
 
 class H2P():
     '''Build the 2-particle resonant Hamiltonian H2P'''
-    def __init__(self, nk, nb, nc, nv,eigv, eigvec,bse_nv, bse_nc, T_table, latdb, kmpgrid, qmpgrid,excitons=None, \
+    def __init__(self, nk, nb, nc, nv,eigv, eigvec,bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
                   kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
                   TD=False,  TBos=300): 
         '''Build H2P:
@@ -34,6 +34,7 @@ class H2P():
         except ValueError:
             print('Warning! Q=0 index not found')
         self.dimbse = bse_nv*bse_nc*nk
+        self.savedb = savedb
         self.latdb = latdb
         # for now Transitions are the same as dipoles?
         self.T_table = T_table
@@ -71,6 +72,7 @@ class H2P():
     def _buildH2P(self):
         # to-do fix inconsistencies with table
         # inconsistencies are in the k-points in mpgrid and lat.red_kpoints in Yambo
+        full_kpoints, kpoints_indexes, symmetry_indexes=self.savedb.expand_kpts()
         if (self.nq_double ==1):
             H2P = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
             t0 = time()
@@ -101,7 +103,7 @@ class H2P():
             H2P = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
             t0 = time()
             for iq in range(self.nq_double):
-                yexc_atq = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q{iq+1}')
+                yexc_atq = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q{kpoints_indexes[iq]+1}')
                 kernel_atq = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}')                
                 v_band = np.min(yexc_atq.table[:,1])
                 c_band = np.min(yexc_atq.table[:,2])                         
