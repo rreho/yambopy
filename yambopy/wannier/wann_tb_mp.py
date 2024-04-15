@@ -18,7 +18,10 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack):
 
     def fold_into_bz(self,points):
         'Fold a point in the first BZ defined in the range [-0.5,0.5]'
-        folded_points = np.mod(points+0.5, 1.0) - 0.5
+        # Applying the modulo operation to shift points within the range [-0.5, 0.5]
+        folded_points = np.mod(points + 0.5, 1.0) - 0.5
+        # Correcting points where original points were exactly 0.5 to remain 0.5
+        folded_points[(points == 0.5)] = 0.5
         return folded_points
 
     def find_closest_kpoints_broadcasting(self, points):
@@ -238,7 +241,10 @@ class NNKP_Grids(NNKP):
 
     def fold_into_bz(self,points):
         'Fold a point in the first BZ defined in the range [-0.5,0.5]'
-        folded_points = np.mod(points+0.5, 1.0) - 0.5
+        # Applying the modulo operation to shift points within the range [-0.5, 0.5]
+        folded_points = np.mod(points + 0.5, 1.0) - 0.5
+        # Correcting points where original points were exactly 0.5 to remain 0.5
+        folded_points[(points == 0.5)] = 0.5
         return folded_points
     
     def get_plaquette(self, nx, ny, nz, dir = 2):
