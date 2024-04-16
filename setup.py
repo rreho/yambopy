@@ -33,6 +33,7 @@ install_requires = [
 "sisl",
 "spglib",
 "tbmodels",
+"fortio",
 ]
 
 if __name__ == '__main__':
