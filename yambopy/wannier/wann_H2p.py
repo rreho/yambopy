@@ -84,14 +84,13 @@ class H2P():
         # Common setup for databases (Yambo databases)
         exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
         # this is Yambo kernel, however I need an auxiliary kernel since the indices of c and v are different between BSE_table and BSE_table of YamboExcitonDB
-        kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}')
         t0 = time()
         for idx, exc_db_file in enumerate(exciton_db_files):
             yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
             #yexc_atq = YamboExcitonDB.from_db_file()
             v_band = np.min(yexc_atk.table[:, 1])
             c_band = np.min(yexc_atk.table[:, 2])
-
+            kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
             # Operations for matrix element calculations
             for t in range(self.dimbse):
                 ik, iv, ic = self.BSE_table[t]
@@ -102,7 +101,6 @@ class H2P():
                     ikplusq = self.kplusq_table[ik, idx]
                     ikminusq = self.kminusq_table[ik, idx]
                     K = kernel_db.kernel[aux_t[t], aux_tp[tp]] * HA2EV
-
                     if t == tp:
                         deltaE = self.eigv[ikminusq, ic] - self.eigv[ik, iv]
                         occupation_diff = self.f_kn[ik, iv] - self.f_kn[ikminusq, ic]
