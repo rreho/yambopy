@@ -97,17 +97,17 @@ class H2P():
                 aux_t = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[iv+1,ic+1], iq = ik+1)
                 for tp in range(self.dimbse):
                     ikp, ivp, icp = self.BSE_table[tp]
-                    aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[ivp+1,icp+1],iq=ikp+1)
                     ikplusq = self.kplusq_table[ik, idx]
                     ikminusq = self.kminusq_table[ik, idx]
-                    K = kernel_db.kernel[aux_t, aux_tp] * HA2EV
-                    print(aux_t,aux_tp)
+                    ikpminusq = self.kminusq_table[ikp,idx]
+                    aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[ivp+1,icp+1],iq=ikp+1)
+                    K = -kernel_db.kernel[aux_t, aux_tp] * HA2EV
                     if t == tp:
-                        deltaE = self.eigv[ikminusq, ic] - self.eigv[ik, iv]
-                        occupation_diff = self.f_kn[ik, iv] - self.f_kn[ikminusq, ic]
+                        deltaE = self.eigv[ik, ic] - self.eigv[ikminusq, iv]
+                        occupation_diff = -self.f_kn[ikpminusq, iv] + self.f_kn[ikp, ic]
                         element_value = deltaE + occupation_diff * K
                     else:
-                        occupation_diff = self.f_kn[ik, iv] - self.f_kn[ikminusq, ic]
+                        occupation_diff = -self.f_kn[ikpminusq, iv] + self.f_kn[ikp, ic]
                         element_value = occupation_diff * K
 
                     if self.nq_double == 1:
