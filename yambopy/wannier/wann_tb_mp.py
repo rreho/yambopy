@@ -12,9 +12,16 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack):
 
     
     def find_closest_kpoint(self, point):
-        distances = np.linalg.norm(self.k-point,axis=1)
+        # Convert point to a numpy array
+        point = np.array(point)
+        
+        # Calculate distances considering periodic boundary conditions
+        distances = np.linalg.norm((self.k - point + 0.5) % 1 - 0.5, axis=1)
+        
+        # Find the index of the minimum distance
         closest_idx = np.argmin(distances)
-        return closest_idx
+        
+        return int(closest_idx)
 
     def fold_into_bz(self,points):
         'Fold a point in the first BZ defined in the range [-0.5,0.5]'
@@ -218,8 +225,15 @@ class NNKP_Grids(NNKP):
         return folded_k_point, G_vector
 
     def find_closest_kpoint(self, point):
-        distances = np.linalg.norm(self.k-point,axis=1)
+        # Convert point to a numpy array
+        point = np.array(point)
+        
+        # Calculate distances considering periodic boundary conditions
+        distances = np.linalg.norm((self.k - point + 0.5) % 1 - 0.5, axis=1)
+        
+        # Find the index of the minimum distance
         closest_idx = np.argmin(distances)
+        
         return int(closest_idx)
 
     def get_kq_tables(self,qmpgrid):

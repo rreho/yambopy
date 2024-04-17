@@ -94,13 +94,14 @@ class H2P():
             # Operations for matrix element calculations
             for t in range(self.dimbse):
                 ik, iv, ic = self.BSE_table[t]
-                aux_t = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[iv+1,ic+1])
+                aux_t = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[iv+1,ic+1], iq = ik+1)
                 for tp in range(self.dimbse):
                     ikp, ivp, icp = self.BSE_table[tp]
-                    aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[ivp+1,icp+1])
+                    aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[ivp+1,icp+1],iq=ikp+1)
                     ikplusq = self.kplusq_table[ik, idx]
                     ikminusq = self.kminusq_table[ik, idx]
-                    K = kernel_db.kernel[aux_t[t], aux_tp[tp]] * HA2EV
+                    K = kernel_db.kernel[aux_t, aux_tp] * HA2EV
+                    print(aux_t,aux_tp)
                     if t == tp:
                         deltaE = self.eigv[ikminusq, ic] - self.eigv[ik, iv]
                         occupation_diff = self.f_kn[ik, iv] - self.f_kn[ikminusq, ic]
