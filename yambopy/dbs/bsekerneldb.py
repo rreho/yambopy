@@ -119,7 +119,7 @@ class YamboBSEKernelDB(YamboSaveDB):
         app( "number of transitions: %d"%self.ntransitions )
         return '\n'.join(lines)
     
-    def get_kernel_indices_bands(self,excitons, bands):
+    def get_kernel_indices_bands(self,excitons, bands, iq):
         ''' Given a pair of v and c indices get the t indices of the kernel
         '''
         table  = excitons.table
@@ -134,10 +134,11 @@ class YamboBSEKernelDB(YamboSaveDB):
         t_v = np.where(table[:,1]==bands[0])[0]
         # Find indices where selected conduction band appears
         t_c = np.where(table[:,2]==bands[1])[0]
+        t_k = np.where(table[:,0]==iq)[0]
         # Among those, find subset of indices where both appear together
-        t_vc = [t for t in t_v if t in t_c ]
+        t_vc = [t for t in t_v if (t in t_c and t in t_k) ]
 
-        return t_vc       
+        return t_vc[0]       
 
     def __str__(self):
         return self.get_string()
