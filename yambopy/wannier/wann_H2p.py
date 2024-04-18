@@ -109,7 +109,6 @@ class H2P():
                     else:
                         occupation_diff = -self.f_kn[ikpminusq, iv] + self.f_kn[ikp, ic]
                         element_value = occupation_diff * K
-
                     if self.nq_double == 1:
                         H2P[t, tp] = element_value
                     else:
