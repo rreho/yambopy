@@ -91,24 +91,26 @@ class H2P():
             v_band = np.min(yexc_atk.table[:, 1])
             c_band = np.min(yexc_atk.table[:, 2])
             kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
+            K_4D = kernel_db.get_kernel_value_bands_4D(yexc_atk,bands_range=[v_band,c_band])
             # Operations for matrix element calculations
             for t in range(self.dimbse):
                 ik, iv, ic = self.BSE_table[t]
-                aux_t = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[iv+1,ic+1], iq = ik+1)
+                #aux_t = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[iv+1,ic+1], iq = ik+1)
                 for tp in range(self.dimbse):
                     ikp, ivp, icp = self.BSE_table[tp]
                     ikplusq = self.kplusq_table[ik, idx]
                     ikminusq = self.kminusq_table[ik, idx]
                     ikpminusq = self.kminusq_table[ikp,idx]
-                    aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[ivp+1,icp+1],iq=ikp+1)
-                    K = -kernel_db.kernel[aux_t, aux_tp] * HA2EV
-                    if t == tp:
-                        deltaE = self.eigv[ik, ic] - self.eigv[ikminusq, iv]
-                        occupation_diff = -self.f_kn[ikpminusq, iv] + self.f_kn[ikp, ic]
-                        element_value = deltaE + occupation_diff * K
+                    #aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk,bands=[ivp+1,icp+1],iq=ikp+1)
+                    #aux_K = kernel_db.get_kernel_value_bands(yexc_atk,bands=[ivp+1,icp+1])
+                    #K = -aux_K[ik,ikp] * HA2EV
+                    K = -K_4D[ivp,icp,ik,ikp]*HA2EV
+                    if (ik==ikp and icp==ic and ivp==iv):
+                        deltaE = self.eigv[ik, ic] - self.eigv[ikpminusq, iv]
                     else:
-                        occupation_diff = -self.f_kn[ikpminusq, iv] + self.f_kn[ikp, ic]
-                        element_value = occupation_diff * K
+                        deltaE = 0.0
+                    occupation_diff = -self.f_kn[ikpminusq, ivp] + self.f_kn[ikp, icp]
+                    element_value = deltaE + occupation_diff * K
                     if self.nq_double == 1:
                         H2P[t, tp] = element_value
                     else:

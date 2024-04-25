@@ -112,6 +112,47 @@ class YamboBSEKernelDB(YamboSaveDB):
             Wcv[ik-1,ip-1] = kernel[it1_subset,it2_subset]
         return Wcv
 
+    def get_kernel_value_bands_4D(self, excitons, bands_range):
+        """
+        Get value of kernel matrix elements as a function of (v, c, k, p)
+        where v and c are valence and conduction bands, k and p are k-point indices.
+
+        Args:
+        excitons: YamboExcitonDB object containing exciton data and the lattice structure
+        bands_range: Tuple (min_band, max_band) defining the range of band indices
+
+        Returns:
+        W: A 4D numpy array with dimensions corresponding to (v, c, k, p)
+        """
+        table = excitons.table
+        nk = self.lattice.nkpoints
+        kernel = self.kernel
+        self.consistency_BSE_BSK(excitons)
+
+        min_band, max_band = bands_range
+        nbands = max_band - min_band + 1
+
+        # Initialize the 4D array for kernel values with dimensions covering the band range
+        W = np.zeros((max_band, max_band, nk, nk), dtype=complex)
+
+        # Iterate over all possible v, c bands within the specified range
+        for iv_index, iv in enumerate(range(min_band, max_band + 1), start=0):
+            for ic_index, ic in enumerate(range(min_band, max_band + 1), start=0):
+                if iv not in table[:, 1] or ic not in table[:, 2]:
+                    continue
+
+                t_v = np.where(table[:, 1] == iv)[0]
+                t_c = np.where(table[:, 2] == ic)[0]
+                t_vc = [t for t in t_v if t in t_c]
+
+                for it1_subset, it2_subset in product(t_vc, repeat=2):
+                    ik = table[it1_subset][0]
+                    ip = table[it2_subset][0]
+                    # Store in 4D array, adjusting indices for zero-based Python indexing
+                    W[iv - 1, ic - 1, ik - 1, ip - 1] = kernel[it1_subset, it2_subset]
+
+        return W
+    
     def get_string(self,mark="="):
         lines = []; app = lines.append
         app( marquee(self.__class__.__name__,mark=mark) )
