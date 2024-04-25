@@ -28,7 +28,7 @@ class H2P():
         self.eigvec = eigvec
         self.kmpgrid = kmpgrid
         self.qmpgrid = qmpgrid
-        (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid)   
+        (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
         try:
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
         except ValueError:
