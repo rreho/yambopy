@@ -3,7 +3,7 @@ from yambopy.units import *
 from yambopy.plot.plotting import add_fig_kwargs,BZ_Wigner_Seitz
 from yambopy.plot.bandstructure import *
 from yambopy.lattice import replicate_red_kmesh, calculate_distances, get_path, car_red
-from yambopy.tools.funcs import gaussian, lorentzian
+from yambopy.tools.funcs import gaussian, lorentzian, boltzman_f
 from yambopy.tools.skw import SkwInterpolator
 from yambopy.dbs.savedb import *
 from yambopy.dbs.latticedb import *
