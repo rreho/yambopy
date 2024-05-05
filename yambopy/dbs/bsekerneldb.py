@@ -130,10 +130,10 @@ class YamboBSEKernelDB(YamboSaveDB):
         self.consistency_BSE_BSK(excitons)
 
         min_band, max_band = bands_range
-        nbands = max_band - min_band + 1
+        nbands = max_band
 
         # Initialize the 4D array for kernel values with dimensions covering the band range
-        W = np.zeros((max_band, max_band, nk, nk), dtype=complex)
+        W = np.zeros((nbands, nbands, nk, nk), dtype=complex)
 
         # Iterate over all possible v, c bands within the specified range
         for iv_index, iv in enumerate(range(min_band, max_band + 1), start=0):
@@ -149,7 +149,7 @@ class YamboBSEKernelDB(YamboSaveDB):
                     ik = table[it1_subset][0]
                     ip = table[it2_subset][0]
                     # Store in 4D array, adjusting indices for zero-based Python indexing
-                    W[iv - 1, ic - 1, ik - 1, ip - 1] = kernel[it1_subset, it2_subset]
+                    W[iv-1, ic-1, ik - 1, ip - 1] = kernel[it1_subset, it2_subset]
 
         return W
     
