@@ -252,6 +252,33 @@ class NNKP_Grids(NNKP):
                 kminusq_table[ik,iq] = idxkminusq
 
         return kplusq_table, kminusq_table
+    
+    def get_kq_tables_yambo(self,savedb):
+        kplusq_table = np.zeros((self.nkpoints,savedb.nkpoints),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,savedb.nkpoints), dtype=int)
+        
+        for ik, k in enumerate(self.k):
+            for iq, q in enumerate(savedb.red_kpoints):
+                kplusq = k+q
+                kminusq = k-q
+                kplusq = self.fold_into_bz(kplusq)
+                kminusq = self.fold_into_bz(kminusq)
+                idxkplusq = self.find_closest_kpoint(kplusq)
+                idxkminusq = self.find_closest_kpoint(kminusq)
+                kplusq_table[ik,iq] = idxkplusq
+                kminusq_table[ik,iq] = idxkminusq
+
+        return kplusq_table, kminusq_table
+
+    def get_kindices_fromq(self,qmpgrid):
+        kindices_fromq = np.zeros((qmpgrid.nkpoints),dtype=int) # get k index corresponding to q-point
+         
+        for iq, q in enumerate(qmpgrid.k):
+            idxk = self.find_closest_kpoint(q)
+            kindices_fromq[iq] = idxk
+
+        self.kindices_fromq=kindices_fromq
+        return kindices_fromq
 
     def fold_into_bz(self,points):
         'Fold a point in the first BZ defined in the range [-0.5,0.5]'

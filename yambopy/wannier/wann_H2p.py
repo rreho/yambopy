@@ -28,6 +28,7 @@ class H2P():
         self.eigvec = eigvec
         self.kmpgrid = kmpgrid
         self.qmpgrid = qmpgrid
+        self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid)
         (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
         try:
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
@@ -37,7 +38,7 @@ class H2P():
         self.savedb = savedb
         self.latdb = latdb
         self.offset_nv = self.savedb.nbandsv-self.nv  
-        (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.kmpgrid,self.savedb) # used in building BSE
+        (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
         # for now Transitions are the same as dipoles?
         self.T_table = T_table
         self.BSE_table = self._get_BSE_table()
@@ -103,7 +104,7 @@ class H2P():
                     ikplusq = self.kplusq_table[ik, kpoints_indexes[idx]]
                     ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx]]
                     ikpminusq = self.kminusq_table_yambo[ikp,kpoints_indexes[idx]]
-                    print(ik, ikp, ikpminusq, idx, kpoints_indexes[idx])
+                    #print(ik, ikp, ikpminusq, idx, kpoints_indexes[idx])
                     #aux_t = kernel_db.get_kernel_indices_bands(yexc_atk, bands=[iv+self.offset_nv+1,ic+self.offset_nv+1],iq=ik+1)
                     #aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk, bands=[ivp+self.offset_nv+1,icp+self.offset_nv+1],iq=ikpminusq+1)
                     
@@ -494,7 +495,7 @@ class H2P():
         # self.eps_0 = eps_0
         return w, eps
 
-    def _get_exc_overlap_ttp(self, t, tp , iq, ib):
+    def _get_exc_overlap_ttp(self, t, tp , iq, ikq, ib):
         '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
         # missing the case of degenerate transitions. The summation seems to hold only for degenerate transitions.
         # Otherwise it's simply a product
@@ -519,7 +520,7 @@ class H2P():
                 ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib][1]
 
                 # Decompose the complex arithmetic into more readable format
-                conj_term = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv-self.nv+iv, ic-self.nv, ik])
+                conj_term = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv-self.nv+iv, ic-self.nv, ik])
                 eigvec_term = self.h2peigvec_vck[iqpb, tp, self.bse_nv-self.nv+ivp, icp-self.nv, ikpbover2]
                 dot_product1 = np.vdot(eigvec_ic, eigvec_icp)
                 dot_product2 = np.vdot(eigvec_ivp, eigvec_iv)
@@ -550,12 +551,12 @@ class H2P():
         # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
         for il, l in enumerate(trange):
             for ilp, lp in enumerate(tprange):   
-                for iq in range(self.qmpgrid.nkpoints):
+                for iq,ikq in enumerate(self.kindices_table):
                     for ib in range(self.qmpgrid.nnkpts):
-                        Mssp[l,lp,iq, ib] = self._get_exc_overlap_ttp(l,lp,iq,ib)
+                        Mssp[l,lp,iq, ib] = self._get_exc_overlap_ttp(l,lp,iq,ikq,ib)
         self.Mssp = Mssp   
 
-    def _get_amn_ttp(self, t, tp, iq):
+    def _get_amn_ttp(self, t, tp, iq,ikq):
         ik = self.BSE_table[t][0]
         iv = self.BSE_table[t][1] 
         ic = self.BSE_table[t][2] 
@@ -563,15 +564,15 @@ class H2P():
         ivp = self.BSE_table[tp][1] 
         icp = self.BSE_table[tp][2] 
         ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
-        Ammn_ttp = self.h2peigvec_vck[iq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
+        Ammn_ttp = self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0], tprange = [0]):
         Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
         for it,t in enumerate(trange):
             for itp, tp in enumerate(tprange):
-                for iq in range(self.qmpgrid.nkpoints):
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq)        
+                for iq,ikq in enumerate(self.kindices_table):
+                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq,ikq)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
@@ -590,7 +591,7 @@ class H2P():
         output_lines.append(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{self.qmpgrid.nnkpts}\n')
         
         # Generate output for each point
-        for iq in range(self.qmpgrid.nkpoints):
+        for iq,ikq in enumerate(self.kindices_table):
             for ib in range(self.qmpgrid.nnkpts):
                 # Header for each block
                 output_lines.append(f'\t{self.qmpgrid.qpb_grid_table[iq,ib][0]+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][1]+1}' +
@@ -625,9 +626,9 @@ class H2P():
     def write_exc_eig(self, seedname='wannier90_exc', trange = [0]):
         exc_eig = np.zeros((len(trange), self.qmpgrid.nkpoints), dtype=complex)
         f_out = open(f'{seedname}.eig', 'w')
-        for iq, q in enumerate(self.qmpgrid.k):
+        for iq, ikq in enumerate(self.kindices_table):
             for it,t in enumerate(trange):
-                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[iq,it]):.13f}\n')
+                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[ikq,it]):.13f}\n')
     
     def write_exc_nnkp(self, seedname='wannier90_exc', trange = [0]):
         f_out = open(f'{seedname}.nnkp', 'w')
@@ -650,7 +651,7 @@ class H2P():
         date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
         f_out.write(f'Created on {date_time_string}\n')
         f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{len(tprange)}\n') 
-        for iq, q in enumerate(self.qmpgrid.k):
+        for iq, q in enumerate(self.kindices_table):
             for itp,tp in enumerate(tprange):
                 for it, t in enumerate(trange):                
                     f_out.write(f'\t{it+1}\t{itp+1}\t{iq+1}\t{np.real(self.Amn[it,itp,iq])}\t\t{np.imag(self.Amn[it,itp,iq])}\n')
