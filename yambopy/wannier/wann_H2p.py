@@ -94,8 +94,9 @@ class H2P():
             v_band = np.min(yexc_atk.table[:, 1])
             c_band = np.max(yexc_atk.table[:, 2])
             kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
+            aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
             #K_4D = kernel_db.get_kernel_value_bands_4D(yexc_atk,bands_range=[v_band,c_band])
-            K_ttp = kernel_db.kernel
+            K_ttp = kernel_db.kernel[aux_t][:,aux_t]
             # Operations for matrix element calculations
             for t in range(self.dimbse):
                 ik, iv, ic = self.BSE_table[t]
