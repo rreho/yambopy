@@ -97,6 +97,7 @@ class H2P():
             aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
             #K_4D = kernel_db.get_kernel_value_bands_4D(yexc_atk,bands_range=[v_band,c_band])
             K_ttp = kernel_db.kernel[aux_t][:,aux_t]
+            # K_ttp = self.ensure_conjugate_symmetry(K_ttp)
             # Operations for matrix element calculations
             for t in range(self.dimbse):
                 ik, iv, ic = self.BSE_table[t]
@@ -110,7 +111,7 @@ class H2P():
                     #aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk, bands=[ivp+self.offset_nv+1,icp+self.offset_nv+1],iq=ikpminusq+1)
                     
                     #K = -K_4D[ivp+self.offset_nv,icp+self.offset_nv,ikpminusq,ik]*HA2EV
-                    K = -K_ttp[t,tp]*HA2EV
+                    K = -(K_ttp[t,tp])*HA2EV
                     #K = -K_ttp[aux_tp,aux_t]*HA2EV
                     #K=0
                     if (ik==ikp and icp==ic and ivp==iv):
@@ -682,4 +683,11 @@ class H2P():
         degenerate_eigenvectors = {key: eigenvectors[:, value] for key, value in degeneracies.items()}
         
         return degenerate_eigenvectors    
-    
+
+    # def ensure_conjugate_symmetry(self,matrix):
+    #     n = matrix.shape[0]
+    #     for i in range(n):
+    #         for j in range(i+1, n):
+    #             if np.isclose(matrix[i, j].real, matrix[j, i].real) and np.isclose(matrix[i, j].imag, -matrix[j, i].imag):
+    #                 matrix[j, i] = np.conjugate(matrix[i, j])
+    #     return matrix
