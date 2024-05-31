@@ -6,11 +6,38 @@ from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
 from time import time
 
+
+
+def process_file(args):
+    idx, exc_db_file, data_dict = args
+    # Unpacking data necessary for processing
+    latdb, kernel_path, kpoints_indexes, HA2EV, BSE_table, kplusq_table, kminusq_table_yambo, eigv, f_kn = data_dict.values()
+
+    yexc_atk = YamboExcitonDB.from_db_file(latdb, filename=exc_db_file)
+    kernel_db = YamboBSEKernelDB.from_db_file(latdb, folder=f'{kernel_path}', Qpt=kpoints_indexes[idx]+1)
+    K_ttp = kernel_db.kernel  # Assuming this returns a 2D array
+    H2P_local = np.zeros((len(BSE_table), len(BSE_table)), dtype=np.complex128)
+
+    for t in range(len(BSE_table)):
+        ik, iv, ic = BSE_table[t]
+        for tp in range(len(BSE_table)):
+            ikp, ivp, icp = BSE_table[tp]
+            ikplusq = kplusq_table[ik, kpoints_indexes[idx]]
+            ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx]]
+            ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+            K = -(K_ttp[t, tp]) * HA2EV
+            deltaE = eigv[ik, ic] - eigv[ikpminusq, iv] if (ik == ikp and icp == ic and ivp == iv) else 0.0
+            occupation_diff = -f_kn[ikpminusq, ivp] + f_kn[ikp, icp]
+            element_value = deltaE + occupation_diff * K
+            H2P_local[t, tp] = element_value
+    return idx, H2P_local
+
+
 class H2P():
     '''Build the 2-particle resonant Hamiltonian H2P'''
     def __init__(self, nk, nb, nc, nv,eigv, eigvec,bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
                   kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                  TD=False,  TBos=300): 
+                  TD=False,  TBos=300 , run_parallel=False): 
         '''Build H2P:
             bsetype = 'full' build H2P resonant + antiresonant + coupling
             bsetype = 'resonant' build H2p resonant
@@ -47,6 +74,7 @@ class H2P():
         self.TD = TD #Tahm-Dancoff
         self.TBos = TBos
         self.method = method
+        self.run_parallel = True
         self.Mssp = None
         self.Amn = None
         # consider to build occupations here in H2P with different occupation functions
@@ -73,60 +101,100 @@ class H2P():
 
 
     def _buildH2P(self):
-        # Expanded k-points and symmetry are prepared for operations that might need them
-        full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
+        if self.run_parallel:
+            import multiprocessing as mp
+            import time
+            pool = mp.Pool(mp.cpu_count())
+            full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
 
-        # Pre-fetch all necessary data based on condition
-        if self.nq_double == 1:
-            H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
-            file_suffix = 'ndb.BS_diago_Q1'
+            if self.nq_double == 1:
+                H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
+                file_suffix = 'ndb.BS_diago_Q1'
+            else:
+                H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
+                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
+
+            exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
+            t0 = time.time()
+
+            # Prepare data to be passed
+            data_dict = {
+                'latdb': self.latdb,
+                'kernel_path': self.kernel_path,
+                'kpoints_indexes': kpoints_indexes,
+                'HA2EV': HA2EV,
+                'BSE_table': self.BSE_table,
+                'kplusq_table': self.kplusq_table,
+                'kminusq_table_yambo': self.kminusq_table_yambo,
+                'eigv': self.eigv,
+                'f_kn': self.f_kn
+            }
+            
+            # Map with the necessary data tuple
+            results = pool.map(process_file, [(idx, file, data_dict) for idx, file in enumerate(exciton_db_files)])
+            for idx, result in results:
+                if self.nq_double == 1:
+                    H2P = result
+                else:
+                    H2P[idx] = result
+
+            print(f"Hamiltonian matrix construction completed in {time.time() - t0:.2f} seconds.")
+            pool.close()
+            pool.join()
+            return H2P
+
         else:
-            H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-            file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
 
-        # Common setup for databases (Yambo databases)
-        exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
-        # this is Yambo kernel, however I need an auxiliary kernel since the indices of c and v are different between BSE_table and BSE_table of YamboExcitonDB
-        t0 = time()
-        for idx, exc_db_file in enumerate(exciton_db_files):
-            yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
-            #yexc_atq = YamboExcitonDB.from_db_file()
-            v_band = np.min(yexc_atk.table[:, 1])
-            c_band = np.max(yexc_atk.table[:, 2])
-            kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
-            aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
-            #K_4D = kernel_db.get_kernel_value_bands_4D(yexc_atk,bands_range=[v_band,c_band])
-            K_ttp = kernel_db.kernel[aux_t][:,aux_t]
-            # K_ttp = self.ensure_conjugate_symmetry(K_ttp)
-            # Operations for matrix element calculations
-            for t in range(self.dimbse):
-                ik, iv, ic = self.BSE_table[t]
-                for tp in range(self.dimbse):
-                    ikp, ivp, icp = self.BSE_table[tp]
-                    ikplusq = self.kplusq_table[ik, kpoints_indexes[idx]]
-                    ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx]]
-                    ikpminusq = self.kminusq_table_yambo[ikp,kpoints_indexes[idx]]
-                    #print(ik, ikp, ikpminusq, idx, kpoints_indexes[idx])
-                    #aux_t = kernel_db.get_kernel_indices_bands(yexc_atk, bands=[iv+self.offset_nv+1,ic+self.offset_nv+1],iq=ik+1)
-                    #aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk, bands=[ivp+self.offset_nv+1,icp+self.offset_nv+1],iq=ikpminusq+1)
-                    
-                    #K = -K_4D[ivp+self.offset_nv,icp+self.offset_nv,ikpminusq,ik]*HA2EV
-                    K = -(K_ttp[t,tp])*HA2EV
-                    #K = -K_ttp[aux_tp,aux_t]*HA2EV
-                    #K=0
-                    if (ik==ikp and icp==ic and ivp==iv):
-                        deltaE = self.eigv[ik, ic] - self.eigv[ikpminusq, iv]
-                    else:
-                        deltaE = 0.0
-                    occupation_diff = -self.f_kn[ikpminusq, ivp] + self.f_kn[ikp, icp]
-                    element_value = deltaE + occupation_diff * K
-                    if self.nq_double == 1:
-                        H2P[t, tp] = element_value
-                    else:
-                        H2P[idx, t, tp] = element_value
+            # Expanded k-points and symmetry are prepared for operations that might need them
+            full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
 
-        print(f"Hamiltonian matrix construction completed in {time() - t0:.2f} seconds.")
-        return H2P
+            # Pre-fetch all necessary data based on condition
+            if self.nq_double == 1:
+                H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
+                file_suffix = 'ndb.BS_diago_Q1'
+            else:
+                H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
+                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
+
+            # Common setup for databases (Yambo databases)
+            exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
+            # this is Yambo kernel, however I need an auxiliary kernel since the indices of c and v are different between BSE_table and BSE_table of YamboExcitonDB
+            t0 = time()
+            for idx, exc_db_file in enumerate(exciton_db_files):
+                yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
+                v_band = np.min(yexc_atk.table[:, 1])
+                c_band = np.max(yexc_atk.table[:, 2])
+                kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
+                aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
+                K_ttp = kernel_db.kernel[aux_t][:,aux_t]
+                # Operations for matrix element calculations
+                for t in range(self.dimbse):
+                    ik, iv, ic = self.BSE_table[t]
+                    for tp in range(self.dimbse):
+                        ikp, ivp, icp = self.BSE_table[tp]
+                        ikplusq = self.kplusq_table[ik, kpoints_indexes[idx]]
+                        ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx]]
+                        ikpminusq = self.kminusq_table_yambo[ikp,kpoints_indexes[idx]]
+                        #print(ik, ikp, ikpminusq, idx, kpoints_indexes[idx])
+                        #aux_t = kernel_db.get_kernel_indices_bands(yexc_atk, bands=[iv+self.offset_nv+1,ic+self.offset_nv+1],iq=ik+1)
+                        #aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk, bands=[ivp+self.offset_nv+1,icp+self.offset_nv+1],iq=ikpminusq+1)
+                        
+                        #K = -K_4D[ivp+self.offset_nv,icp+self.offset_nv,ikpminusq,ik]*HA2EV
+                        K = -(K_ttp[t,tp])*HA2EV
+                        #K = -K_ttp[aux_tp,aux_t]*HA2EV
+                        #K=0
+                        if (ik==ikp and icp==ic and ivp==iv):
+                            deltaE = self.eigv[ik, ic] - self.eigv[ikpminusq, iv]
+                        else:
+                            deltaE = 0.0
+                        occupation_diff = -self.f_kn[ikpminusq, ivp] + self.f_kn[ikp, icp]
+                        element_value = deltaE + occupation_diff * K
+                        if self.nq_double == 1:
+                            H2P[t, tp] = element_value
+                        else:
+                            H2P[idx, t, tp] = element_value
+
+            return H2P
     # def _buildH2P(self):
     #     # to-do fix inconsistencies with table
     #     # inconsistencies are in the k-points in mpgrid and lat.red_kpoints in Yambo
