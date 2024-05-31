@@ -502,51 +502,51 @@ class H2P():
         # missing the case of degenerate transitions. The summation seems to hold only for degenerate transitions.
         # Otherwise it's simply a product
         #6/12/23 after discussion with P.Melo I have to loop once again over all the transition indices
-        Mssp_ttp = 0
-        # Precompute indices and values that are reused
-        ik, iv, ic = self.BSE_table[t]
-        ikp, ivp, icp = self.BSE_table[tp]
-        iqpb = self.kmpgrid.qpb_grid_table[iq, ib][1]
-        
-        for it in range(self.dimbse):
-            # Precompute values used in the inner loop to reduce complexity
-            eigvec_ic = self.eigvec[:, ic]
-            eigvec_icp = self.eigvec[:, icp]
-            eigvec_iv = self.eigvec[:, iv]
-            eigvec_ivp = self.eigvec[:, ivp]
-
-            for itp in range(self.dimbse):
-                # Further decompose grid table access to simplify the formula
-                ikmq = self.kmpgrid.kmq_grid_table[ik, iq][1]
-                ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib][1]
-                ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib][1]
-
-                # Decompose the complex arithmetic into more readable format
-                conj_term = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv-self.nv+iv, ic-self.nv, ik])
-                eigvec_term = self.h2peigvec_vck[iqpb, tp, self.bse_nv-self.nv+ivp, icp-self.nv, ikpbover2]
-                dot_product1 = np.vdot(eigvec_ic, eigvec_icp)
-                dot_product2 = np.vdot(eigvec_ivp, eigvec_iv)
-                
-                # Perform the summation
-                Mssp_ttp += conj_term * eigvec_term * dot_product1 * dot_product2
-
-        return Mssp_ttp        
         # Mssp_ttp = 0
+        # # Precompute indices and values that are reused
+        # ik, iv, ic = self.BSE_table[t]
+        # ikp, ivp, icp = self.BSE_table[tp]
+        # iqpb = self.kmpgrid.qpb_grid_table[iq, ib][1]
+        
         # for it in range(self.dimbse):
+        #     # Precompute values used in the inner loop to reduce complexity
+        #     eigvec_ic = self.eigvec[:, ic]
+        #     eigvec_icp = self.eigvec[:, icp]
+        #     eigvec_iv = self.eigvec[:, iv]
+        #     eigvec_ivp = self.eigvec[:, ivp]
+
         #     for itp in range(self.dimbse):
-        #         ik = self.BSE_table[t][0]
-        #         iv = self.BSE_table[t][1] 
-        #         ic = self.BSE_table[t][2] 
-        #         ikp = self.BSE_table[tp][0]
-        #         ivp = self.BSE_table[tp][1] 
-        #         icp = self.BSE_table[tp][2] 
-        #         iqpb = self.kmpgrid.qpb_grid_table[iq, ib][1]
-        #         ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
+        #         # Further decompose grid table access to simplify the formula
+        #         ikmq = self.kmpgrid.kmq_grid_table[ik, iq][1]
         #         ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib][1]
         #         ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib][1]
-        #         Mssp_ttp += np.conjugate(self.h2peigvec_vck[iq,t,self.bse_nv-self.nv+iv,ic-self.nv,ik])*self.h2peigvec_vck[iqpb,tp,self.bse_nv-self.nv+ivp,icp-self.nv, ikpbover2]*\
-        #                         np.vdot(self.eigvec[ik,:, ic], self.eigvec[ikpbover2,:, icp])*np.vdot(self.eigvec[ikmqmbover2,:,ivp], self.eigvec[ikmq,:,iv]) 
-        # return Mssp_ttp
+
+        #         # Decompose the complex arithmetic into more readable format
+        #         conj_term = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv-self.nv+iv, ic-self.nv, ik])
+        #         eigvec_term = self.h2peigvec_vck[iqpb, tp, self.bse_nv-self.nv+ivp, icp-self.nv, ikpbover2]
+        #         dot_product1 = np.vdot(eigvec_ic, eigvec_icp)
+        #         dot_product2 = np.vdot(eigvec_ivp, eigvec_iv)
+                
+        #         # Perform the summation
+        #         Mssp_ttp += conj_term * eigvec_term * dot_product1 * dot_product2
+
+        # return Mssp_ttp        
+        Mssp_ttp = 0
+        for it in range(self.dimbse):
+            for itp in range(self.dimbse):
+                ik = self.BSE_table[t][0]
+                iv = self.BSE_table[t][1] 
+                ic = self.BSE_table[t][2] 
+                ikp = self.BSE_table[tp][0]
+                ivp = self.BSE_table[tp][1] 
+                icp = self.BSE_table[tp][2] 
+                iqpb = self.kmpgrid.qpb_grid_table[iq, ib][1]
+                ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
+                ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib][1]
+                ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib][1]
+                Mssp_ttp += np.conjugate(self.h2peigvec_vck[ikq,t,self.bse_nv-self.nv+iv,ic-self.nv,ik])*self.h2peigvec_vck[iqpb,tp,self.bse_nv-self.nv+ivp,icp-self.nv, ikpbover2]*\
+                                np.vdot(self.eigvec[ik,:, ic], self.eigvec[ikpbover2,:, icp])*np.vdot(self.eigvec[ikmqmbover2,:,ivp], self.eigvec[ikmq,:,iv]) 
+        return Mssp_ttp
     
     def get_exc_overlap(self, trange = [0], tprange = [0]):
         Mssp = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints, self.qmpgrid.nnkpts), dtype=np.complex128)
@@ -565,8 +565,8 @@ class H2P():
         ikp = self.BSE_table[tp][0]
         ivp = self.BSE_table[tp][1] 
         icp = self.BSE_table[tp][2] 
-        ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
-        Ammn_ttp = self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
+        ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
+        Ammn_ttp = self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ikq,:,ic])
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0], tprange = [0]):
