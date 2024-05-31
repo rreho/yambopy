@@ -182,6 +182,8 @@ class ProjwfcXML(object):
         if path_kpoints:
             if isinstance(path_kpoints,Path):
                 path_kpoints = path_kpoints.get_indexes()
+        # else:
+            # path_kpoints = 
         if bandmax is None or bandmax > self.nbands:
             bandmax = self.nbands
 
@@ -199,14 +201,14 @@ class ProjwfcXML(object):
         kpoints_dists = calculate_distances(self.kpoints[:self.nkpoints])
  
         #make K-points labels
-        ticks, labels = list(zip(*path_kpoints))
-        ax.set_xticks([kpoints_dists[t] for t in ticks])
-        ax.set_xticklabels(labels)
+        # ticks, labels = list(zip(*path_kpoints))
+        # ax.set_xticks([kpoints_dists[t] for t in ticks])
+        # ax.set_xticklabels(labels)
         ax.set_ylabel('E (eV)')
 
         #plot vertical lines
-        for t in ticks:
-            ax.axvline(kpoints_dists[t],c='k',lw=2)
+        # for t in ticks:
+            # ax.axvline(kpoints_dists[t],c='k',lw=2)
         ax.axhline(0,c='k')
      
         # Plot bands for fixed size in a colormap
@@ -241,20 +243,21 @@ class ProjwfcXML(object):
                      cax2= ax.scatter(kpoints_dists,eig2,s=size,c=w_rel2[:,ib],cmap=color_map2,vmin=0,vmax=1,edgecolors='none',label=label_1,rasterized=True,zorder=2)
 
         # Plot bands with changing size and a fixed color
+        # else:
+            # if self.spin_components == 1 or self.spin_components == 4:
+            #    w_proj = self.get_weights(selected_orbitals=selected_orbitals)
+            #    for ib in range(bandmin,bandmax):
+            #        eig = self.eigen[:,ib] + y_offset
+            #        cax = ax.scatter(kpoints_dists,eig,s=w_proj[:,ib]*size,c=color,edgecolors='none',alpha=alpha,label=label_1,rasterized=True,zorder=2)
+
+            # elif self.spin_components == 2:
+            #      w_proj1, w_proj2 = self.get_weights(selected_orbitals=selected_orbitals)
+            #      for ib in range(bandmin,bandmax):
+            #          eig1, eig2 = self.eigen1[:,ib], self.eigen2[:,ib]
+            #          cax = ax.scatter(kpoints_dists,eig1,s=w_proj1[:,ib]*size,c=color  ,edgecolors='none',alpha=alpha,label=label_1)
+            #          cax2= ax.scatter(kpoints_dists,eig2,s=w_proj2[:,ib]*size,c=color_2,edgecolors='none',alpha=alpha,label=label_2)
         else:
-            if self.spin_components == 1 or self.spin_components == 4:
-               w_proj = self.get_weights(selected_orbitals=selected_orbitals)
-               for ib in range(bandmin,bandmax):
-                   eig = self.eigen[:,ib] + y_offset
-                   cax = ax.scatter(kpoints_dists,eig,s=w_proj[:,ib]*size,c=color,edgecolors='none',alpha=alpha,label=label_1,rasterized=True,zorder=2)
-
-            elif self.spin_components == 2:
-                 w_proj1, w_proj2 = self.get_weights(selected_orbitals=selected_orbitals)
-                 for ib in range(bandmin,bandmax):
-                     eig1, eig2 = self.eigen1[:,ib], self.eigen2[:,ib]
-                     cax = ax.scatter(kpoints_dists,eig1,s=w_proj1[:,ib]*size,c=color  ,edgecolors='none',alpha=alpha,label=label_1)
-                     cax2= ax.scatter(kpoints_dists,eig2,s=w_proj2[:,ib]*size,c=color_2,edgecolors='none',alpha=alpha,label=label_2)
-
+            cax = None
         ax.set_xlim(0, max(kpoints_dists))
         return cax
     
