@@ -74,7 +74,7 @@ class H2P():
         self.TD = TD #Tahm-Dancoff
         self.TBos = TBos
         self.method = method
-        self.run_parallel = True
+        self.run_parallel = run_parallel
         self.Mssp = None
         self.Amn = None
         # consider to build occupations here in H2P with different occupation functions
@@ -101,10 +101,14 @@ class H2P():
 
 
     def _buildH2P(self):
+        import time
         if self.run_parallel:
             import multiprocessing as mp
-            import time
-            pool = mp.Pool(mp.cpu_count())
+            cpucount= mp.cpu_count()
+            if cpucount > 8:
+                cpucount = 8
+            print(f"CPU count involved in H2P loading pool: {cpucount}")
+            pool = mp.Pool(cpucount)
             full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
 
             if self.nq_double == 1:
@@ -144,7 +148,6 @@ class H2P():
             return H2P
 
         else:
-
             # Expanded k-points and symmetry are prepared for operations that might need them
             full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
 
@@ -159,7 +162,8 @@ class H2P():
             # Common setup for databases (Yambo databases)
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
             # this is Yambo kernel, however I need an auxiliary kernel since the indices of c and v are different between BSE_table and BSE_table of YamboExcitonDB
-            t0 = time()
+            t0 = time.time()
+
             for idx, exc_db_file in enumerate(exciton_db_files):
                 yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
                 v_band = np.min(yexc_atk.table[:, 1])
@@ -193,6 +197,7 @@ class H2P():
                             H2P[t, tp] = element_value
                         else:
                             H2P[idx, t, tp] = element_value
+            print(f"Hamiltonian matrix construction completed in {time.time() - t0:.2f} seconds.")
 
             return H2P
     # def _buildH2P(self):
