@@ -15,7 +15,8 @@ def process_file(args):
 
     yexc_atk = YamboExcitonDB.from_db_file(latdb, filename=exc_db_file)
     kernel_db = YamboBSEKernelDB.from_db_file(latdb, folder=f'{kernel_path}', Qpt=kpoints_indexes[idx]+1)
-    K_ttp = kernel_db.kernel  # Assuming this returns a 2D array
+    aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
+    K_ttp = kernel_db.kernel[aux_t][:,aux_t]  
     H2P_local = np.zeros((len(BSE_table), len(BSE_table)), dtype=np.complex128)
 
     for t in range(len(BSE_table)):
@@ -621,6 +622,7 @@ class H2P():
                                 np.vdot(self.eigvec[ik,:, ic], self.eigvec[ikpbover2,:, icp])*np.vdot(self.eigvec[ikmqmbover2,:,ivp], self.eigvec[ikmq,:,iv]) 
         return Mssp_ttp
     
+
     def get_exc_overlap(self, trange = [0], tprange = [0]):
         Mssp = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints, self.qmpgrid.nnkpts), dtype=np.complex128)
         # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
@@ -630,6 +632,7 @@ class H2P():
                     for ib in range(self.qmpgrid.nnkpts):
                         Mssp[l,lp,iq, ib] = self._get_exc_overlap_ttp(l,lp,iq,ikq,ib)
         self.Mssp = Mssp   
+    
 
     def _get_amn_ttp(self, t, tp, iq,ikq):
         ik = self.BSE_table[t][0]
@@ -651,6 +654,7 @@ class H2P():
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
+
         if self.Mssp is None:
             self.get_exc_overlap(trange, tprange)
 
@@ -664,7 +668,8 @@ class H2P():
         # Preparing header and initial data
         output_lines.append(f'Created on {date_time_string}\n')
         output_lines.append(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{self.qmpgrid.nnkpts}\n')
-        
+
+
         # Generate output for each point
         for iq,ikq in enumerate(self.kindices_table):
             for ib in range(self.qmpgrid.nnkpts):
