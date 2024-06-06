@@ -4,33 +4,10 @@ from yambopy.wannier.wann_utils import *
 from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
+from yambopy.wannier.wann_par_utils import *
 from time import time
+import multiprocessing as mp
 
-
-
-def process_file(args):
-    idx, exc_db_file, data_dict = args
-    # Unpacking data necessary for processing
-    latdb, kernel_path, kpoints_indexes, HA2EV, BSE_table, kplusq_table, kminusq_table_yambo, eigv, f_kn = data_dict.values()
-
-    yexc_atk = YamboExcitonDB.from_db_file(latdb, filename=exc_db_file)
-    kernel_db = YamboBSEKernelDB.from_db_file(latdb, folder=f'{kernel_path}', Qpt=kpoints_indexes[idx]+1)
-    K_ttp = kernel_db.kernel  # Assuming this returns a 2D array
-    H2P_local = np.zeros((len(BSE_table), len(BSE_table)), dtype=np.complex128)
-
-    for t in range(len(BSE_table)):
-        ik, iv, ic = BSE_table[t]
-        for tp in range(len(BSE_table)):
-            ikp, ivp, icp = BSE_table[tp]
-            ikplusq = kplusq_table[ik, kpoints_indexes[idx]]
-            ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx]]
-            ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx]]
-            K = -(K_ttp[t, tp]) * HA2EV
-            deltaE = eigv[ik, ic] - eigv[ikpminusq, iv] if (ik == ikp and icp == ic and ivp == iv) else 0.0
-            occupation_diff = -f_kn[ikpminusq, ivp] + f_kn[ikp, icp]
-            element_value = deltaE + occupation_diff * K
-            H2P_local[t, tp] = element_value
-    return idx, H2P_local
 
 
 class H2P():
@@ -77,6 +54,12 @@ class H2P():
         self.run_parallel = run_parallel
         self.Mssp = None
         self.Amn = None
+        if run_parallel:
+            self.cpucount = mp.cpu_count()
+            if self.cpucount >= 64:
+                self.cpucount = 64
+        else:
+            self.cpucount = 1
         # consider to build occupations here in H2P with different occupation functions
         if (f_kn == None):
             self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float128)
@@ -101,14 +84,9 @@ class H2P():
 
 
     def _buildH2P(self):
-        import time
         if self.run_parallel:
-            import multiprocessing as mp
-            cpucount= mp.cpu_count()
-            if cpucount > 8:
-                cpucount = 8
-            print(f"CPU count involved in H2P loading pool: {cpucount}")
-            pool = mp.Pool(cpucount)
+            print(f"CPU count involved in H2P loading pool: {self.cpucount}")
+            pool = mp.Pool(self.cpucount)
             full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
 
             if self.nq_double == 1:
@@ -119,7 +97,7 @@ class H2P():
                 file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
 
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
-            t0 = time.time()
+            t0 = time()
 
             # Prepare data to be passed
             data_dict = {
@@ -142,7 +120,7 @@ class H2P():
                 else:
                     H2P[idx] = result
 
-            print(f"Hamiltonian matrix construction completed in {time.time() - t0:.2f} seconds.")
+            print(f"Hamiltonian matrix construction completed in {time() - t0:.2f} seconds.")
             pool.close()
             pool.join()
             return H2P
@@ -162,7 +140,7 @@ class H2P():
             # Common setup for databases (Yambo databases)
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
             # this is Yambo kernel, however I need an auxiliary kernel since the indices of c and v are different between BSE_table and BSE_table of YamboExcitonDB
-            t0 = time.time()
+            t0 = time()
 
             for idx, exc_db_file in enumerate(exciton_db_files):
                 yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
@@ -197,7 +175,7 @@ class H2P():
                             H2P[t, tp] = element_value
                         else:
                             H2P[idx, t, tp] = element_value
-            print(f"Hamiltonian matrix construction completed in {time.time() - t0:.2f} seconds.")
+            print(f"Hamiltonian matrix construction completed in {time() - t0:.2f} seconds.")
 
             return H2P
     # def _buildH2P(self):
@@ -603,7 +581,7 @@ class H2P():
                 # Perform the summation
                 Mssp_ttp += conj_term * eigvec_term * dot_product1 * dot_product2
 
-        return Mssp_ttp        
+        return Mssp_ttp    
         # Mssp_ttp = 0
         # for it in range(self.dimbse):
         #     for itp in range(self.dimbse):
@@ -621,6 +599,7 @@ class H2P():
         #                         np.vdot(self.eigvec[ik,:, ic], self.eigvec[ikpbover2,:, icp])*np.vdot(self.eigvec[ikmqmbover2,:,ivp], self.eigvec[ikmq,:,iv]) 
         # return Mssp_ttp
     
+
     def get_exc_overlap(self, trange = [0], tprange = [0]):
         Mssp = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints, self.qmpgrid.nnkpts), dtype=np.complex128)
         # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
@@ -628,8 +607,20 @@ class H2P():
             for ilp, lp in enumerate(tprange):   
                 for iq,ikq in enumerate(self.kindices_table):
                     for ib in range(self.qmpgrid.nnkpts):
-                        Mssp[l,lp,iq, ib] = self._get_exc_overlap_ttp(l,lp,iq,ikq,ib)
+                        Mssp[l,lp,iq, ib] = self.get_exc_overlap_ttp(l,lp,iq,ikq,ib)
         self.Mssp = Mssp   
+    
+    def get_exc_overlap_par(self,trange=[0], tprange=[0]):
+        Mssp = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints, self.qmpgrid.nnkpts), dtype=np.complex128)
+        args_list = [(l, lp, iq, ikq, ib, self.eigvec, self.h2peigvec_vck, self.BSE_table, self.kmpgrid, self.nv, self.bse_nv, self.dimbse)
+            for _,l in enumerate(trange) for _, lp in enumerate(tprange) for iq, ikq in enumerate(self.kindices_table) for ib in range(self.qmpgrid.nnkpts)]
+        with mp.Pool(processes=self.cpucount) as pool:
+            results = pool.map(get_exc_overlap_ttp_par, args_list)
+        
+        for l, lp, iq, ib, Mssp_t in results:
+            Mssp[l, lp, iq, ib] = Mssp_t
+
+        self.Mssp = Mssp
 
     def _get_amn_ttp(self, t, tp, iq,ikq):
         ik = self.BSE_table[t][0]
@@ -651,8 +642,19 @@ class H2P():
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
-        if self.Mssp is None:
-            self.get_exc_overlap(trange, tprange)
+        # Parallelizing the main workhorse of the function
+        if self.run_parallel:
+            t0 = time()
+            if self.Mssp is None:
+                self.get_exc_overlap_par(trange, tprange)
+                print(f"exc overlap construction completed in {time() - t0:.2f} seconds.")
+
+        else:
+            t0 = time()
+            if self.Mssp is None:
+                self.get_exc_overlap(trange, tprange)
+                print(f"non parallel exc overlap construction completed in {time() - t0:.2f} seconds.")
+
 
         from datetime import datetime
 
@@ -664,7 +666,8 @@ class H2P():
         # Preparing header and initial data
         output_lines.append(f'Created on {date_time_string}\n')
         output_lines.append(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{self.qmpgrid.nnkpts}\n')
-        
+
+
         # Generate output for each point
         for iq,ikq in enumerate(self.kindices_table):
             for ib in range(self.qmpgrid.nnkpts):

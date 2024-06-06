@@ -69,7 +69,6 @@ from yambopy.dbs.elphondb import *
 from yambopy.dbs.bsekerneldb import *
 from yambopy.dbs.excphondb import *
 from yambopy.dbs.kqgridsdb import *
-
 #input/output files
 from yambopy.io.inputfile import *
 from yambopy.io.outputfile import *
@@ -131,3 +130,4 @@ from yambopy.wannier.wann_H2p import *
 from yambopy.wannier.wann_lifetimes import *
 from yambopy.wannier.wann_ode import *
 from yambopy.wannier.wann_realtime import *
+from yambopy.wannier.wann_par_utils import *
