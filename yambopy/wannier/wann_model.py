@@ -16,19 +16,32 @@ from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T, sort_e
 from yambopy.wannier.wann_dipoles import TB_dipoles
 import matplotlib.pyplot as plt
 class TBMODEL(tbmodels.Model):
-    '''
-    Class that inherits from tbmodels.Model for TB-model Hamiltonians
-    '''
-    
+    """
+    Class that inherits from tbmodels.Model for TB-model Hamiltonians.
+
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.Mmn = None
     
     @classmethod
     def set_mpgrid(cls,mpgrid):
+        """
+        Set the Monkhorst-Pack grid.
+
+        Parameters:
+            mpgrid: The Monkhorst-Pack grid.
+        """        
         cls.mpgrid = mpgrid
     
     def solve_ham(self, k: ty.Union[ty.Sequence[float], ty.Sequence[ty.Sequence[float]]], convention: int = 2):
+        """
+        Solve the Hamiltonian.
+
+        Parameters:
+            k: The k-points in reduced coordinates.
+            convention: The convention to use.
+        """        
         # k in reduced coordinates
         self.H_k = self.hamilton(k, convention=convention)
         self.nk = int(self.H_k.shape[0]) # number of k-points
