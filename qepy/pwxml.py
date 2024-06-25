@@ -113,8 +113,8 @@ class PwXML():
         if Monkhorst_pack_offset is not []:
             self.ktype = 'automatic'
             Brillouin_zone = self.datafile_xml.find('BRILLOUIN_ZONE/BRILLOUIN_ZONE')
-            self.kpoints = [Brillouin_zone.get('nk1'), Brillouin_zone.get('nk2'), Brillouin_zone.get('nk3')]
-            self.shiftk = [Monkhorst_pack_offset.get('k1'), Monkhorst_pack_offset.get('k2'), Monkhorst_pack_offset.get('k3')]
+            self.kpoints = [int(Brillouin_zone.get('nk1')), int(Brillouin_zone.get('nk2')), int(Brillouin_zone.get('nk3'))]
+            self.shiftk = [int(Monkhorst_pack_offset.get('k1')), int(Monkhorst_pack_offset.get('k2')), int(Monkhorst_pack_offset.get('k3'))]
         
         # get klist of k-points
         self.klist = [] 
