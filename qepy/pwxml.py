@@ -102,18 +102,30 @@ class PwXML():
             self.atypes[atype_string]=[atype_mass,atype_pseudo]
 
         #get nkpoints
-
-        #get nkpoints
         self.nkpoints = int(self.datafile_xml.findall("BRILLOUIN_ZONE/NUMBER_OF_K-POINTS")[0].text.strip())
         # Read the number of BANDS
         self.nbands   = int(self.datafile_xml.find("BAND_STRUCTURE_INFO/NUMBER_OF_BANDS").text)
 
         #get k-points
-        self.kpoints = [] 
-        for i in range(self.nkpoints):
-          k_aux = self.datafile_xml.findall('BRILLOUIN_ZONE/K-POINT.%d'%(i+1))[0].get('XYZ')
-          self.kpoints.append([float(x) for x in k_aux.strip().split()])
+        Monkhorst_pack_offset = self.datafile_xml.findall('BRILLOUIN_ZONE/MONKHORST_PACK_OFFSET')[0]
+
+
+        if Monkhorst_pack_offset is not []:
+            self.ktype = 'automatic'
+            Brillouin_zone = self.datafile_xml.find('BRILLOUIN_ZONE/BRILLOUIN_ZONE')
+            self.kpoints = [Brillouin_zone.get('nk1'), Brillouin_zone.get('nk2'), Brillouin_zone.get('nk3')]
+            self.shiftk = [Monkhorst_pack_offset.get('k1'), Monkhorst_pack_offset.get('k2'), Monkhorst_pack_offset.get('k3')]
         
+        # get klist of k-points
+        self.klist = [] 
+        
+        for i in range(self.nkpoints):
+            k_aux = self.datafile_xml.findall('BRILLOUIN_ZONE/K-POINT.%d'%(i+1))[0].get('XYZ')
+            k_aux = [float(x) for x in k_aux.strip().split()]
+            k_weight = self.datafile_xml.findall('BRILLOUIN_ZONE/K-POINT.%d'%(i+1))[0].get('WEIGHT')
+            k_weight = [float(x) for x in k_weight.strip().split()]
+
+            self.klist.append([k_aux[:3], k_weight[:3]])
         #get fermi
         self.fermi = float(self.datafile_xml.find("BAND_STRUCTURE_INFO/FERMI_ENERGY").text)*HatoeV
  
