@@ -119,28 +119,32 @@ class PwXML():
  
         #get eigenvalues
 
+
         if not self.lsda:
 
-           eigen = []
-           for ik in range(self.nkpoints):
-               for EIGENVALUES in ET.parse( "%s/%s.save/K%05d/%s" % (self.path,self.prefix,(ik + 1),self._eig_xml) ).getroot().findall("EIGENVALUES"):
-                   eigen.append(list(map(float,EIGENVALUES.text.split())*HatoeV))
-           self.eigen  = eigen - self.fermi
-           self.eigen1 = eigen - self.fermi
+            eigen = []
+            for ik in range(self.nkpoints):
+                for EIGENVALUES in ET.parse( "%s/%s.save/K%05d/%s" % (self.path,self.prefix,(ik + 1),self._eig_xml) ).getroot().findall("EIGENVALUES"):
+                    eigen.append(np.array(list(map(float, EIGENVALUES.text.split()))) * HatoeV)
+            eigen = np.concatenate(eigen)
+            self.eigen  = eigen - self.fermi
+            self.eigen1 = eigen - self.fermi
 
         #get eigenvalues of spin up & down
 
         if self.lsda:
-           eigen1, eigen2 = [], []
-           for ik in range(self.nkpoints):
-               for EIGENVALUES1 in ET.parse( "%s/%s.save/K%05d/%s" % (self.path,self.prefix,(ik + 1),self._eig1_xml) ).getroot().findall("EIGENVALUES"):
-                    eigen1.append(list(map(float, EIGENVALUES1.text.split())*HatoeV))
-               for EIGENVALUES2 in ET.parse( "%s/%s.save/K%05d/%s" % (self.path,self.prefix,(ik + 1),self._eig2_xml) ).getroot().findall("EIGENVALUES"):
-                    eigen2.append(list(map(float, EIGENVALUES2.text.split())*HatoeV))
+            eigen1, eigen2 = [], []
+            for ik in range(self.nkpoints):
+                for EIGENVALUES1 in ET.parse( "%s/%s.save/K%05d/%s" % (self.path,self.prefix,(ik + 1),self._eig1_xml) ).getroot().findall("EIGENVALUES"):
+                    eigen1.append(np.array(list(map(float, EIGENVALUES1.text.split()))) * HatoeV)
+                for EIGENVALUES2 in ET.parse( "%s/%s.save/K%05d/%s" % (self.path,self.prefix,(ik + 1),self._eig2_xml) ).getroot().findall("EIGENVALUES"):
+                    eigen2.append(np.array(list(map(float, EIGENVALUES2.text.split()))) * HatoeV)
+            eigen1=np.concatenate(eigen1)
+            eigen2=np.concatenate(eigen2)
+            self.eigen   = eigen1 - self.fermi
+            self.eigen1  = eigen1 - self.fermi
+            self.eigen2  = eigen2 - self.fermi
 
-           self.eigen   = eigen1 - self.fermi
-           self.eigen1  = eigen1 - self.fermi
-           self.eigen2  = eigen2 - self.fermi
 
         #get occupations of spin up & down
         if self.lsda:

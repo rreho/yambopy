@@ -407,6 +407,10 @@ class PwIn(object):
         self.kpoints = kpoints
         self.shiftk = shiftk
 
+    def set_klist(self,klist):
+        self.ktype = "crystal"
+        self.klist = klist
+
     def copy(self):
         """Return a copy of this instance"""
         import copy
