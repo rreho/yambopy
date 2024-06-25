@@ -123,9 +123,8 @@ class PwXML():
             k_aux = self.datafile_xml.findall('BRILLOUIN_ZONE/K-POINT.%d'%(i+1))[0].get('XYZ')
             k_aux = [float(x) for x in k_aux.strip().split()]
             k_weight = self.datafile_xml.findall('BRILLOUIN_ZONE/K-POINT.%d'%(i+1))[0].get('WEIGHT')
-            k_weight = [float(x) for x in k_weight.strip().split()]
-
-            self.klist.append([k_aux[:3], k_weight[:3]])
+            [k_aux.append(float(x)) for x in k_weight.strip().split()]
+            self.klist.append(k_aux)
         #get fermi
         self.fermi = float(self.datafile_xml.find("BAND_STRUCTURE_INFO/FERMI_ENERGY").text)*HatoeV
  
