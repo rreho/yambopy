@@ -106,11 +106,12 @@ class PwIn(object):
         return new
 
     @classmethod
-    def from_structure_dict(cls,structure,kpoints=None,ecut=None,pseudo_dir='.',conv_thr=None):
+    def from_structure_dict(cls,structure,kpoints=None,ecutwfc=None,ecutrho=None,pseudo_dir='.',conv_thr=None):
         pwi = cls()
         pwi.set_structure(structure)
         if kpoints: pwi.set_kpoints(kpoints)
-        if ecut: pwi.set_ecut(ecut)
+        if ecutwfc: pwi.set_ecutwfc(ecutwfc)
+        if ecutrho: pwi.set_ecutrho(ecutrho)
         if pseudo_dir: pwi.pseudo_dir = pseudo_dir
         if conv_thr: pwi.electrons['conv_thr'] = conv_thr
         return pwi
@@ -140,8 +141,11 @@ class PwIn(object):
     def prefix(self,value):
         self.control['prefix'] = "'%s'"%value.replace("'",'')
 
-    def set_ecut(self,ecut):
-        self.system['ecutwfc'] = ecut
+    def set_ecutwfc(self,ecutwfc):
+        self.system['ecutwfc'] = ecutwfc
+
+    def set_ecutrho(self,ecutrho):
+        self.system['ecutrho'] = ecutrho
 
     def set_structure(self,structure):
         """

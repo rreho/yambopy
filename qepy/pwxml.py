@@ -101,11 +101,13 @@ class PwXML():
             atype_pseudo =  atype_xml.findall('PSEUDO')[0].text.strip()
             self.atypes[atype_string]=[atype_mass,atype_pseudo]
 
-        #get nkpoints
-        self.nkpoints = int(self.datafile_xml.findall("BRILLOUIN_ZONE/NUMBER_OF_K-POINTS")[0].text.strip())
         # Read the number of BANDS
         self.nbands   = int(self.datafile_xml.find("BAND_STRUCTURE_INFO/NUMBER_OF_BANDS").text)
 
+        self.ecutwfc = float(self.datafile_xml.find("PLANE_WAVES/WFC_CUTOFF").text.strip())
+        self.ecutrho = float(self.datafile_xml.find("PLANE_WAVES/RHO_CUTOFF").text.strip())
+        #get nkpoints
+        self.nkpoints = int(self.datafile_xml.findall("BRILLOUIN_ZONE/NUMBER_OF_K-POINTS")[0].text.strip())
         #get k-points
         Monkhorst_pack_offset = self.datafile_xml.findall('BRILLOUIN_ZONE/MONKHORST_PACK_OFFSET')[0]
 
