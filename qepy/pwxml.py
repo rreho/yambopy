@@ -104,8 +104,8 @@ class PwXML():
         # Read the number of BANDS
         self.nbands   = int(self.datafile_xml.find("BAND_STRUCTURE_INFO/NUMBER_OF_BANDS").text)
 
-        self.ecutwfc = float(self.datafile_xml.find("PLANE_WAVES/WFC_CUTOFF").text.strip())
-        self.ecutrho = float(self.datafile_xml.find("PLANE_WAVES/RHO_CUTOFF").text.strip())
+        self.ecutwfc = float(self.datafile_xml.find("PLANE_WAVES/WFC_CUTOFF").text.strip())*2 # convert to rydberg
+        self.ecutrho = float(self.datafile_xml.find("PLANE_WAVES/RHO_CUTOFF").text.strip())*2 # convert to rydberg
         #get nkpoints
         self.nkpoints = int(self.datafile_xml.findall("BRILLOUIN_ZONE/NUMBER_OF_K-POINTS")[0].text.strip())
         #get k-points
@@ -254,8 +254,8 @@ class PwXML():
         else:
            self.nbands = int(self.datafile_xml.findall("output/band_structure/nbnd")[0].text.strip())
         
-        self.ecutwfc = float(self.datafile_xml.find("input/basis/ecutwfc").text.strip())*2 #times 2 to get value from inputfile
-        self.ecutrho = float(self.datafile_xml.find("input/basis/ecutrho").text.strip())*2 #times 2 to get value from inputfile
+        self.ecutwfc = float(self.datafile_xml.find("input/basis/ecutwfc").text.strip())*2 #convert to rydberg
+        self.ecutrho = float(self.datafile_xml.find("input/basis/ecutrho").text.strip())*2 #convert to rydberg
 
         #get ks states
         kstates = self.datafile_xml.findall('output/band_structure/ks_energies')
