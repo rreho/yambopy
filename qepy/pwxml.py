@@ -197,6 +197,8 @@ class PwXML():
         """
         self.datafile_xml = ET.parse( filename ).getroot()
 
+        self.calculation_type = self.datafile_xml.find("input/control_variables/calculation").text
+
         # occupation type
         self.occ_type = self.datafile_xml.findall("input/bands/occupations")[0].text
 
@@ -244,8 +246,6 @@ class PwXML():
             atype_pseudo = atypes[i].findall('pseudo_file')[0].text.strip()
             self.atypes[atype_string]=[atype_mass,atype_pseudo]
 
-        #get nkpoints
-        self.nkpoints = int(self.datafile_xml.findall("output/band_structure/nks")[0].text.strip())
         # Read the number of BANDS
         if self.lsda:
            self.nbands_up = int(self.datafile_xml.findall("output/band_structure/nbnd_up")[0].text.strip())
@@ -253,10 +253,15 @@ class PwXML():
            self.nbands = self.nbands_up + self.nbands_dw
         else:
            self.nbands = int(self.datafile_xml.findall("output/band_structure/nbnd")[0].text.strip())
+        
+        self.ecutwfc = float(self.datafile_xml.find("input/basis/ecutwfc").text.strip())*2 #times 2 to get value from inputfile
+        self.ecutrho = float(self.datafile_xml.find("input/basis/ecutrho").text.strip())*2 #times 2 to get value from inputfile
 
         #get ks states
         kstates = self.datafile_xml.findall('output/band_structure/ks_energies')
 
+        #get nkpoints
+        self.nkpoints = int(self.datafile_xml.findall("output/band_structure/nks")[0].text.strip())
         #get k-points
         self.kpoints = []
         self.shiftk = []
