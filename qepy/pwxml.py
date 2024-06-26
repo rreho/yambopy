@@ -198,7 +198,6 @@ class PwXML():
         self.datafile_xml = ET.parse( filename ).getroot()
 
         # occupation type
-
         self.occ_type = self.datafile_xml.findall("input/bands/occupations")[0].text
 
         #get magnetization state
@@ -259,10 +258,20 @@ class PwXML():
         kstates = self.datafile_xml.findall('output/band_structure/ks_energies')
 
         #get k-points
-        self.kpoints = [] 
+        self.kpoints = []
+        self.shiftk = []
+        monkhorst_pack = self.datafile_xml.find("input/k_points_IBZ/monkhorst_pack")
+        print(monkhorst_pack)
+        for i in range(1,4):
+            print('nk%d'%i)
+            self.kpoints.append(int(monkhorst_pack.get('nk%d'%i)))
+            self.shiftk.append(int(monkhorst_pack.get('k%d'%i)))
+
+        self.klist = [] 
         for i in range(self.nkpoints):
             kpoint = [float(x) for x in kstates[i].findall('k_point')[0].text.strip().split()]
-            self.kpoints.append( kpoint )
+            kpoint.append(float(kstates[i].findall('k_point')[0].get('weight')))
+            self.klist.append( kpoint )
 
         #get fermi (it depends on the occupations and spin pol)
         if self.occ_type == 'fixed':
