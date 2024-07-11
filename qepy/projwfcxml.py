@@ -90,7 +90,7 @@ class ProjwfcXML(object):
                 # examples of the lines we have to read
                 #  5: atom   1 (C  ), wfc  3 (l=2 m= 1)               #no spin case
                 #  5: atom   1 (C  ), wfc  3 (j=1.5 l=1 m_j=-1.5)     #non collinear spin case
-                _, iatom, atype, wfc, l, j, m_j = line
+                istate, iatom, atype, wfc, l, j, m_j = line
                 if j: j = float(j)
                 if l: l = int(l)
                 if m_j: m_j = float(m_j)
