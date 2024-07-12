@@ -718,6 +718,7 @@ class H2P():
             for ib in range(self.qmpgrid.nnkpts):
                 iqpb = self.qmpgrid.qpb_grid_table[iq, ib][1]
                 f_out.write(f'\t{iq+1}\t{iqpb+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
+        f_out.write('end nnkpts')
 
     def write_exc_amn(self, seedname='wannier90_exc', trange = [0], tprange = [0]):
         if (self.Amn is None):
