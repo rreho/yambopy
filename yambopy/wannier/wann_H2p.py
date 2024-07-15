@@ -33,42 +33,62 @@ def process_file(args):
             H2P_local[t, tp] = element_value
     return idx, H2P_local
 
+class FakeLatticeObject():
+    '''should make the YamboLatticeDB class actually more lightweight and
+    allow for other ways of initiliazing with only the unit cell for instance because we don't need most things.
+    We only need: 
+    .lat_vol
+    .alat
+
+    YamboBSEKernelDB class only uses it when it needs kernel values per bands, and in that case it only need nkpoints
+    
+    '''
+    def __init__(self, model):
+        self.alat = model.uc * 1/0.52917720859      # this results in minor difference, do we really want the values from yambo?
+        self.lat_vol = np.prod(np.diag(self.alat))  # difference becomes bigger
+
+
 
 class H2P():
-    '''Build the 2-particle resonant Hamiltonian H2P'''
-    def __init__(self, nk, nb, nc, nv,eigv, eigvec,bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
-                  kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                  TD=False,  TBos=300 , run_parallel=False): 
+    '''Build the 2-particle resonant Hamiltonian H2P
+        Easy to use only requires the model as input. 
+    '''
+    def __init__(self, model, savedb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
+                  TD=False,  TBos=300 , run_parallel=False):
+    
+    # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
+    #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
+    #               TD=False,  TBos=300 , run_parallel=False): 
         '''Build H2P:
             bsetype = 'full' build H2P resonant + antiresonant + coupling
             bsetype = 'resonant' build H2p resonant
             TD is the Tahm-Dancoff which neglects the coupling
         '''
-        self.nk = nk
-        self.nb = nb
-        self.nc = nc
-        self.nv = nv
+        self.nk = model.nk
+        self.nb = model.nb
+        self.nc = model.nc
+        self.nv = model.nv
         self.bse_nv = bse_nv
         self.bse_nc = bse_nc
-        self.nq_double = len(kmpgrid.k)
+        self.kmpgrid = model.mpgrid
         self.nq = len(qmpgrid.k)
-        self.eigv = eigv
-        self.eigvec = eigvec
-        self.kmpgrid = kmpgrid
+        self.eigv = model.eigv
+        self.eigvec = model.eigvec
         self.qmpgrid = qmpgrid
+        self.nq_double = len(self.kmpgrid.k)
         self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid)
         (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
         try:
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
         except ValueError:
             print('Warning! Q=0 index not found')
-        self.dimbse = bse_nv*bse_nc*nk
-        self.savedb = savedb
-        self.latdb = latdb
+        self.dimbse = self.bse_nv*self.bse_nc*self.nk
+        self.savedb = YamboSaveDB.from_db_file(f'{savedb_path}')
+        self.latdb = YamboLatticeDB.from_db_file(f'{savedb_path}/ns.db1')
         self.offset_nv = self.savedb.nbandsv-self.nv  
         (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
         # for now Transitions are the same as dipoles?
-        self.T_table = T_table
+        self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
         self.ctype = ctype
         self.ktype = ktype
@@ -81,7 +101,7 @@ class H2P():
         # consider to build occupations here in H2P with different occupation functions
         if (f_kn == None):
             self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float128)
-            self.f_kn[:,:nv] = 1.0
+            self.f_kn[:,:self.nv] = 1.0
         else:
             self.f_kn = f_kn
         if(self.method=='model' and cpot is not None):
@@ -93,7 +113,10 @@ class H2P():
             #Remember that the BSEtable in Yambopy start counting from 1 and not to 0
             try:
                 self.kernel_path = kernel_path
-                self.excitons_path = excitons_path
+                if not excitons_path:
+                    self.excitons_path = kernel_path
+                else:
+                    self.excitons_path = excitons_path
             except  TypeError:
                 print('Error Kernel is None or Path Not found')
             self.H2P = self._buildH2P()
