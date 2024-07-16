@@ -4,6 +4,7 @@ from yambopy.wannier.wann_utils import *
 from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
+from yambopy.wannier.wann_io import AMN
 from time import time
 
 
@@ -657,7 +658,7 @@ class H2P():
         self.Mssp = Mssp   
     
 
-    def _get_amn_ttp(self, t, tp, iq,ikq):
+    def _get_amn_ttp(self, t, tp, iq,ikq, B):
         ik = self.BSE_table[t][0]
         iv = self.BSE_table[t][1] 
         ic = self.BSE_table[t][2] 
@@ -665,15 +666,17 @@ class H2P():
         ivp = self.BSE_table[tp][1] 
         icp = self.BSE_table[tp][2] 
         ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
-        Ammn_ttp = self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ikq,:,ic])
+        Ammn_ttp = self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(B[ikmq,:,iv], B[ikq,:,ic])
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0], tprange = [0]):
         Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
+        amn_wann = AMN(infile=self.projection_infile)
+        B = amn_wann.A_knm
         for it,t in enumerate(trange):
             for itp, tp in enumerate(tprange):
                 for iq,ikq in enumerate(self.kindices_table):
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq,ikq)        
+                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq,ikq, B)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
@@ -743,7 +746,8 @@ class H2P():
                 f_out.write(f'\t{iq+1}\t{iqpb+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
         f_out.write('end nnkpts')
 
-    def write_exc_amn(self, seedname='wannier90_exc', trange = [0], tprange = [0]):
+    def write_exc_amn(self,infile, seedname='wannier90_exc', trange = [0], tprange = [0]):
+        self.projection_infile = infile
         if (self.Amn is None):
             self.get_exc_amn(trange, tprange)
 

@@ -87,6 +87,24 @@ class MMN(W90_data):
         t2 = time()
         print("Time for MMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))
 
+class AMN(W90_data):
+
+    def __init__(self, infile):
+        data = np.loadtxt(infile, skiprows=2)
+        m,n,k,A_real,A_im = [data[:,i] for i in range(0,5)] # band index, projection index, k, real and imaginary A
+        A_complex = A_real + 1j * A_im
+        m = m.astype(int)
+        n = n.astype(int)
+        k = k.astype(int)
+        A_complex_matrix = np.zeros((np.max(k), np.max(n), np.max(m)), dtype=complex) # maybe max is not needed and we just need the last one
+        indices = np.array([k, n, m])
+
+        for index, value in zip(indices.transpose(), A_complex):
+            i,j,l= index
+            A_complex_matrix[i-1, j-1, l-1] = value
+
+        self.A_knm = A_complex_matrix
+    
 class EIG(W90_data):
 
     def __init__(self, seedname):
