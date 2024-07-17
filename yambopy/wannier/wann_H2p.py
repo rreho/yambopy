@@ -738,6 +738,31 @@ class H2P():
     
     def write_exc_nnkp(self, seedname='wannier90_exc', trange = [0]):
         f_out = open(f'{seedname}.nnkp', 'w')
+
+        from datetime import datetime
+        current_datetime = datetime.now()
+        date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
+        f_out.write(f'Created on {date_time_string}\n\n')
+        f_out.write('calc_only_A  :  F\n\n') # have to figure this one out
+        
+        f_out.write('begin real_lattice\n')
+        for i, dim  in enumerate(self.kmpgrid.real_lattice):
+            f_out.write(f'\t{dim[0]:.7f}\t{dim[1]:.7f}\t{dim[2]:.7f}\n')
+        f_out.write('end real_lattice\n\n')
+
+        f_out.write('begin recip_lattice\n')
+        for i, dim in enumerate(self.kmpgrid.reciprocal_lattice):
+            f_out.write(f'\t{dim[0]:.7f}\t{dim[1]:.7f}\t{dim[2]:.7f}\n')
+        f_out.write('end recip_lattice\n\n')
+
+        f_out.write(f'begin kpoints\n\t {len(self.kmpgrid.red_kpoints)}\n')
+        for i, dat in enumerate(self.kmpgrid.red_kpoints):
+            f_out.write(f'   {dat[0]:11.8f}\t{dat[1]:11.8f}\t{dat[2]:11.8f}\n')
+        f_out.write(f'end kpoints\n\n')
+
+        f_out.write(f'begin projections\n\t')
+        f_out.write(f'\nend projections\n\n')
+        
         f_out.write('begin nnkpts\n')
         f_out.write(f'\t{self.qmpgrid.nnkpts}\n')
         for iq, q in enumerate(self.qmpgrid.k):
