@@ -659,22 +659,21 @@ class H2P():
     
 
     def _get_amn_ttp(self, t, tp, iq,ikq, B):
-        ik = self.BSE_table[t][0]
-        iv = self.BSE_table[t][1] 
-        ic = self.BSE_table[t][2] 
-        ikp = self.BSE_table[tp][0]
-        ivp = self.BSE_table[tp][1] 
-        icp = self.BSE_table[tp][2] 
-        ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
-        Ammn_ttp = self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(B[ikmq,:,iv], B[ikq,:,ic])
+        Ammn_ttp=0
+        for il in range(self.dimbse):
+            ik = self.BSE_table[il][0]
+            iv = self.BSE_table[il][1] 
+            ic = self.BSE_table[il][2] 
+            ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
+            Ammn_ttp += self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])
         return Ammn_ttp
 
-    def get_exc_amn(self, trange = [0], tprange = [0]):
+    def get_exc_amn(self, trange = [0], tprange = [0]): #tprange here has a different meaning, is the trial exciton wavefunction, for now is basically always one
         Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
         amn_wann = AMN(infile=self.projection_infile)
-        B = amn_wann.A_knm
+        B = amn_wann.A_kmn
         for it,t in enumerate(trange):
-            for itp, tp in enumerate(tprange):
+            for t,tp in enumerate(tprange):
                 for iq,ikq in enumerate(self.kindices_table):
                     Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq,ikq, B)        
         self.Amn = Amn

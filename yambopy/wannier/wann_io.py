@@ -89,9 +89,9 @@ class MMN(W90_data):
 
 class AMN(W90_data):
 
-    def __init__(self, seedname, npar = multiprocessing.cpu_count()):
+    def __init__(self, infile, npar = multiprocessing.cpu_count()):
         t0 = time()
-        f_amn_in = open(seedname + ".amn", "r")
+        f_amn_in = open(infile + ".amn", "r")
         f_amn_in.readline()
         NB, NK, NW = np.array(f_amn_in.readline().split(),dtype=int) # number of bands, number of k-points, number of wannier
         self.A_kmn = np.zeros((NB, NW, NK), dtype=complex)
