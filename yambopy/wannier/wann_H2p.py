@@ -713,20 +713,6 @@ class H2P():
         with open(f'{seedname}.mmn', 'w') as f_out:
             f_out.writelines(output_lines)
 
-        # current_datetime = datetime.now()
-        # date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
-        # f_out = open(f'{seedname}.mmn', 'w')
-        # f_out.write(f'Created on {date_time_string}\n')
-        # f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{self.qmpgrid.nnkpts}\n')        
-        # for iq in range(self.qmpgrid.nkpoints):
-        #     for ib in range(self.qmpgrid.nnkpts):
-        #         # +1 is for Fortran counting
-        #         f_out.write(f'\t{self.qmpgrid.qpb_grid_table[iq,ib][0]+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][1]+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
-        #         for it,t in enumerate(trange):
-        #             for itp,tp in enumerate(tprange):
-        #                 f_out.write(f'\t{np.real(self.Mssp[tp,t,iq,ib]):.14f}\t{np.imag(self.Mssp[tp,t,iq,ib]):.14f}\n')
-        
-        # f_out.close()
 
     def write_exc_eig(self, seedname='wannier90_exc', trange = [0]):
         exc_eig = np.zeros((len(trange), self.qmpgrid.nkpoints), dtype=complex)
@@ -760,6 +746,8 @@ class H2P():
         f_out.write(f'end kpoints\n\n')
 
         f_out.write(f'begin projections\n\t')
+        f_out.write(f'    {len(trange):11}')
+
         f_out.write(f'\nend projections\n\n')
         
         f_out.write('begin nnkpts\n')
@@ -769,6 +757,8 @@ class H2P():
                 iqpb = self.qmpgrid.qpb_grid_table[iq, ib][1]
                 f_out.write(f'\t{iq+1}\t{iqpb+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
         f_out.write('end nnkpts')
+
+        # NNKP(seedname)
 
     def write_exc_amn(self,infile, seedname='wannier90_exc', trange = [0], tprange = [0]):
         self.projection_infile = infile

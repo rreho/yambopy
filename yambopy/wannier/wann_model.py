@@ -110,8 +110,9 @@ class TBMODEL(tbmodels.Model):
         t1 = time()
         print(f'Diagonalization took {t1-t0:.3f} s')
 
-    def get_pos_from_ham(self, lat, hr, from_hr = True):
-        'get positions from Hamiltonian, first the indices and then reduced coordinates of hoppings'
+    def get_pos_from_ham(self, lat, hr, from_hr=True):
+        '''get positions from Hamiltonian, first the indices and then reduced coordinates of 
+        hoppings'''
         # get tuple of irpos
         if (not from_hr):
             self.irpos = np.array(list(self.hop.keys())) 
@@ -125,9 +126,9 @@ class TBMODEL(tbmodels.Model):
             pos = hr.hop
             self.nrpos = hr.nrpts
             self.pos = pos
-            return pos
+            return self.pos
 
-    def get_hlm (self ,lat, hr, from_hr=True):
+    def get_hlm(self ,lat, hr, from_hr=True):
         ''' computes light mater interaction hamiltonian for grid of points
         k is one k-point in reduced coordinates
         hrx = P_\alpha = dH(k)\dk_\alpha = \sum_{R=1}^N e^{ikR}iR_\alpha H_{R}
@@ -150,8 +151,8 @@ class TBMODEL(tbmodels.Model):
         #ws_deg is needed for fourier factor
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
-        if (not from_hr):
-            pos = self.get_pos_from_ham(lat, hr, from_hr)
+        if not from_hr:
+            pos = self.get_pos_from_ham(lat, hr, from_hr=from_hr)
         else:
             pos = self.get_pos_from_ham(lat, hr, from_hr=True)
             irpos = hr.hop
@@ -194,8 +195,8 @@ class TBMODEL(tbmodels.Model):
         #ws_deg is needed for fourier factor
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
-        if (not from_hr):
-            pos = self.get_pos_from_ham(lat, hr, from_hr)
+        if not from_hr:
+            pos = self.get_pos_from_ham(lat=lat, hr=hr, from_hr=False)
         else:
             pos = self.get_pos_from_ham(lat=lat,hr=hr, from_hr=True)
             irpos = hr.hop

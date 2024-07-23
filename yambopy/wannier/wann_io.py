@@ -288,20 +288,23 @@ class RMN(W90_data):
 
 class NNKP():
     """
-    read nnkp data file. 
-    Store reciprocal lattice vectors, neighbouring points and b-vectors
+    read  and write nnkp data files. 
+    Store reciprocal lattice vectors, neighbouring points and b-vectors, and now projections too
     """
-    def __init__(self, seedname):
-        t0 = time()
-        f_hr_in = open(seedname + ".nnkp", "r")
-        real_lattice = []
-        reciprocal_lattice = []
-        k = []
-        nkpoints = 0 
-        nnkpts = 0
-        b_grid = []
-        data = []
+    def __init__(self):
+        self.real_lattice = []
+        self.reciprocal_lattice = []
+        self.k = []
+        self.nkpoints = 0 
+        self.nnkpts = 0
+        self.b_grid = []
+        self.data = []
+        self.n_projections = 0
+        self.projections = []
 
+    def read_wann(self, seedname):
+        self.t0 = time()
+        f_hr_in = open(seedname + ".nnkp", "r")
         lines = f_hr_in.readlines()
         current_block = None
 
@@ -312,38 +315,83 @@ class NNKP():
                 current_block = None
             else:
                 if current_block == 'real_lattice':
-                    real_lattice.append([float(x) for x in line.split()])
+                    self.real_lattice.append([float(x) for x in line.split()])
                 elif current_block == 'recip_lattice':
-                    reciprocal_lattice.append([float(x) for x in line.split()])
+                    self.reciprocal_lattice.append([float(x) for x in line.split()])
                 elif current_block == 'kpoints':
                     if nkpoints == 0:
                         nkpoints = int(line.strip())
                     else:
-                        k.append([float(x) for x in line.split()])
+                        self.k.append([float(x) for x in line.split()])
+                elif current_block == 'projections':  # this does not hold true for spinor_projections
+                    if n_projections == 0:
+                        n_projections = int(line.strip())
+                    else:
+                        self.projections.append(line.split())
                 elif current_block == 'nnkpts':
                     if nnkpts == 0:
                         nnkpts = int(line.strip())
                     else:
-                        data.append([float(x) for x in line.split()])
+                        self.data.append([float(x) for x in line.split()])
 
-        self.real_lattice = np.array(real_lattice)
-        self.reciprocal_lattice = np.array(reciprocal_lattice)
-        self.k = np.array(k)
+
+        self.real_lattice = np.array(self.real_lattice)
+        self.reciprocal_lattice = np.array(self.reciprocal_lattice)
+        self.k = np.array(self.k)
         self.nkpoints = nkpoints
-        self.data = np.array(data)
+        self.data = np.array(self.data)
         self.ik = self.data[:,0].astype(int)-1
         self.ikpb = self.data[:,1].astype(int)-1
         self.iG = self.data[:,2:5].astype(int)
-        self.nnkpts = nnkpts
+
 
         Gvec = np.zeros((self.data.shape[0],3), dtype = np.float128)
         
         for ikkp in range(0, len(self.ik)):
             #Gvec[ikkp] = np.dot(reciprocal_lattice, self.iG[ikkp] )
             tmpb = self.k[self.ikpb[ikkp]] - self.k[self.ik[ikkp]] - self.iG[ikkp]
-            b_grid.append(tmpb)
+            self.b_grid.append(tmpb)
 
-        self.b_grid = np.array(b_grid)
+        self.b_grid = np.array(self.b_grid)
 
         t2 = time()
-        print("Time for NNKP.__init__() : {}".format(t2 - t0))
+        print("Time for reading NNKP : {}".format(t2 - self.t0))
+
+    def write_wann(self, seedname, trange=[0]):
+        
+
+        f_out = open(f'{seedname}.nnkp', 'w')
+
+        from datetime import datetime
+        current_datetime = datetime.now()
+        date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
+        f_out.write(f'Created on {date_time_string}\n\n')
+        f_out.write('calc_only_A  :  F\n\n') # have to figure this one out
+        
+        f_out.write('begin real_lattice\n')
+        for i, dim  in enumerate(self.real_lattice):
+            f_out.write(f'\t{dim[0]:.7f}\t{dim[1]:.7f}\t{dim[2]:.7f}\n')
+        f_out.write('end real_lattice\n\n')
+
+        f_out.write('begin recip_lattice\n')
+        for i, dim in enumerate(self.reciprocal_lattice):
+            f_out.write(f'\t{dim[0]:.7f}\t{dim[1]:.7f}\t{dim[2]:.7f}\n')
+        f_out.write('end recip_lattice\n\n')
+
+        f_out.write(f'begin kpoints\n\t {len(self.k)}\n')
+        for i, dat in enumerate(self.k):
+            f_out.write(f'   {dat[0]:11.8f}\t{dat[1]:11.8f}\t{dat[2]:11.8f}\n')
+        f_out.write(f'end kpoints\n\n')
+
+        f_out.write(f'begin projections\n\t')
+        f_out.write(f'    {len(trange):11}')
+
+        f_out.write(f'\nend projections\n\n')
+        
+        f_out.write('begin nnkpts\n')
+        f_out.write(f'\t{self.nnkpts}\n')
+        for iq, q in enumerate(self.k):
+            for ib in range(self.nnkpts):
+                iqpb = self.qpb_grid_table[iq, ib][1]
+                f_out.write(f'\t{iq+1}\t{iqpb+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
+        f_out.write('end nnkpts')

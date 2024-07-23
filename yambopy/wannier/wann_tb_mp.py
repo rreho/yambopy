@@ -102,7 +102,7 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack):
         self.qplaquette_grid = qplaquette_grid
 class NNKP_Grids(NNKP):
     def __init__(self, seedname, latdb, yambo_grid=False):
-        super().__init__(seedname)
+        super().read_wann(seedname)
         if(yambo_grid):
             self.k = np.array([self.fold_into_bz(k) for ik,k in enumerate(self.k)])
         self.latdb = latdb
