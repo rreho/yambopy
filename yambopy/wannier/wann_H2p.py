@@ -345,7 +345,7 @@ class H2P():
             self.h2peigv = np.zeros((self.dimbse), dtype=np.complex128)
             self.h2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
             h2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
-            h2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nv,self.nk),dtype=np.complex128)
+            h2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
             (self.h2peigv, self.h2peigvec) = np.linalg.eigh(self.H2P)
             self.deg_h2peigvec = self.find_degenerate_eigenvalues(self.h2peigv, self.h2peigvec)
             #(self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec)
