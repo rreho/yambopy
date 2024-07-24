@@ -55,7 +55,7 @@ class H2P():
         Easy to use only requires the model as input. 
     '''
     def __init__(self, model, savedb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                  TD=False,  TBos=300 , run_parallel=False):
+                  TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -76,9 +76,12 @@ class H2P():
         self.eigv = model.eigv
         self.eigvec = model.eigvec
         self.qmpgrid = qmpgrid
-        self.nq_double = len(self.kmpgrid.k)
+        self.gammaonly=gammaonly
+        if(self.gammaonly):
+            self.nq_double = 1
+        else:
+            self.nq_double = len(self.kmpgrid.k)
         self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid)
-        (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
         try:
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
         except ValueError:
@@ -87,8 +90,7 @@ class H2P():
         self.savedb = YamboSaveDB.from_db_file(f'{savedb_path}')
         self.latdb = YamboLatticeDB.from_db_file(f'{savedb_path}/ns.db1')
         self.offset_nv = self.savedb.nbandsv-self.nv  
-        (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
-        # for now Transitions are the same as dipoles?
+        print('end kq tables')
         self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
         self.ctype = ctype
@@ -99,6 +101,7 @@ class H2P():
         self.run_parallel = run_parallel
         self.Mssp = None
         self.Amn = None
+        self.skip_diago = False
         # consider to build occupations here in H2P with different occupation functions
         if (f_kn == None):
             self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float128)
@@ -106,10 +109,14 @@ class H2P():
         else:
             self.f_kn = f_kn
         if(self.method=='model' and cpot is not None):
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
+            (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
             print('\n Building H2P from model Coulomb potentials. Default is v2dt2\n')
             self.cpot = cpot
             self.H2P = self._buildH2P_fromcpot()
         elif(self.method=='kernel' and cpot is None):
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)
+            (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
             print('\n Building H2P from model YamboKernelDB\n')
             #Remember that the BSEtable in Yambopy start counting from 1 and not to 0
             try:
@@ -121,6 +128,12 @@ class H2P():
             except  TypeError:
                 print('Error Kernel is None or Path Not found')
             self.H2P = self._buildH2P()
+        elif(self.method=='skip-diago' and cpot is None):
+            self.excitons_path = excitons_path
+            print('Method skip-diago running only for post-processing of wannier exc data: Remember to set dimslepc')
+            self.skip_diago = True
+            self.dimslepc=dimslepc
+            (self.h2peigv, self.h2peigvec,self.h2peigv_vck, self.h2peigvec_vck) = self._buildH2Peigv()
         else:
             print('\nWarning! Kernel can be built only from Yambo database or model Coulomb potential\n')
 
@@ -225,6 +238,47 @@ class H2P():
             print(f"Hamiltonian matrix construction completed in {time.time() - t0:.2f} seconds.")
 
             return H2P
+
+    def _buildH2Peigv(self):
+        import time
+        if(self.skip_diago):
+            # Expanded k-points and symmetry are prepared for operations that might need them
+            full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
+
+            # Pre-fetch all necessary data based on condition
+            if self.nq_double == 1:
+                H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
+                file_suffix = 'ndb.BS_diago_Q1'
+            else:
+                H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
+                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
+
+            # Common setup for databases (Yambo databases)
+            exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
+            h2peigv_vck = np.zeros((self.nq_double,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
+            h2peigvec_vck = np.zeros((self.nq_double, self.dimslepc,self.bse_nv,self.bse_nc,self.nk), dtype=np.complex128)
+            h2peigv = np.zeros((self.nq_double,self.dimslepc),dtype=np.complex128)
+            h2peigvec = np.zeros((self.nq_double, self.dimslepc,self.dimbse), dtype=np.complex128)
+            # this is Yambo kernel, however I need an auxiliary kernel since the indices of c and v are different between BSE_table and BSE_table of YamboExcitonDB
+            t0 = time.time()
+
+            for idx, exc_db_file in enumerate(exciton_db_files):
+                yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
+                aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
+                tmph2peigvec=yexc_atk.eigenvectors.filled(0).copy()
+                tmph2peigv=yexc_atk.eigenvalues.filled(0).copy()                
+                for t in range(self.dimslepc):
+                    ik,iv, ic = self.BSE_table[aux_t[t]]
+                    h2peigv_vck[idx,self.bse_nv-self.nv+iv,ic-self.nv,ik]=tmph2peigv[t]
+                    h2peigv[idx,aux_t[t]]= tmph2peigv[t]
+                    h2peigvec[idx,aux_t[t],:] = tmph2peigvec[t,:]
+                    for tp in range(self.dimbse):
+                        ikp, ivp, icp = self.BSE_table[aux_t[tp]]
+                        h2peigvec_vck[idx,aux_t[t],self.bse_nv-self.nv+ivp,icp-self.nv,ikp] = tmph2peigvec[t,tp]
+            print(f"reading excitonic eigenvalues and eigenvectors in {time.time() - t0:.2f} seconds.")
+            return h2peigv,h2peigvec, h2peigv_vck, h2peigvec_vck
+        else:
+            print('Error: skip_diago is false')   
     # def _buildH2P(self):
     #     # to-do fix inconsistencies with table
     #     # inconsistencies are in the k-points in mpgrid and lat.red_kpoints in Yambo
@@ -632,12 +686,12 @@ class H2P():
         Mssp_ttp = 0
         for it in range(self.dimbse):
             for itp in range(self.dimbse):
-                ik = self.BSE_table[t][0]
-                iv = self.BSE_table[t][1] 
-                ic = self.BSE_table[t][2] 
-                ikp = self.BSE_table[tp][0]
-                ivp = self.BSE_table[tp][1] 
-                icp = self.BSE_table[tp][2] 
+                ik = self.BSE_table[it][0]
+                iv = self.BSE_table[it][1] 
+                ic = self.BSE_table[it][2] 
+                ikp = self.BSE_table[itp][0]
+                ivp = self.BSE_table[itp][1] 
+                icp = self.BSE_table[itp][2] 
                 iqpb = self.kmpgrid.qpb_grid_table[iq, ib][1]
                 ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
                 ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib][1]
