@@ -4,47 +4,94 @@ from yambopy.wannier.wann_utils import *
 from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
-from yambopy.wannier.wann_par_utils import *
+from yambopy.wannier.wann_io import AMN
 from time import time
-import multiprocessing as mp
+
+
+
+def process_file(args):
+    idx, exc_db_file, data_dict = args
+    # Unpacking data necessary for processing
+    latdb, kernel_path, kpoints_indexes, HA2EV, BSE_table, kplusq_table, kminusq_table_yambo, eigv, f_kn = data_dict.values()
+
+    yexc_atk = YamboExcitonDB.from_db_file(latdb, filename=exc_db_file)
+    kernel_db = YamboBSEKernelDB.from_db_file(latdb, folder=f'{kernel_path}', Qpt=kpoints_indexes[idx]+1)
+    aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
+    K_ttp = kernel_db.kernel[aux_t][:,aux_t]  
+    H2P_local = np.zeros((len(BSE_table), len(BSE_table)), dtype=np.complex128)
+
+    for t in range(len(BSE_table)):
+        ik, iv, ic = BSE_table[t]
+        for tp in range(len(BSE_table)):
+            ikp, ivp, icp = BSE_table[tp]
+            ikplusq = kplusq_table[ik, kpoints_indexes[idx]]
+            ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx]]
+            ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+            K = -(K_ttp[t, tp]) * HA2EV
+            deltaE = eigv[ik, ic] - eigv[ikpminusq, iv] if (ik == ikp and icp == ic and ivp == iv) else 0.0
+            occupation_diff = -f_kn[ikpminusq, ivp] + f_kn[ikp, icp]
+            element_value = deltaE + occupation_diff * K
+            H2P_local[t, tp] = element_value
+    return idx, H2P_local
+
+class FakeLatticeObject():
+    '''should make the YamboLatticeDB class actually more lightweight and
+    allow for other ways of initiliazing with only the unit cell for instance because we don't need most things.
+    We only need: 
+    .lat_vol
+    .alat
+
+    YamboBSEKernelDB class only uses it when it needs kernel values per bands, and in that case it only need nkpoints
+    
+    '''
+    def __init__(self, model):
+        self.alat = model.uc * 1/0.52917720859      # this results in minor difference, do we really want the values from yambo?
+        self.lat_vol = np.prod(np.diag(self.alat))  # difference becomes bigger
 
 
 
 class H2P():
-    '''Build the 2-particle resonant Hamiltonian H2P'''
-    def __init__(self, nk, nb, nc, nv,eigv, eigvec,bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
-                  kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                  TD=False,  TBos=300 , run_parallel=False): 
+    '''Build the 2-particle resonant Hamiltonian H2P
+        Easy to use only requires the model as input. 
+    '''
+    def __init__(self, model, savedb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
+                  TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False):
+    
+    # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
+    #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
+    #               TD=False,  TBos=300 , run_parallel=False): 
         '''Build H2P:
             bsetype = 'full' build H2P resonant + antiresonant + coupling
             bsetype = 'resonant' build H2p resonant
             TD is the Tahm-Dancoff which neglects the coupling
         '''
-        self.nk = nk
-        self.nb = nb
-        self.nc = nc
-        self.nv = nv
+        self.nk = model.nk
+        self.nb = model.nb
+        self.nc = model.nc
+        self.nv = model.nv
         self.bse_nv = bse_nv
         self.bse_nc = bse_nc
-        self.nq_double = len(kmpgrid.k)
+        self.kmpgrid = model.mpgrid
         self.nq = len(qmpgrid.k)
-        self.eigv = eigv
-        self.eigvec = eigvec
-        self.kmpgrid = kmpgrid
+        self.eigv = model.eigv
+        self.eigvec = model.eigvec
         self.qmpgrid = qmpgrid
+        self.gammaonly=gammaonly
+        if(self.gammaonly):
+            self.nq_double = 1
+        else:
+            self.nq_double = len(self.kmpgrid.k)
         self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid)
-        (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
         try:
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
         except ValueError:
             print('Warning! Q=0 index not found')
-        self.dimbse = bse_nv*bse_nc*nk
-        self.savedb = savedb
-        self.latdb = latdb
+        self.dimbse = self.bse_nv*self.bse_nc*self.nk
+        self.savedb = YamboSaveDB.from_db_file(f'{savedb_path}')
+        self.latdb = YamboLatticeDB.from_db_file(f'{savedb_path}/ns.db1')
         self.offset_nv = self.savedb.nbandsv-self.nv  
-        (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
-        # for now Transitions are the same as dipoles?
-        self.T_table = T_table
+        print('end kq tables')
+        self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
         self.ctype = ctype
         self.ktype = ktype
@@ -54,31 +101,39 @@ class H2P():
         self.run_parallel = run_parallel
         self.Mssp = None
         self.Amn = None
-        if run_parallel:
-            self.cpucount = mp.cpu_count()
-            if self.cpucount >= 64:
-                self.cpucount = 64
-        else:
-            self.cpucount = 1
+        self.skip_diago = False
         # consider to build occupations here in H2P with different occupation functions
         if (f_kn == None):
             self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float128)
-            self.f_kn[:,:nv] = 1.0
+            self.f_kn[:,:self.nv] = 1.0
         else:
             self.f_kn = f_kn
         if(self.method=='model' and cpot is not None):
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
+            (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
             print('\n Building H2P from model Coulomb potentials. Default is v2dt2\n')
             self.cpot = cpot
             self.H2P = self._buildH2P_fromcpot()
         elif(self.method=='kernel' and cpot is None):
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)
+            (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
             print('\n Building H2P from model YamboKernelDB\n')
             #Remember that the BSEtable in Yambopy start counting from 1 and not to 0
             try:
                 self.kernel_path = kernel_path
-                self.excitons_path = excitons_path
+                if not excitons_path:
+                    self.excitons_path = kernel_path
+                else:
+                    self.excitons_path = excitons_path
             except  TypeError:
                 print('Error Kernel is None or Path Not found')
             self.H2P = self._buildH2P()
+        elif(self.method=='skip-diago' and cpot is None):
+            self.excitons_path = excitons_path
+            print('Method skip-diago running only for post-processing of wannier exc data: Remember to set dimslepc')
+            self.skip_diago = True
+            self.dimslepc=dimslepc
+            (self.h2peigv, self.h2peigvec,self.h2peigv_vck, self.h2peigvec_vck) = self._buildH2Peigv()
         else:
             print('\nWarning! Kernel can be built only from Yambo database or model Coulomb potential\n')
 
@@ -178,6 +233,47 @@ class H2P():
             print(f"Hamiltonian matrix construction completed in {time() - t0:.2f} seconds.")
 
             return H2P
+
+    def _buildH2Peigv(self):
+        import time
+        if(self.skip_diago):
+            # Expanded k-points and symmetry are prepared for operations that might need them
+            full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
+
+            # Pre-fetch all necessary data based on condition
+            if self.nq_double == 1:
+                H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
+                file_suffix = 'ndb.BS_diago_Q1'
+            else:
+                H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
+                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
+
+            # Common setup for databases (Yambo databases)
+            exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
+            h2peigv_vck = np.zeros((self.nq_double,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
+            h2peigvec_vck = np.zeros((self.nq_double, self.dimslepc,self.bse_nv,self.bse_nc,self.nk), dtype=np.complex128)
+            h2peigv = np.zeros((self.nq_double,self.dimslepc),dtype=np.complex128)
+            h2peigvec = np.zeros((self.nq_double, self.dimslepc,self.dimbse), dtype=np.complex128)
+            # this is Yambo kernel, however I need an auxiliary kernel since the indices of c and v are different between BSE_table and BSE_table of YamboExcitonDB
+            t0 = time.time()
+
+            for idx, exc_db_file in enumerate(exciton_db_files):
+                yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
+                aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
+                tmph2peigvec=yexc_atk.eigenvectors.filled(0).copy()
+                tmph2peigv=yexc_atk.eigenvalues.filled(0).copy()                
+                for t in range(self.dimslepc):
+                    ik,iv, ic = self.BSE_table[aux_t[t]]
+                    h2peigv_vck[idx,self.bse_nv-self.nv+iv,ic-self.nv,ik]=tmph2peigv[t]
+                    h2peigv[idx,aux_t[t]]= tmph2peigv[t]
+                    h2peigvec[idx,aux_t[t],:] = tmph2peigvec[t,:]
+                    for tp in range(self.dimbse):
+                        ikp, ivp, icp = self.BSE_table[aux_t[tp]]
+                        h2peigvec_vck[idx,aux_t[t],self.bse_nv-self.nv+ivp,icp-self.nv,ikp] = tmph2peigvec[t,tp]
+            print(f"reading excitonic eigenvalues and eigenvectors in {time.time() - t0:.2f} seconds.")
+            return h2peigv,h2peigvec, h2peigv_vck, h2peigvec_vck
+        else:
+            print('Error: skip_diago is false')   
     # def _buildH2P(self):
     #     # to-do fix inconsistencies with table
     #     # inconsistencies are in the k-points in mpgrid and lat.red_kpoints in Yambo
@@ -298,7 +394,7 @@ class H2P():
             self.h2peigv = np.zeros((self.dimbse), dtype=np.complex128)
             self.h2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
             h2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
-            h2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nv,self.nk),dtype=np.complex128)
+            h2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
             (self.h2peigv, self.h2peigvec) = np.linalg.eigh(self.H2P)
             self.deg_h2peigvec = self.find_degenerate_eigenvalues(self.h2peigv, self.h2peigvec)
             #(self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec)
@@ -585,12 +681,12 @@ class H2P():
         Mssp_ttp = 0
         for it in range(self.dimbse):
             for itp in range(self.dimbse):
-                ik = self.BSE_table[t][0]
-                iv = self.BSE_table[t][1] 
-                ic = self.BSE_table[t][2] 
-                ikp = self.BSE_table[tp][0]
-                ivp = self.BSE_table[tp][1] 
-                icp = self.BSE_table[tp][2] 
+                ik = self.BSE_table[it][0]
+                iv = self.BSE_table[it][1] 
+                ic = self.BSE_table[it][2] 
+                ikp = self.BSE_table[itp][0]
+                ivp = self.BSE_table[itp][1] 
+                icp = self.BSE_table[itp][2] 
                 iqpb = self.kmpgrid.qpb_grid_table[iq, ib][1]
                 ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
                 ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib][1]
@@ -610,51 +706,31 @@ class H2P():
                         Mssp[l,lp,iq, ib] = self._get_exc_overlap_ttp(l,lp,iq,ikq,ib)
         self.Mssp = Mssp   
     
-    def get_exc_overlap_par(self,trange=[0], tprange=[0]):
-        Mssp = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints, self.qmpgrid.nnkpts), dtype=np.complex128)
-        args_list = [(l, lp, iq, ikq, ib, self.eigvec, self.h2peigvec_vck, self.BSE_table, self.kmpgrid, self.nv, self.bse_nv, self.dimbse)
-            for _,l in enumerate(trange) for _, lp in enumerate(tprange) for iq, ikq in enumerate(self.kindices_table) for ib in range(self.qmpgrid.nnkpts)]
-        with mp.Pool(processes=self.cpucount) as pool:
-            results = pool.map(get_exc_overlap_ttp_par, args_list)
-        
-        for l, lp, iq, ib, Mssp_t in results:
-            Mssp[l, lp, iq, ib] = Mssp_t
 
-        self.Mssp = Mssp
-
-    def _get_amn_ttp(self, t, tp, iq,ikq):
-        ik = self.BSE_table[t][0]
-        iv = self.BSE_table[t][1] 
-        ic = self.BSE_table[t][2] 
-        ikp = self.BSE_table[tp][0]
-        ivp = self.BSE_table[tp][1] 
-        icp = self.BSE_table[tp][2] 
-        ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
-        Ammn_ttp = self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
+    def _get_amn_ttp(self, t, tp, iq,ikq, B):
+        Ammn_ttp=0
+        for il in range(self.dimbse):
+            ik = self.BSE_table[il][0]
+            iv = self.BSE_table[il][1] 
+            ic = self.BSE_table[il][2] 
+            ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
+            Ammn_ttp += self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])
         return Ammn_ttp
 
-    def get_exc_amn(self, trange = [0], tprange = [0]):
+    def get_exc_amn(self, trange = [0], tprange = [0]): #tprange here has a different meaning, is the trial exciton wavefunction, for now is basically always one
         Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
+        amn_wann = AMN(infile=self.projection_infile)
+        B = amn_wann.A_kmn
         for it,t in enumerate(trange):
-            for itp, tp in enumerate(tprange):
+            for t,tp in enumerate(tprange):
                 for iq,ikq in enumerate(self.kindices_table):
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq,ikq)        
+                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq,ikq, B)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
-        # Parallelizing the main workhorse of the function
-        if self.run_parallel:
-            t0 = time()
-            if self.Mssp is None:
-                self.get_exc_overlap_par(trange, tprange)
-                print(f"exc overlap construction completed in {time() - t0:.2f} seconds.")
 
-        else:
-            t0 = time()
-            if self.Mssp is None:
-                self.get_exc_overlap(trange, tprange)
-                print(f"non parallel exc overlap construction completed in {time() - t0:.2f} seconds.")
-
+        if self.Mssp is None:
+            self.get_exc_overlap(trange, tprange)
 
         from datetime import datetime
 
@@ -710,14 +786,41 @@ class H2P():
     
     def write_exc_nnkp(self, seedname='wannier90_exc', trange = [0]):
         f_out = open(f'{seedname}.nnkp', 'w')
+
+        from datetime import datetime
+        current_datetime = datetime.now()
+        date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
+        f_out.write(f'Created on {date_time_string}\n\n')
+        f_out.write('calc_only_A  :  F\n\n') # have to figure this one out
+        
+        f_out.write('begin real_lattice\n')
+        for i, dim  in enumerate(self.kmpgrid.real_lattice):
+            f_out.write(f'\t{dim[0]:.7f}\t{dim[1]:.7f}\t{dim[2]:.7f}\n')
+        f_out.write('end real_lattice\n\n')
+
+        f_out.write('begin recip_lattice\n')
+        for i, dim in enumerate(self.kmpgrid.reciprocal_lattice):
+            f_out.write(f'\t{dim[0]:.7f}\t{dim[1]:.7f}\t{dim[2]:.7f}\n')
+        f_out.write('end recip_lattice\n\n')
+
+        f_out.write(f'begin kpoints\n\t {len(self.kmpgrid.red_kpoints)}\n')
+        for i, dat in enumerate(self.kmpgrid.red_kpoints):
+            f_out.write(f'   {dat[0]:11.8f}\t{dat[1]:11.8f}\t{dat[2]:11.8f}\n')
+        f_out.write(f'end kpoints\n\n')
+
+        f_out.write(f'begin projections\n\t')
+        f_out.write(f'\nend projections\n\n')
+        
         f_out.write('begin nnkpts\n')
         f_out.write(f'\t{self.qmpgrid.nnkpts}\n')
         for iq, q in enumerate(self.qmpgrid.k):
             for ib in range(self.qmpgrid.nnkpts):
                 iqpb = self.qmpgrid.qpb_grid_table[iq, ib][1]
                 f_out.write(f'\t{iq+1}\t{iqpb+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
+        f_out.write('end nnkpts')
 
-    def write_exc_amn(self, seedname='wannier90_exc', trange = [0], tprange = [0]):
+    def write_exc_amn(self,infile, seedname='wannier90_exc', trange = [0], tprange = [0]):
+        self.projection_infile = infile
         if (self.Amn is None):
             self.get_exc_amn(trange, tprange)
 
