@@ -58,18 +58,22 @@ class TB_dipoles():
     
     def _get_dipoles(self, method):
         if (method == 'real'):
-            dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
-            for t in range(0,self.ntransitions):
-                ik = self.T_table[t][0]
-                iv = self.T_table[t][1]
-                ic = self.T_table[t][2]
-                # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
-                E = self.eigv[ik, ic]-self.eigv[ik, iv]
-                GR = GreensFunctions(E,0,self.eta).GR
-                #GA = GreensFunctions(E,0,self.eta).GA
-                dipoles[ik, ic, iv,0] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                dipoles[ik, ic, iv,1] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                dipoles[ik, ic, iv,2] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
+            dipoles = np.zeros((self.ntransitions, self.nkpoints, self.nb, self.nb, 3),dtype=np.complex128)
+            for n in range(0,self.ntransitions):
+                for i,t in enumerate(self.T_table):
+                    ik = t[0]
+                    iv = t[1] 
+                    ic = t[2]
+
+                    # --rr: here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs --sb: why? just do w=E_cv and E=E_vk
+                    #  = self.eigv[ik, ic] - self.eigv[ik, iv]
+                    GR = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GR #w - E
+                    #GA = GreensFunctions(E,0,self.eta).GA
+
+                    dipoles[n, ik, ic, iv, 0] = GR*np.vdot(self.eigvec[ik,:,ic], np.dot(self.hlm[ik,:,:,0], self.eigvec[ik,:,iv]))
+                    dipoles[n, ik, ic, iv, 1] = GR*np.vdot(self.eigvec[ik,:,ic], np.dot(self.hlm[ik,:,:,1], self.eigvec[ik,:,iv]))
+                    dipoles[n, ik, ic, iv, 2] = GR*np.vdot(self.eigvec[ik,:,ic], np.dot(self.hlm[ik,:,:,2], self.eigvec[ik,:,iv]))
+        
         if (method == 'yambo'):
             dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
             for t in range(0,self.ntransitions):
@@ -77,9 +81,9 @@ class TB_dipoles():
                 iv = self.T_table[t][1]
                 ic = self.T_table[t][2]
                 # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
-                E = self.eigv[ik, ic]-self.eigv[ik, iv]
-                GR = GreensFunctions(E,0,self.eta).GR
-                GA = GreensFunctions(E,0,self.eta).GA
+                # E = self.eigv[ik, ic]-self.eigv[ik, iv]
+                GR = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GR #w - E
+                GA = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GA #w - E
                 dipoles[ik, ic, iv,0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
                 dipoles[ik, ic, iv,1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
                 dipoles[ik, ic, iv,2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))

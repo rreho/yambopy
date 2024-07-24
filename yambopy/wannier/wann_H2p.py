@@ -429,7 +429,7 @@ class H2P():
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
-            K_direct = self.cpot.v2dt(self.kmpgrid.car_kpoints[ikp,:],self.kmpgrid.car_kpoints[ik,:])\
+            K_direct = self.cpot.v2drk(self.kmpgrid.car_kpoints[ikp,:],self.kmpgrid.car_kpoints[ik,:])\
                         *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
         return K_direct
 
@@ -471,7 +471,7 @@ class H2P():
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
-            K_direct = self.cpot.v2dt(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
+            K_direct = self.cpot.v2drk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
                         *np.vdot(self.eigvec[ikplusq,:, ic],self.eigvec[ikpplusq,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
         return K_direct
     
@@ -513,7 +513,7 @@ class H2P():
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
-            K_ex = self.cpot.v2dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
+            K_ex = self.cpot.v2drk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
                         *np.vdot(self.eigvec[ikplusq, : ,ic],self.eigvec[ik,:, iv])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ikpplusq,:, icp])
         return K_ex
         
@@ -535,7 +535,7 @@ class H2P():
             h2peigvec = self.h2peigvec[self.q0index]
             h2peigv = self.h2peigv[self.q0index]
 
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=h2peigvec_vck)
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=h2peigvec_vck, method='real')
         # compute osc strength
         F_kcv = tb_dipoles.F_kcv
         self.F_kcv = F_kcv
