@@ -184,23 +184,21 @@ class TB_dipoles():
                 iv = self.T_table[i][1]
                 ic = self.T_table[i][2]
                 factorRx = t[ik, ic,iv, 0]
-                # factorLx = factorRx.conj() 
+                factorLx = factorRx.conj() 
                 factorRy = t[ik, ic,iv, 1]
                 factorLy = factorRy.conj() 
-                # factorRz = t[ik, ic-self.nv, self.bse_nv-self.nv+iv, 2]
-                # factorLz = factorRz.conj() 
-                # F_kcv[i,0,0] = factorRx*factorLx
+                factorRz = t[ik, ic-self.nv, self.bse_nv-self.nv+iv, 2]
+                factorLz = factorRz.conj() 
+                F_kcv[i,0,0] = factorRx*factorLx
                 F_kcv[i,0,1] = factorRx*factorLy
-                # F_kcv[i,0,2] = factorRx*factorLz
-                # F_kcv[i,1,0] = factorRy*factorLx
-                # F_kcv[i,1,1] = factorRy*factorLy
-                # F_kcv[i,1,2] = factorRy*factorLz
-                # F_kcv[i,2,0] = factorRz*factorLx
-                # F_kcv[i,2,1] = factorRz*factorLy
-                # F_kcv[i,2,2] = factorRz*factorLz
-                if i%50 ==0 :
-                    print(f"dipoles = {factorRx}")
-                    print(f"F = {F_kcv[i,0,1]}")
+                F_kcv[i,0,2] = factorRx*factorLz
+                F_kcv[i,1,0] = factorRy*factorLx
+                F_kcv[i,1,1] = factorRy*factorLy
+                F_kcv[i,1,2] = factorRy*factorLz
+                F_kcv[i,2,0] = factorRz*factorLx
+                F_kcv[i,2,1] = factorRz*factorLy
+                F_kcv[i,2,2] = factorRz*factorLz
+
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')
         if (method== 'r-gauge'):
