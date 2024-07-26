@@ -6,5 +6,6 @@ build
 *.bak
 *.egg-info
 .cache
+.DS_store
 tags
 tbwannier.pptx
