@@ -517,7 +517,7 @@ class H2P():
                         *np.vdot(self.eigvec[ikplusq, : ,ic],self.eigvec[ik,:, iv])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ikpplusq,:, icp])
         return K_ex
         
-    def get_eps(self, hlm, emin, emax, estep, eta):
+    def get_eps(self, hlm, emin, emax, estep, eta, with_bse=True):
         '''
         Compute microscopic dielectric function 
         dipole_left/right = l/r_residuals.
@@ -535,12 +535,13 @@ class H2P():
             h2peigvec = self.h2peigvec[self.q0index]
             h2peigv = self.h2peigv[self.q0index]
 
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=h2peigvec_vck, method='real')
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=h2peigvec_vck, method='real', with_bse=with_bse)
         # compute osc strength
+        # self.dipoles_bse = tb_dipoles.dipoles_bse
+        self.dipoles = tb_dipoles.dipoles
+
         F_kcv = tb_dipoles.F_kcv
         self.F_kcv = F_kcv
-        self.dipoles_bse = tb_dipoles.dipoles_bse
-        self.dipoles = tb_dipoles.dipoles
         # compute eps and pl
         #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
         #pl = eps
@@ -576,10 +577,11 @@ class H2P():
 
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=h2peigvec_vck, method='yambo')
         # compute osc strength
+        self.dipoles_bse = tb_dipoles.dipoles_bse
+        # self.dipoles = tb_dipoles.dipoles
         F_kcv = tb_dipoles.F_kcv
         self.F_kcv = F_kcv
-        self.dipoles_bse = tb_dipoles.dipoles_bse
-        self.dipoles = tb_dipoles.dipoles
+
         # compute eps and pl
         #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
         #pl = eps

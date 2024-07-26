@@ -2,10 +2,12 @@ import numpy as np
 from yambopy.wannier.wann_Gfuncs import GreensFunctions
 from yambopy.wannier.wann_io import RMN
 from yambopy.wannier.wann_utils import *
+
+
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self , nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, BSE_table, h2peigvec = None, method = 'real', rmn = None):
+                 eta, hlm, T_table, BSE_table, h2peigvec = None, method = 'real', with_bse=True, rmn = None):
         # hk, hlm are TBMODEL hamiltonians
         self.ntransitions = nc*nv*nkpoints
         self.nbsetransitions = bse_nc*bse_nv*nkpoints
@@ -24,22 +26,30 @@ class TB_dipoles():
         # self.eigvecc = eigvecc
         self.eta = eta
         self.hlm = hlm
+        if self.hlm[0][0][0][0] ==0:
+            raise ValueError
+        else:
+            print(f"hlm not zero: {self.hlm[0][0][0][0]}")
         self.method = method
         if(rmn is not None):
             self.rmn = rmn
             self.method = 'position'
         #T_table = [transition, ik, iv, ic] 
         self.T_table = T_table
-        self.BSE_table = BSE_table
         #[nkpoints,3,nbands,nbands]
-        self.dipoles = self._get_dipoles(method)
-        self.d_knm = self._get_dipoles_nm(method)
+        # self.dipoles = self._get_dipoles(method)
+        # self.d_knm = self._get_dipoles_nm(method)
         if (h2peigvec is not None):
             self.h2peigvec = h2peigvec
-            self.dipoles_bse = self._get_dipoles_bse(method)
-            self.F_kcv = self._get_osc_strength(method)
+            # self.dipoles_bse = self._get_dipoles_bse(method)
+        if with_bse:
+            self._get_dipoles_bse(method=method)
+            self.T_table = BSE_table
+        else:
+            self._get_dipoles(method=method)
+        self._get_osc_strength(method)
 
-    # full dipoles matrix, not only cv 
+    # full dipoles matrix, not only cv, needs adaptation
     def _get_dipoles_nm(self, method):
         if (method == 'real'):
             dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
@@ -57,36 +67,58 @@ class TB_dipoles():
         return dipoles/(HA2EV**3)
     
     def _get_dipoles(self, method):
-        if (method == 'real'):
-            dipoles = np.zeros((self.ntransitions, self.nkpoints, self.nb, self.nb, 3),dtype=np.complex128)
-            for n in range(0,self.ntransitions):
-                for i,t in enumerate(self.T_table):
-                    ik = t[0]
-                    iv = t[1] 
-                    ic = t[2]
+        if method == 'real':  # Parallelize over kpoints
+            import time
+            print("Starting dipole matrix formation.\n")
+            t0 = time.time()
 
-                    # --rr: here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs --sb: why? just do w=E_cv and E=E_vk
-                    #  = self.eigv[ik, ic] - self.eigv[ik, iv]
-                    GR = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GR #w - E
-                    #GA = GreensFunctions(E,0,self.eta).GA
+            # Determine the dimension of hlm
+            dim_hlm = 3 if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
 
-                    dipoles[n, ik, ic, iv, 0] = GR*np.vdot(self.eigvec[ik,:,ic], np.dot(self.hlm[ik,:,:,0], self.eigvec[ik,:,iv]))
-                    dipoles[n, ik, ic, iv, 1] = GR*np.vdot(self.eigvec[ik,:,ic], np.dot(self.hlm[ik,:,:,1], self.eigvec[ik,:,iv]))
-                    dipoles[n, ik, ic, iv, 2] = GR*np.vdot(self.eigvec[ik,:,ic], np.dot(self.hlm[ik,:,:,2], self.eigvec[ik,:,iv]))
-        
+            # Extract k, v, c from T_table
+            k_indices, v_indices, c_indices = self.T_table.T
+
+            # Compute Green's function for all transitions
+            w = self.eigv[k_indices, c_indices]
+            E = self.eigv[k_indices, v_indices]
+            GR = GreensFunctions(w=w, E=E, eta=self.eta).GR
+
+            # Initialize dipoles array
+            dipoles = np.zeros((self.ntransitions, dim_hlm), dtype=np.complex128)
+
+            # Prepare eigenvectors
+            eigvec_c = self.eigvec[k_indices, :, c_indices]
+            eigvec_v = self.eigvec[k_indices, :, v_indices]
+
+            # Compute dipoles
+            for dim in range(dim_hlm):
+                # Compute the dot product
+                dot_product = np.einsum('ij,ijk->ik', eigvec_v, self.hlm[k_indices, :, :, dim])
+                
+                # Compute the vdot and multiply with GR
+                dipoles[:, dim] = GR * np.sum(np.conjugate(eigvec_c) * dot_product, axis=1)
+
+            # Reshape dipoles to match your original shape
+            final_dipoles = np.zeros((self.ntransitions, self.nkpoints, self.nb, self.nb, 3), dtype=np.complex128)
+            final_dipoles[np.arange(self.ntransitions), k_indices, c_indices, v_indices, :dim_hlm] = dipoles
+            self.dipoles = final_dipoles / (HA2EV ** 3)
+            print("Dipoles matrix computed successfully in serial mode.")
+            print(f"Time for Dipoles matrix formation: {time.time() - t0:.2f}")
         if (method == 'yambo'):
-            dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
-            for t in range(0,self.ntransitions):
-                ik = self.T_table[t][0]
-                iv = self.T_table[t][1]
-                ic = self.T_table[t][2]
-                # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
-                # E = self.eigv[ik, ic]-self.eigv[ik, iv]
-                GR = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GR #w - E
-                GA = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GA #w - E
-                dipoles[ik, ic, iv,0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                dipoles[ik, ic, iv,1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                dipoles[ik, ic, iv,2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
+            dipoles = np.zeros((self.ntransitions, self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
+            for n in range(0, self.ntransitions):
+                for t in self.T_table:
+                    ik = t[0]
+                    iv = t[1]
+                    ic = t[2]
+                    # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
+                    # E = self.eigv[ik, ic]-self.eigv[ik, iv]
+                    GR = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GR #w - E
+                    GA = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GA #w - E
+                    dipoles[n, ik, ic, iv, 0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                    dipoles[n, ik, ic, iv, 1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                    dipoles[n, ik, ic, iv, 2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
+            self.dipoles = dipoles/(HA2EV**3)  
 
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')
@@ -94,71 +126,86 @@ class TB_dipoles():
             print('Warning! position gauge not implemented yet')
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
-        return dipoles/(HA2EV**3)     
+           
 
     def _get_dipoles_bse(self, method):
         if (method == 'real'):
-            dipoles = np.zeros((self.nkpoints, self.bse_nb,self.bse_nb,3),dtype=np.complex128)
-            for t in range(0,self.nbsetransitions):
-                ik = self.BSE_table[t][0]
-                iv = self.BSE_table[t][1]
-                ic = self.BSE_table[t][2]
-                # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
-                E = self.eigv[ik, ic]-self.eigv[ik, iv]
-                GR = GreensFunctions(E,0,self.eta).GR
-                GA = GreensFunctions(E,0,self.eta).GA
-                dipoles[ik, ic-self.nv, self.bse_nv-self.nv+iv,0] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                dipoles[ik, ic-self.nv, self.bse_nv-self.nv+iv,1] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                dipoles[ik, ic-self.nv, self.bse_nv-self.nv+iv,2] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
+            dipoles = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nb,self.bse_nb,3),dtype=np.complex128)
+            
+            for n in range(0,self.nbsetransitions):
+                for t in self.T_table:
+                    ik = t[0]
+                    iv = t[1]
+                    ic = t[2]
+                    # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
+                    E = self.eigv[ik, ic]-self.eigv[ik, iv]
+                    GR = GreensFunctions(E,0,self.eta).GR
+                    # GA = GreensFunctions(E,0,self.eta).GA
+                    dipoles[n, ik, ic-self.nv, self.bse_nv-self.nv+iv, 0] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                    dipoles[n, ik, ic-self.nv, self.bse_nv-self.nv+iv, 1] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                    dipoles[n, ik, ic-self.nv, self.bse_nv-self.nv+iv, 2] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
+        
         if (method == 'yambo'):
-            dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
-            for t in range(0,self.ntransitions):
-                ik = self.T_table[t][0]
-                iv = self.T_table[t][1]
-                ic = self.T_table[t][2]
-                # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
-                E = self.eigv[ik, ic]-self.eigv[ik, iv]
-                GR = GreensFunctions(E,0,self.eta).GR
-                GA = GreensFunctions(E,0,self.eta).GA
-                dipoles[ik, ic, iv,0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                dipoles[ik, ic, iv,1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                dipoles[ik, ic, iv,2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))      
+            dipoles = np.zeros((self.ntransitions, self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
+            for n in range(0, self.ntransitions):
+                for t in self.T_table:
+                    ik = t[0]
+                    iv = t[1]
+                    ic = t[2]
+                    # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
+                    E = self.eigv[ik, ic]-self.eigv[ik, iv]
+                    GR = GreensFunctions(E,0,self.eta).GR
+                    GA = GreensFunctions(E,0,self.eta).GA
+                    dipoles[n, ik, ic, iv,0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                    dipoles[n, ik, ic, iv,1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                    dipoles[n, ik, ic, iv,2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))      
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')
         if (method== 'r-gauge'):
             print('Warning! position gauge not implemented yet')
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
-        return dipoles                        
+        self.dipoles = dipoles                        
     
     def _get_osc_strength(self,method):
         '''computes osc strength from dipoles'''
-        F_kcv = np.zeros((self.nbsetransitions,3,3), dtype=np.complex128)    
-        dipoles = self.dipoles_bse
+        print('Computing oscillator strenght')
+        import time
+        t0 = time.time()
+        dipoles = self.dipoles
+        F_kcv = np.zeros((self.ntransitions, 3, 3), dtype=np.complex128)   
+        print(f"nonzero in dipoles: {np.count_nonzero(self.dipoles[:,:,:,:,0])}")
+        print(f"nonzero in dipoles: {np.count_nonzero(self.dipoles[:,:,:,:,1])}")
+        print(f"nonzero in dipoles: {np.count_nonzero(self.dipoles[:,:,:,:,2])}")
+
         if (method == 'real'):
-            for t in range(0,self.nbsetransitions):
-                ik = self.BSE_table[t][0]
-                iv = self.BSE_table[t][1]
-                ic = self.BSE_table[t][2]
-                factorRx = dipoles[ik,ic-self.nv,self.bse_nv-self.nv+iv,0]
-                factorLx = factorRx.conj() 
-                factorRy = dipoles[ik,ic-self.nv,self.bse_nv-self.nv+iv,1]
+            for i, t in enumerate(dipoles):
+                ik = self.T_table[i][0]
+                iv = self.T_table[i][1]
+                ic = self.T_table[i][2]
+                factorRx = t[ik, ic,iv, 0]
+                # factorLx = factorRx.conj() 
+                factorRy = t[ik, ic,iv, 1]
                 factorLy = factorRy.conj() 
-                factorRz = dipoles[ik,ic-self.nv,self.bse_nv-self.nv+iv,2]
-                factorLz = factorRz.conj() 
-                F_kcv[t,0,0] = F_kcv[t,0,0] + factorRx*factorLx
-                F_kcv[t,0,1] = F_kcv[t,0,1] + factorRx*factorLy
-                F_kcv[t,0,2] = F_kcv[t,0,2] + factorRx*factorLz
-                F_kcv[t,1,0] = F_kcv[t,1,0] + factorRy*factorLx
-                F_kcv[t,1,1] = F_kcv[t,1,1] + factorRy*factorLy
-                F_kcv[t,1,2] = F_kcv[t,1,2] + factorRy*factorLz                    
-                F_kcv[t,2,0] = F_kcv[t,2,0] + factorRz*factorLx
-                F_kcv[t,2,1] = F_kcv[t,2,1] + factorRz*factorLy
-                F_kcv[t,2,2] = F_kcv[t,2,2] + factorRz*factorLz
+                # factorRz = t[ik, ic-self.nv, self.bse_nv-self.nv+iv, 2]
+                # factorLz = factorRz.conj() 
+                # F_kcv[i,0,0] = factorRx*factorLx
+                F_kcv[i,0,1] = factorRx*factorLy
+                # F_kcv[i,0,2] = factorRx*factorLz
+                # F_kcv[i,1,0] = factorRy*factorLx
+                # F_kcv[i,1,1] = factorRy*factorLy
+                # F_kcv[i,1,2] = factorRy*factorLz
+                # F_kcv[i,2,0] = factorRz*factorLx
+                # F_kcv[i,2,1] = factorRz*factorLy
+                # F_kcv[i,2,2] = factorRz*factorLz
+                if i%50 ==0 :
+                    print(f"dipoles = {factorRx}")
+                    print(f"F = {F_kcv[i,0,1]}")
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')
         if (method== 'r-gauge'):
             print('Warning! position gauge not implemented yet')
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
-        return F_kcv        
+        self.F_kcv = F_kcv        
+        print(f"Oscillation strenght computed succesfully in {time.time()-t0:.2f}s")
