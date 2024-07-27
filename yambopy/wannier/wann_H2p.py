@@ -20,19 +20,47 @@ def process_file(args):
     K_ttp = kernel_db.kernel[aux_t][:,aux_t]  
     H2P_local = np.zeros((len(BSE_table), len(BSE_table)), dtype=np.complex128)
 
-    for t in range(len(BSE_table)):
-        ik, iv, ic = BSE_table[t]
-        for tp in range(len(BSE_table)):
-            ikp, ivp, icp = BSE_table[tp]
-            ikplusq = kplusq_table[ik, kpoints_indexes[idx]]
-            ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx]]
-            ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx]]
-            K = -(K_ttp[t, tp]) * HA2EV
-            deltaE = eigv[ik, ic] - eigv[ikpminusq, iv] if (ik == ikp and icp == ic and ivp == iv) else 0.0
-            occupation_diff = -f_kn[ikpminusq, ivp] + f_kn[ikp, icp]
-            element_value = deltaE + occupation_diff * K
-            H2P_local[t, tp] = element_value
-    return idx, H2P_local
+    BSE_table = np.array(BSE_table)
+    ik = BSE_table[:, 0]
+    iv = BSE_table[:, 1]
+    ic = BSE_table[:, 2]
+
+    ikp = BSE_table[:, 0]
+    ivp = BSE_table[:, 1]
+    icp = BSE_table[:, 2]
+
+    ikplusq = kplusq_table[ik, kpoints_indexes[idx]]
+    ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx]]
+    ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+
+    # Ensure deltaE is diagonal
+    deltaE = np.zeros((len(BSE_table), len(BSE_table)),dtype=np.complex128)
+    diag_indices = np.arange(len(BSE_table))
+    mask = (ik == ikp) & (ic == icp) & (iv == ivp)
+    deltaE[diag_indices, diag_indices] = np.where(mask, eigv[ik, ic] - eigv[ikpminusq, iv], 0.0)
+
+
+    occupation_diff = -f_kn[ikpminusq, ivp] + f_kn[ikp, icp]
+    K = -(K_ttp[np.arange(BSE_table.shape[0])[:, None], np.arange(BSE_table.shape[0])[None, :]]) * HA2EV
+
+    # Ensure deltaE is diagonal in (t, tp)
+    H2P_local = deltaE + occupation_diff[:, None] * K
+    
+    return idx, H2P_local    
+
+    # for t in range(len(BSE_table)):
+    #     ik, iv, ic = BSE_table[t]
+    #     for tp in range(len(BSE_table)):
+    #         ikp, ivp, icp = BSE_table[tp]
+    #         ikplusq = kplusq_table[ik, kpoints_indexes[idx]]
+    #         ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx]]
+    #         ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+    #         K = -(K_ttp[t, tp]) * HA2EV
+    #         deltaE = eigv[ik, ic] - eigv[ikpminusq, iv] if (ik == ikp and icp == ic and ivp == iv) else 0.0
+    #         occupation_diff = -f_kn[ikpminusq, ivp] + f_kn[ikp, icp]
+    #         element_value = deltaE + occupation_diff * K
+    #         H2P_local[t, tp] = element_value
+    # return idx, H2P_local
 
 class FakeLatticeObject():
     '''should make the YamboLatticeDB class actually more lightweight and
@@ -140,8 +168,10 @@ class H2P():
 
     def _buildH2P(self):
         if self.run_parallel:
-            print(f"CPU count involved in H2P loading pool: {self.cpucount}")
-            pool = mp.Pool(self.cpucount)
+            import multiprocessing as mp
+            cpucount= mp.cpu_count()
+            print(f"CPU count involved in H2P loading pool: {cpucount}")
+            pool = mp.Pool(cpucount)
             full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
 
             if self.nq_double == 1:
@@ -205,34 +235,58 @@ class H2P():
                 aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
                 K_ttp = kernel_db.kernel[aux_t][:,aux_t]
                 # Operations for matrix element calculations
-                for t in range(self.dimbse):
-                    ik, iv, ic = self.BSE_table[t]
-                    for tp in range(self.dimbse):
-                        ikp, ivp, icp = self.BSE_table[tp]
-                        ikplusq = self.kplusq_table[ik, kpoints_indexes[idx]]
-                        ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx]]
-                        ikpminusq = self.kminusq_table_yambo[ikp,kpoints_indexes[idx]]
-                        #print(ik, ikp, ikpminusq, idx, kpoints_indexes[idx])
-                        #aux_t = kernel_db.get_kernel_indices_bands(yexc_atk, bands=[iv+self.offset_nv+1,ic+self.offset_nv+1],iq=ik+1)
-                        #aux_tp = kernel_db.get_kernel_indices_bands(yexc_atk, bands=[ivp+self.offset_nv+1,icp+self.offset_nv+1],iq=ikpminusq+1)
-                        
-                        #K = -K_4D[ivp+self.offset_nv,icp+self.offset_nv,ikpminusq,ik]*HA2EV
-                        K = -(K_ttp[t,tp])*HA2EV
-                        #K = -K_ttp[aux_tp,aux_t]*HA2EV
-                        #K=0
-                        if (ik==ikp and icp==ic and ivp==iv):
-                            deltaE = self.eigv[ik, ic] - self.eigv[ikpminusq, iv]
-                        else:
-                            deltaE = 0.0
-                        occupation_diff = -self.f_kn[ikpminusq, ivp] + self.f_kn[ikp, icp]
-                        element_value = deltaE + occupation_diff * K
-                        if self.nq_double == 1:
-                            H2P[t, tp] = element_value
-                        else:
-                            H2P[idx, t, tp] = element_value
-            print(f"Hamiltonian matrix construction completed in {time() - t0:.2f} seconds.")
+                BSE_table = np.array(self.BSE_table)
+                ik = BSE_table[:, 0]
+                iv = BSE_table[:, 1]
+                ic = BSE_table[:, 2]
 
-            return H2P
+                ikp = BSE_table[:, 0]
+                ivp = BSE_table[:, 1]
+                icp = BSE_table[:, 2]
+
+                ikplusq = self.kplusq_table[ik, kpoints_indexes[idx]]
+                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx]]
+                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+
+                # Ensure deltaE is diagonal
+                deltaE = np.zeros((self.dimbse, self.dimbse))
+                diag_indices = np.arange(self.dimbse)
+                mask = (ik == ikp) & (ic == icp) & (iv == ivp)
+                deltaE[diag_indices, diag_indices] = np.where(mask, self.eigv[ik, ic] - self.eigv[ikpminusq, iv], 0.0)
+
+                occupation_diff = -self.f_kn[ikpminusq, ivp] + self.f_kn[ikp, icp]
+
+                # Refactored K calculation
+                K = -(K_ttp[np.arange(self.dimbse)[:, None], np.arange(self.dimbse)[None, :]]) * HA2EV
+
+                element_value = deltaE + occupation_diff[:, None] * K
+                if self.nq_double == 1:
+                    H2P[:, :] = element_value
+                else:
+                    H2P[idx, :, :] = element_value
+
+            print(f"Hamiltonian matrix construction completed in {time() - t0:.2f} seconds.")
+            return H2P              
+                # for t in range(self.dimbse):
+                #     ik, iv, ic = self.BSE_table[t]
+                #     for tp in range(self.dimbse):
+                #         ikp, ivp, icp = self.BSE_table[tp]
+                #         ikplusq = self.kplusq_table[ik, kpoints_indexes[idx]]
+                #         ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx]]
+                #         ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+
+                #         deltaE = self.eigv[ik, ic] - self.eigv[ikpminusq, iv] if (ik == ikp and icp == ic and ivp == iv) else 0.0
+                #         occupation_diff = -self.f_kn[ikpminusq, ivp] + self.f_kn[ikp, icp]
+                #         K = -(K_ttp[t, tp]) * HA2EV
+                #         element_value = deltaE + occupation_diff * K
+
+                #         if self.nq_double == 1:
+                #             H2P[t, tp] = element_value
+                #         else:
+                #             H2P[idx, t, tp] = element_value
+
+        print(f"Hamiltonian matrix construction completed in {time() - t0:.2f} seconds.")
+        # return H2P
 
     def _buildH2Peigv(self):
         import time
