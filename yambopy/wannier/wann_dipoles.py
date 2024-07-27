@@ -64,7 +64,7 @@ class TB_dipoles():
                         dipoles[ik, n, m,1] = np.vdot(self.eigvec[ik,:,n],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,m]))
                         dipoles[ik, n, m,2] = np.vdot(self.eigvec[ik,:,n],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,m]))
 
-        return dipoles/(HA2EV**3)
+        return dipoles#/(HA2EV**3)
     
     def _get_dipoles(self, method):
         if method == 'real':  # Parallelize over kpoints
