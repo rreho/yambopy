@@ -312,7 +312,7 @@ class H2P():
                 ik_t = ik[:self.dimslepc]
                 iv_t = iv[:self.dimslepc]
                 ic_t = ic[:self.dimslepc]
-
+                #this should be called with inverse_aux_t
                 h2peigv_vck[idx, self.bse_nv - self.nv + iv_t, ic_t - self.nv, ik_t] = tmph2peigv[:self.dimslepc]
 
                 ikp_indices = BSE_table[inverse_aux_t, 0]
@@ -320,6 +320,7 @@ class H2P():
                 icp_indices = BSE_table[inverse_aux_t, 2]
                 #tmph2peigvec = tmph2peigvec.reshape((1, 100, 648))
                 tmp_t = np.arange(0,self.dimslepc)
+                #first t index should be called normally, second with inverse_aux_t
                 h2peigvec_vck[idx, tmp_t[:,None], self.bse_nv - self.nv + ivp_indices[None,:], icp_indices[None,:] - self.nv, ikp_indices[None,:]] = tmph2peigvec[:, :]
 
             print(f"Reading excitonic eigenvalues and eigenvectors in {time() - t0:.2f} seconds.")
