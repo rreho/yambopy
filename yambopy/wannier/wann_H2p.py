@@ -288,39 +288,39 @@ class H2P():
             for idx, exc_db_file in enumerate(exciton_db_files):
                 yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
                 aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
+                # Create an array to store the inverse mapping
+                inverse_aux_t = np.empty_like(aux_t)
+                # Populate the inverse mapping
+                inverse_aux_t[aux_t] = np.arange(aux_t.size)
+
                 tmph2peigvec = yexc_atk.eigenvectors.filled(0).copy()
                 tmph2peigv = yexc_atk.eigenvalues.filled(0).copy()
 
                 BSE_table = np.array(self.BSE_table)
-                ik = BSE_table[:, 0]
-                iv = BSE_table[:, 1]
-                ic = BSE_table[:, 2]
-
-                ikp = BSE_table[:, 0]
 
 
                 # Broadcasting and advanced indexing
-                ik_indices = aux_t[:self.dimslepc]
+                inverse_aux_t_slepc = inverse_aux_t[:self.dimslepc]
+                h2peigv[idx, :] = tmph2peigv[:]
+                h2peigvec[idx, :, :] = tmph2peigvec[:self.dimslepc, :]
 
-                h2peigv[idx, ik_indices] = tmph2peigv[:self.dimslepc]
-                h2peigvec[idx, ik_indices, :] = tmph2peigvec[:self.dimslepc, :]
+                ik_t = BSE_table[inverse_aux_t, 0]
+                iv_t = BSE_table[inverse_aux_t, 1]
+                ic_t = BSE_table[inverse_aux_t, 2]
 
-                ik_t = ik[ik_indices]
-                iv_t = iv[ik_indices]
-                ic_t = ic[ik_indices]
+                h2peigv_vck[idx, self.bse_nv - self.nv + iv_t, ic_t - self.nv, ik_t] = tmph2peigv[:self.dimslepc]
 
-                h2peigv_vck[idx, self.bse_nv - self.nv + iv_t[:, None], ic_t[:, None] - self.nv, ik_t[:, None]] = tmph2peigv[:self.dimslepc][:, None]
-
-                ivp_indices = iv[aux_t]
-                icp_indices = ic[aux_t]
-                ikp_indices = ik[aux_t]
-
-                h2peigvec_vck[idx, ik_indices[:, None], self.bse_nv - self.nv + ivp_indices[None, :], icp_indices[None, :] - self.nv, ikp_indices[None, :]] = tmph2peigvec[:self.dimslepc, :]
+                ivp_indices = BSE_table[inverse_aux_t, 0]
+                icp_indices = BSE_table[inverse_aux_t, 1]
+                ikp_indices = BSE_table[inverse_aux_t, 2]
+                #tmph2peigvec = tmph2peigvec.reshape((1, 100, 648))
+                tmp_t = np.arange(0,self.dimslepc)
+                h2peigvec_vck[idx, tmp_t[:,None], self.bse_nv - self.nv + ivp_indices[None,:], icp_indices[None,:] - self.nv, ikp_indices[None,:]] = tmph2peigvec[:, :]
 
             print(f"Reading excitonic eigenvalues and eigenvectors in {time() - t0:.2f} seconds.")
             return h2peigv, h2peigvec, h2peigv_vck, h2peigvec_vck
         else:
-            print('Error: skip_diago is false')       
+            print('Error: skip_diago is false')        
 
     
     def _buildH2P_fromcpot(self):
