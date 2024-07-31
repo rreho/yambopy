@@ -297,6 +297,11 @@ class H2P():
                 tmph2peigv = yexc_atk.eigenvalues.filled(0).copy()
 
                 BSE_table = np.array(self.BSE_table)
+                ik = BSE_table[inverse_aux_t, 0]
+                iv = BSE_table[inverse_aux_t, 1]
+                ic = BSE_table[inverse_aux_t, 2]
+
+                ikp = BSE_table[inverse_aux_t, 0]
 
 
                 # Broadcasting and advanced indexing
@@ -304,15 +309,15 @@ class H2P():
                 h2peigv[idx, :] = tmph2peigv[:]
                 h2peigvec[idx, :, :] = tmph2peigvec[:self.dimslepc, :]
 
-                ik_t = BSE_table[inverse_aux_t, 0]
-                iv_t = BSE_table[inverse_aux_t, 1]
-                ic_t = BSE_table[inverse_aux_t, 2]
+                ik_t = ik[:self.dimslepc]
+                iv_t = iv[:self.dimslepc]
+                ic_t = ic[:self.dimslepc]
 
                 h2peigv_vck[idx, self.bse_nv - self.nv + iv_t, ic_t - self.nv, ik_t] = tmph2peigv[:self.dimslepc]
 
-                ivp_indices = BSE_table[inverse_aux_t, 0]
-                icp_indices = BSE_table[inverse_aux_t, 1]
-                ikp_indices = BSE_table[inverse_aux_t, 2]
+                ikp_indices = BSE_table[inverse_aux_t, 0]
+                ivp_indices = BSE_table[inverse_aux_t, 1]
+                icp_indices = BSE_table[inverse_aux_t, 2]
                 #tmph2peigvec = tmph2peigvec.reshape((1, 100, 648))
                 tmp_t = np.arange(0,self.dimslepc)
                 h2peigvec_vck[idx, tmp_t[:,None], self.bse_nv - self.nv + ivp_indices[None,:], icp_indices[None,:] - self.nv, ikp_indices[None,:]] = tmph2peigvec[:, :]
@@ -320,7 +325,7 @@ class H2P():
             print(f"Reading excitonic eigenvalues and eigenvectors in {time() - t0:.2f} seconds.")
             return h2peigv, h2peigvec, h2peigv_vck, h2peigvec_vck
         else:
-            print('Error: skip_diago is false')        
+            print('Error: skip_diago is false')         
 
     
     def _buildH2P_fromcpot(self):
