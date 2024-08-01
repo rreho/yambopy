@@ -715,12 +715,14 @@ class H2P():
 
     def _get_amn_ttp(self, t, tp, iq,ikq, B):
         Ammn_ttp=0
+        offset_nb = self.savedb.nbandsv-self.nv
         for il in range(self.dimbse):
             ik = self.BSE_table[il][0]
             iv = self.BSE_table[il][1] 
             ic = self.BSE_table[il][2] 
             ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
-            Ammn_ttp += self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])
+            Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(np.sum(B[ikq,ic+offset_nb,:]))*np.sum(B[ikmq,iv+offset_nb,:])
+            #*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0], tprange = [0]): #tprange here has a different meaning, is the trial exciton wavefunction, for now is basically always one
