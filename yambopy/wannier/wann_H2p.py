@@ -713,7 +713,7 @@ class H2P():
     #     self.Mssp = Mssp   
     
 
-    def _get_amn_ttp(self, t, tp, iq,ikq, B):
+    def _get_amn_ttp(self, t, l , iq,ikq, B):
         Ammn_ttp=0
         offset_nb = self.savedb.nbandsv-self.nv
         for il in range(self.dimbse):
@@ -721,18 +721,19 @@ class H2P():
             iv = self.BSE_table[il][1] 
             ic = self.BSE_table[il][2] 
             ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
-            Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(np.sum(B[ikq,ic+offset_nb,:]))*np.sum(B[ikmq,iv+offset_nb,:])
+            Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(B[ikq,ic+offset_nb,l])B[ikmq,iv+offset_nb,l]
             #*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])
         return Ammn_ttp
 
-    def get_exc_amn(self, trange = [0], tprange = [0]): #tprange here has a different meaning, is the trial exciton wavefunction, for now is basically always one
-        Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
+    def get_exc_amn(self, trange = [0]): #tprange here has a different meaning, is the trial exciton wavefunction, for now is basically always one
         amn_wann = AMN(infile=self.projection_infile)
         B = amn_wann.A_kmn
+        lrange = np.arange(0,B.shape[1])
+        Amn = np.zeros((len(trange), B.shape[1],self.qmpgrid.nkpoints), dtype=np.complex128)
         for it,t in enumerate(trange):
-            for t,tp in enumerate(tprange):
+            for l,lp in enumerate(lrange):
                 for iq,ikq in enumerate(self.kindices_table):
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq,ikq, B)        
+                    Amn[t,lp, iq] = self._get_amn_ttp(t,lp,iq,ikq, B)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
@@ -827,23 +828,23 @@ class H2P():
                 f_out.write(f'\t{iq+1}\t{iqpb+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
         f_out.write('end nnkpts')
 
-    def write_exc_amn(self,infile, seedname='wannier90_exc', trange = [0], tprange = [0]):
+    def write_exc_amn(self,infile, seedname='wannier90_exc', trange = [0]):
         self.projection_infile = infile
         if (self.Amn is None):
-            self.get_exc_amn(trange, tprange)
+            self.get_exc_amn(trange)
 
         f_out = open(f'{seedname}.amn', 'w')
 
         from datetime import datetime
-
+        lrange = self.Amn.shape[1]
         current_datetime = datetime.now()
         date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
         f_out.write(f'Created on {date_time_string}\n')
         f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{len(tprange)}\n') 
         for iq, q in enumerate(self.kindices_table):
-            for itp,tp in enumerate(tprange):
+            for ilp,lp in enumerate(lrange):
                 for it, t in enumerate(trange):                
-                    f_out.write(f'\t{it+1}\t{itp+1}\t{iq+1}\t{np.real(self.Amn[it,itp,iq])}\t\t{np.imag(self.Amn[it,itp,iq])}\n')
+                    f_out.write(f'\t{it+1}\t{ilp+1}\t{iq+1}\t{np.real(self.Amn[it,ilp,iq])}\t\t{np.imag(self.Amn[it,ilp,iq])}\n')
 
     def _get_BSE_table(self):
         ntransitions = self.nk*self.bse_nc*self.bse_nv
