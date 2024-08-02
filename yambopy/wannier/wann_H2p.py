@@ -874,7 +874,6 @@ class H2P():
         for iq, q in enumerate(self.kindices_table):
             for ilp,lp in enumerate(lrange):
                 for it, t in enumerate(trange):                
-                    print(ilp, self.Amn.shape)
                     f_out.write(f'\t{it+1}\t{ilp+1}\t{iq+1}\t{np.real(self.Amn[it,ilp,iq])}\t\t{np.imag(self.Amn[it,ilp,iq])}\n')
 
     def _get_BSE_table(self):
