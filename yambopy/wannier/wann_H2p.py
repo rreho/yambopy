@@ -9,7 +9,6 @@ from time import time
 from memory_profiler import profile
 import gc
 
-@profile
 def process_file(args):
     idx, exc_db_file, data_dict = args
     # Unpacking data necessary for processing
@@ -172,7 +171,7 @@ class H2P():
         else:
             print('\nWarning! Kernel can be built only from Yambo database or model Coulomb potential\n')
 
-    @profile
+
     def _buildH2P(self):
         if self.run_parallel:
             import multiprocessing as mp
@@ -774,8 +773,8 @@ class H2P():
     def get_exc_amn(self, trange = [0]): #tprange here has a different meaning, is the trial exciton wavefunction, for now is basically always one
         amn_wann = AMN(infile=self.projection_infile)
         B = amn_wann.A_kmn
-        lrange = np.arange(0,B.shape[1])
-        Amn = np.zeros((len(trange), B.shape[1],self.qmpgrid.nkpoints), dtype=np.complex128)
+        lrange = np.arange(0,B.shape[2])
+        Amn = np.zeros((len(trange), B.shape[2],self.qmpgrid.nkpoints), dtype=np.complex128)
         for it,t in enumerate(trange):
             for l,lp in enumerate(lrange):
                 for iq,ikq in enumerate(self.kindices_table):
@@ -882,11 +881,11 @@ class H2P():
         f_out = open(f'{seedname}.amn', 'w')
 
         from datetime import datetime
-        lrange = self.Amn.shape[1]
+        lrange = np.arange(0,self.Amn.shape[2])
         current_datetime = datetime.now()
         date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
         f_out.write(f'Created on {date_time_string}\n')
-        f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{len(tprange)}\n') 
+        f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{len(lrange)}\n') 
         for iq, q in enumerate(self.kindices_table):
             for ilp,lp in enumerate(lrange):
                 for it, t in enumerate(trange):                
