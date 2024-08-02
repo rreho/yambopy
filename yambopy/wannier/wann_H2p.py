@@ -6,9 +6,10 @@ from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
 from yambopy.wannier.wann_io import AMN
 from time import time
+from memory_profiler import profile
+import gc
 
-
-
+@profile
 def process_file(args):
     idx, exc_db_file, data_dict = args
     # Unpacking data necessary for processing
@@ -19,6 +20,8 @@ def process_file(args):
     aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
     K_ttp = kernel_db.kernel[aux_t][:,aux_t]  
     H2P_local = np.zeros((len(BSE_table), len(BSE_table)), dtype=np.complex128)
+
+    del kernel_db, yexc_atk  # Free memory as early as possible
 
     BSE_table = np.array(BSE_table)
     ik = BSE_table[:, 0]
@@ -39,13 +42,16 @@ def process_file(args):
     mask = (ik == ikp) & (ic == icp) & (iv == ivp)
     deltaE[diag_indices, diag_indices] = np.where(mask, eigv[ik, ic] - eigv[ikpminusq, iv], 0.0)
 
-
     occupation_diff = -f_kn[ikpminusq, ivp] + f_kn[ikp, icp]
+    del ik, iv, ic, ikp, ivp, icp, ikplusq, ikminusq, ikpminusq  # Free memory
     K = -(K_ttp[np.arange(BSE_table.shape[0])[:, None], np.arange(BSE_table.shape[0])[None, :]]) * HA2EV
 
     # Ensure deltaE is diagonal in (t, tp)
     H2P_local = deltaE + occupation_diff[:, None] * K
-    
+
+    del deltaE, occupation_diff, K, K_ttp  # Free memory
+    gc.collect()  # Force garbage collection
+
     return idx, H2P_local    
 
     # for t in range(len(BSE_table)):
@@ -82,8 +88,9 @@ class H2P():
     '''Build the 2-particle resonant Hamiltonian H2P
         Easy to use only requires the model as input. 
     '''
-    def __init__(self, model, savedb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                  TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False):
+    def __init__(self, model, savedb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
+                 ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
+                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -161,10 +168,11 @@ class H2P():
             self.skip_diago = True
             self.dimslepc=dimslepc
             (self.h2peigv, self.h2peigvec,self.h2peigv_vck, self.h2peigvec_vck) = self._buildH2Peigv()
+            (self.aux_t,self.inverse_aux_t) = self._get_aux_maps()
         else:
             print('\nWarning! Kernel can be built only from Yambo database or model Coulomb potential\n')
 
-
+    @profile
     def _buildH2P(self):
         if self.run_parallel:
             import multiprocessing as mp
@@ -203,7 +211,8 @@ class H2P():
                     H2P = result
                 else:
                     H2P[idx] = result
-
+            del results  # Free up memory by deleting the results
+            gc.collect()  # Force garbage collection
             print(f"Hamiltonian matrix construction completed in {time() - t0:.2f} seconds.")
             pool.close()
             pool.join()
@@ -263,7 +272,8 @@ class H2P():
                     H2P[:, :] = element_value
                 else:
                     H2P[idx, :, :] = element_value
-
+                del element_value  # Free up memory by deleting the results
+                gc.collect()  # Force garbage collection
             print(f"Hamiltonian matrix construction completed in {time() - t0:.2f} seconds.")
             return H2P              
         
@@ -328,7 +338,6 @@ class H2P():
         else:
             print('Error: skip_diago is false')         
 
-    
     def _buildH2P_fromcpot(self):
         'build resonant h2p from model coulomb potential'
         if (self.nq == 1):        
@@ -662,30 +671,56 @@ class H2P():
     def _get_exc_overlap_ttp(self, t, tp, iq, ikq, ib):
         '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
         #Extract indices from BSE_table
-        ik = self.BSE_table[:, 0][:, np.newaxis]
-        iv = self.BSE_table[:, 1][:, np.newaxis]
-        ic = self.BSE_table[:, 2][:, np.newaxis]
+        if (self.method=='skip-diago'):
+            ik = self.BSE_table[self.inverse_aux_t, 0][:, np.newaxis]
+            iv = self.BSE_table[self.inverse_aux_t, 1][:, np.newaxis]
+            ic = self.BSE_table[self.inverse_aux_t, 2][:, np.newaxis]
 
-        ikp = self.BSE_table[:, 0][np.newaxis, :]
-        ivp = self.BSE_table[:, 1][np.newaxis, :]
-        icp = self.BSE_table[:, 2][np.newaxis, :]
+            ikp = self.BSE_table[self.inverse_aux_t, 0][np.newaxis, :]
+            ivp = self.BSE_table[self.inverse_aux_t, 1][np.newaxis, :]
+            icp = self.BSE_table[self.inverse_aux_t, 2][np.newaxis, :]
 
-        # Get grid table values
-        iqpb = self.kmpgrid.qpb_grid_table[iq, ib, 1]
-        ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
-        ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
-        ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
+            # Get grid table values
+            iqpb = self.kmpgrid.qpb_grid_table[iq, ib, 1]
+            ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
+            ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
+            ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
 
-        # Compute terms 1 and 2
-        term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-        term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
+            # Compute terms 1 and 2
+            term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+            term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
-        # Compute inner products for term 3 and term 4
-        term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
-        term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
+            # Compute inner products for term 3 and term 4
+            term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
+            term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
 
-        # Compute the final result
-        Mssp_ttp = np.sum(term1 * term2 * term3 * term4)
+            # Compute the final result
+            Mssp_ttp = np.sum(term1 * term2 * term3 * term4)
+        else:
+            ik = self.BSE_table[:, 0][:, np.newaxis]
+            iv = self.BSE_table[:, 1][:, np.newaxis]
+            ic = self.BSE_table[:, 2][:, np.newaxis]
+
+            ikp = self.BSE_table[:, 0][np.newaxis, :]
+            ivp = self.BSE_table[:, 1][np.newaxis, :]
+            icp = self.BSE_table[:, 2][np.newaxis, :]
+
+            # Get grid table values
+            iqpb = self.kmpgrid.qpb_grid_table[iq, ib, 1]
+            ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
+            ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
+            ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
+
+            # Compute terms 1 and 2
+            term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+            term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
+
+            # Compute inner products for term 3 and term 4
+            term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
+            term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
+
+            # Compute the final result
+            Mssp_ttp = np.sum(term1 * term2 * term3 * term4)
 
         return Mssp_ttp
 
@@ -714,15 +749,26 @@ class H2P():
     
 
     def _get_amn_ttp(self, t, l , iq,ikq, B):
-        Ammn_ttp=0
-        offset_nb = self.savedb.nbandsv-self.nv
-        for il in range(self.dimbse):
-            ik = self.BSE_table[il][0]
-            iv = self.BSE_table[il][1] 
-            ic = self.BSE_table[il][2] 
-            ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
-            Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(B[ikq,ic+offset_nb,l])B[ikmq,iv+offset_nb,l]
-            #*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])
+        if(self.method=='skip-diago'):
+            Ammn_ttp=0
+            offset_nb = self.savedb.nbandsv-self.nv
+            for il in range(self.dimslepc):                
+                ik = self.BSE_table[self.inverse_aux_t[il]][0]
+                iv = self.BSE_table[self.inverse_aux_t[il]][1] 
+                ic = self.BSE_table[self.inverse_aux_t[il]][2] 
+                ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
+                Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(B[ikq,ic+offset_nb,l])*B[ikmq,iv+offset_nb,l]
+                #*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])            
+        else:
+            Ammn_ttp=0
+            offset_nb = self.savedb.nbandsv-self.nv
+            for il in range(self.dimbse):
+                ik = self.BSE_table[il][0]
+                iv = self.BSE_table[il][1] 
+                ic = self.BSE_table[il][2] 
+                ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
+                Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(B[ikq,ic+offset_nb,l])*B[ikmq,iv+offset_nb,l]
+                #*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0]): #tprange here has a different meaning, is the trial exciton wavefunction, for now is basically always one
@@ -879,3 +925,12 @@ class H2P():
     #             if np.isclose(matrix[i, j].real, matrix[j, i].real) and np.isclose(matrix[i, j].imag, -matrix[j, i].imag):
     #                 matrix[j, i] = np.conjugate(matrix[i, j])
     #     return matrix
+    def _get_aux_maps(self):
+        yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q1')
+        aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
+        # Create an array to store the inverse mapping
+        inverse_aux_t = np.empty_like(aux_t)
+        # Populate the inverse mapping
+        inverse_aux_t[aux_t] = np.arange(aux_t.size)        
+        
+        return aux_t, inverse_aux_t
