@@ -8,6 +8,7 @@ from yambopy.wannier.wann_io import AMN
 from time import time
 from memory_profiler import profile
 import gc
+from joblib import Parallel, delayed
 
 def process_file(args):
     idx, exc_db_file, data_dict = args
@@ -670,56 +671,40 @@ class H2P():
     def _get_exc_overlap_ttp(self, t, tp, iq, ikq, ib):
         '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
         #Extract indices from BSE_table
-        if (self.method=='skip-diago'):
-            ik = self.BSE_table[self.inverse_aux_t, 0][:, np.newaxis]
-            iv = self.BSE_table[self.inverse_aux_t, 1][:, np.newaxis]
-            ic = self.BSE_table[self.inverse_aux_t, 2][:, np.newaxis]
-
-            ikp = self.BSE_table[self.inverse_aux_t, 0][np.newaxis, :]
-            ivp = self.BSE_table[self.inverse_aux_t, 1][np.newaxis, :]
-            icp = self.BSE_table[self.inverse_aux_t, 2][np.newaxis, :]
-
-            # Get grid table values
-            iqpb = self.kmpgrid.qpb_grid_table[iq, ib, 1]
-            ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
-            ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
-            ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
-
-            # Compute terms 1 and 2
-            term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-            term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
-
-            # Compute inner products for term 3 and term 4
-            term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
-            term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
-
-            # Compute the final result
-            Mssp_ttp = np.sum(term1 * term2 * term3 * term4)
+        if self.method == 'skip-diago':
+            indices = self.inverse_aux_t
         else:
-            ik = self.BSE_table[:, 0][:, np.newaxis]
-            iv = self.BSE_table[:, 1][:, np.newaxis]
-            ic = self.BSE_table[:, 2][:, np.newaxis]
+            indices = slice(None)
+        chunk_size=int(self.dimbse/100.0)
+        if (chunk_size < 1): chun_size=self.dimbse
+        # Chunk the indices to manage memory usage
+        ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
+        iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
+        ic_chunks = chunkify(self.BSE_table[indices, 2], chunk_size)
 
-            ikp = self.BSE_table[:, 0][np.newaxis, :]
-            ivp = self.BSE_table[:, 1][np.newaxis, :]
-            icp = self.BSE_table[:, 2][np.newaxis, :]
+        Mssp_ttp = 0
 
-            # Get grid table values
+        for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks):
+            ik = np.array(ik)[:, np.newaxis]
+            iv = np.array(iv)[:, np.newaxis]
+            ic = np.array(ic)[:, np.newaxis]
+
+            ikp = ik.T
+            ivp = iv.T
+            icp = ic.T
+
             iqpb = self.kmpgrid.qpb_grid_table[iq, ib, 1]
             ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
             ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
             ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
 
-            # Compute terms 1 and 2
             term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
             term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
-            # Compute inner products for term 3 and term 4
             term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
             term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
 
-            # Compute the final result
-            Mssp_ttp = np.sum(term1 * term2 * term3 * term4)
+            Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
 
         return Mssp_ttp
 
@@ -881,7 +866,7 @@ class H2P():
         f_out = open(f'{seedname}.amn', 'w')
 
         from datetime import datetime
-        lrange = np.arange(0,self.Amn.shape[2])
+        lrange = np.arange(0,self.Amn.shape[1])
         current_datetime = datetime.now()
         date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
         f_out.write(f'Created on {date_time_string}\n')
@@ -889,6 +874,7 @@ class H2P():
         for iq, q in enumerate(self.kindices_table):
             for ilp,lp in enumerate(lrange):
                 for it, t in enumerate(trange):                
+                    print(ilp, self.Amn.shape)
                     f_out.write(f'\t{it+1}\t{ilp+1}\t{iq+1}\t{np.real(self.Amn[it,ilp,iq])}\t\t{np.imag(self.Amn[it,ilp,iq])}\n')
 
     def _get_BSE_table(self):
@@ -933,3 +919,7 @@ class H2P():
         inverse_aux_t[aux_t] = np.arange(aux_t.size)        
         
         return aux_t, inverse_aux_t
+
+def chunkify(lst, n):
+    """Divide list `lst` into `n` chunks."""
+    return [lst[i::n] for i in range(n)]    
