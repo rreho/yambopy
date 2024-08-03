@@ -6,9 +6,8 @@ from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
 from yambopy.wannier.wann_io import AMN
 from time import time
-from memory_profiler import profile
 import gc
-from joblib import Parallel, delayed
+
 
 def process_file(args):
     idx, exc_db_file, data_dict = args
@@ -90,7 +89,7 @@ class H2P():
     '''
     def __init__(self, model, savedb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
                  ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False):
+                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -136,6 +135,7 @@ class H2P():
         self.Mssp = None
         self.Amn = None
         self.skip_diago = False
+        self.nproc = nproc
         # consider to build occupations here in H2P with different occupation functions
         if (f_kn == None):
             self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float128)
@@ -178,7 +178,7 @@ class H2P():
             import multiprocessing as mp
             cpucount= mp.cpu_count()
             print(f"CPU count involved in H2P loading pool: {cpucount}")
-            pool = mp.Pool(cpucount)
+            pool = mp.Pool(self.nproc)
             full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
 
             if self.nq_double == 1:
