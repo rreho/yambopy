@@ -732,38 +732,23 @@ class H2P():
     #     self.Mssp = Mssp   
     
 
-    def _get_amn_ttp(self, t, l , iq,ikq, B):
-        if(self.method=='skip-diago'):
-            Ammn_ttp=0
-            offset_nb = self.savedb.nbandsv-self.nv
-            for il in range(self.dimslepc):                
-                ik = self.BSE_table[self.inverse_aux_t[il]][0]
-                iv = self.BSE_table[self.inverse_aux_t[il]][1] 
-                ic = self.BSE_table[self.inverse_aux_t[il]][2] 
-                ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
-                Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(B[ikq,ic+offset_nb,l])*B[ikmq,iv+offset_nb,l]
-                #*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])            
-        else:
-            Ammn_ttp=0
-            offset_nb = self.savedb.nbandsv-self.nv
-            for il in range(self.dimbse):
-                ik = self.BSE_table[il][0]
-                iv = self.BSE_table[il][1] 
-                ic = self.BSE_table[il][2] 
-                ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
-                Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(B[ikq,ic+offset_nb,l])*B[ikmq,iv+offset_nb,l]
-                #*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])
+    def _get_amn_ttp(self, t, tp, iq):
+        ik = self.BSE_table[t][0]
+        iv = self.BSE_table[t][1] 
+        ic = self.BSE_table[t][2] 
+        ikp = self.BSE_table[tp][0]
+        ivp = self.BSE_table[tp][1] 
+        icp = self.BSE_table[tp][2] 
+        ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
+        Ammn_ttp = self.h2peigvec_vck[iq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
         return Ammn_ttp
 
-    def get_exc_amn(self, trange = [0]): #tprange here has a different meaning, is the trial exciton wavefunction, for now is basically always one
-        amn_wann = AMN(infile=self.projection_infile)
-        B = amn_wann.A_kmn
-        lrange = np.arange(0,B.shape[2])
-        Amn = np.zeros((len(trange), B.shape[2],self.qmpgrid.nkpoints), dtype=np.complex128)
+    def get_exc_amn(self, trange = [0], tprange = [0]):
+        Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
         for it,t in enumerate(trange):
-            for l,lp in enumerate(lrange):
-                for iq,ikq in enumerate(self.kindices_table):
-                    Amn[t,lp, iq] = self._get_amn_ttp(t,lp,iq,ikq, B)        
+            for itp, tp in enumerate(tprange):
+                for iq in range(self.qmpgrid.nkpoints):
+                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
