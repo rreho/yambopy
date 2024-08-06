@@ -14,7 +14,7 @@ class CoulombPotentials:
     alpha = -(0.0904756) * 10 ** 3
     pi = np.pi
 
-    def __init__(self, ngrid, lattice, v0 =0.0, lc = 15.0, w=1.0, r0=1.0, tolr=0.001, ediel=[1.0,1.0,1.0]):
+    def __init__(self, ngrid, lattice, v0=0.0, lc=15.0, w=1.0, r0=1.0, tolr=0.001, ediel=[1.0,1.0,1.0]):
         print('''Warning! CoulombPotentials works with atomic units and return energy in eV \n
                 Check consistency of units in the methods, they have not been properly tested
               ''')
@@ -61,7 +61,7 @@ class CoulombPotentials:
 
     def vcoul(self, kpt1, kpt2):
         modk = modvec(kpt1, kpt2)
-        vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
+        vbz = self.rec_vol
         ed = self.ediel[1]  # The dielectric constant is set to 1.0
         if modk < self.tolr:
             vcoul = self.v0

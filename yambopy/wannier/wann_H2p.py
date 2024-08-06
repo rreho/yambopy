@@ -570,7 +570,7 @@ class H2P():
                         *np.vdot(self.eigvec[ikplusq, : ,ic],self.eigvec[ik,:, iv])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ikpplusq,:, icp])
         return K_ex
         
-    def get_eps(self, hlm, emin, emax, estep, eta, with_bse=True):
+    def get_eps(self, hlm, emin, emax, estep, eta):
         '''
         Compute microscopic dielectric function 
         dipole_left/right = l/r_residuals.
@@ -582,13 +582,13 @@ class H2P():
         for i in range(eps.shape[0]):
             np.fill_diagonal(eps[i,:,:], 1)
         # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
-        if(self.nq != 1): 
-            h2peigvec_vck=self.h2peigvec_vck[self.q0index]
-            h2peigv_vck = self.h2peigv_vck[self.q0index]
-            h2peigvec = self.h2peigvec[self.q0index]
-            h2peigv = self.h2peigv[self.q0index]
+        # if(self.nq != 1): 
+        #     h2peigvec_vck=self.h2peigvec_vck[self.q0index]
+        #     h2peigv_vck = self.h2peigv_vck[self.q0index]
+        #     h2peigvec = self.h2peigvec[self.q0index]
+        #     h2peigv = self.h2peigv[self.q0index]
 
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=h2peigvec_vck, method='real', with_bse=with_bse)
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=self.h2peigvec_vck, method='real')
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
         self.dipoles = tb_dipoles.dipoles
