@@ -7,7 +7,7 @@ from yambopy.wannier.wann_utils import *
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self , nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, BSE_table, h2peigvec = None, method = 'real', rmn = None):
+                 eta, hlm, T_table, BSE_table, h2peigvec_vck = None, method = 'real', rmn = None):
         # hk, hlm are TBMODEL hamiltonians
         self.ntransitions = nc*nv*nkpoints
         self.nbsetransitions = bse_nc*bse_nv*nkpoints
@@ -39,10 +39,10 @@ class TB_dipoles():
         #[nkpoints,3,nbands,nbands]
         # self.dipoles = self._get_dipoles(method)
         # self.d_knm = self._get_dipoles_nm(method)
-        if (h2peigvec is not None):
-            self.h2peigvec = h2peigvec
+        if (h2peigvec_vck is not None):
+            self.h2peigvec = h2peigvec_vck
             # self.dipoles_bse = self._get_dipoles_bse(method)
-            self.T_table = BSE_table
+            self.BSE_table = BSE_table
             self._get_dipoles_bse(method=method)
         else:
             self._get_dipoles(method=method)
@@ -70,39 +70,53 @@ class TB_dipoles():
             import time
             print("Starting dipole matrix formation.\n")
             t0 = time.time()
+            dipoles_kcv = np.zeros((self.nkpoints,self.nb,self.nb,3),dtype=np.complex128)
+            for t in range(0,self.ntransitions):
+                ik = self.T_table[t][0]
+                iv = self.T_table[t][1]
+                ic = self.T_table[t][2]
+                w = self.eigv[ik,ic]
+                E = self.eigv[ik,ic]
+                GR = GreensFunctions(w=w, E=E, eta=self.eta).GR
+                dipoles_kcv[ik, ic, iv,0] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                dipoles_kcv[ik, ic, iv,1] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                dipoles_kcv[ik, ic, iv,2] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
 
-            # Determine the dimension of hlm
-            dim_hlm = 3 if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
+            self.dipoles_kcv = dipoles_kcv
+            # # Determine the dimension of hlm
+            # dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
 
-            # Extract k, v, c from T_table
-            k_indices, v_indices, c_indices = self.T_table.T
+            # # Extract k, v, c from T_table
+            # k_indices, v_indices, c_indices = self.T_table.T
 
-            # Compute Green's function for all transitions
-            w = self.eigv[k_indices, c_indices]
-            E = self.eigv[k_indices, v_indices]
-            GR = GreensFunctions(w=w, E=E, eta=self.eta).GR
+            # # Compute Green's function for all transitions
+            # w = self.eigv[k_indices, c_indices]
+            # E = self.eigv[k_indices, v_indices]
+            # GR = GreensFunctions(w=w, E=E, eta=self.eta).GR
 
-            # Initialize dipoles array
-            dipoles = np.zeros((self.ntransitions, dim_hlm), dtype=np.complex128)
+            # # Initialize dipoles array
+            # dipoles = np.zeros((self.ntransitions, dim_hlm), dtype=np.complex128)
 
-            # Prepare eigenvectors
-            eigvec_c = self.eigvec[k_indices, :, c_indices]
-            eigvec_v = self.eigvec[k_indices, :, v_indices]
-
-            # Compute dipoles
-            for dim in range(dim_hlm):
-                # Compute the dot product
-                dot_product = np.einsum('ij,ijk->ik', eigvec_v, self.hlm[k_indices, :, :, dim])
+            # # Prepare eigenvectors
+            # eigvec_c = self.eigvec[k_indices, :, c_indices]
+            # eigvec_v = self.eigvec[k_indices, :, v_indices]
+            # print('shape eigvec', eigvec_c.shape)
+            # # Compute dipoles
+            # for dim in range(dim_hlm):
+            #     # Compute the dot product
+            #     print('shape hlm',self.hlm[k_indices,:,:,dim].shape)
+            #     dot_product = np.einsum('ijk,ij->ik', self.hlm[k_indices, :, :, dim],eigvec_v)
                 
-                # Compute the vdot and multiply with GR
-                dipoles[:, dim] = GR * np.sum(np.conjugate(eigvec_c) * dot_product, axis=1)
+            #     # Compute the vdot and multiply with GR
+            #     dipoles[:, dim] = GR * np.einsum('ij,jk->i',np.conjugate(eigvec_c),dot_product)
+            #     #* np.sum(np.conjugate(eigvec_c) * dot_product, axis=1)
 
-            # Reshape dipoles to match your original shape
-            final_dipoles = np.zeros((self.ntransitions, self.nkpoints, self.nb, self.nb, 3), dtype=np.complex128)
-            final_dipoles[np.arange(self.ntransitions), k_indices, c_indices, v_indices, :dim_hlm] = dipoles
-            self.dipoles = final_dipoles / (HA2EV ** 3)
-            print("Dipoles matrix computed successfully in serial mode.")
-            print(f"Time for Dipoles matrix formation: {time.time() - t0:.2f}")
+            # # Reshape dipoles to match your original shape
+            # final_dipoles = np.zeros((self.ntransitions, 3), dtype=np.complex128)
+            # final_dipoles[np.arange(self.ntransitions), :dim_hlm] = dipoles
+            # #self.dipoles_kcv = final_dipoles / (HA2EV ** 3)
+            # print("Dipoles matrix computed successfully in serial mode.")
+            # print(f"Time for Dipoles matrix formation: {time.time() - t0:.2f}")
         if (method == 'yambo'):
             dipoles = np.zeros((self.ntransitions, self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
             for n in range(0, self.ntransitions):
@@ -132,43 +146,57 @@ class TB_dipoles():
             import time
             print("Starting BSE dipole matrix formation.\n")
             t0 = time.time()
-
+            dipoles_bse_kcv = np.zeros((self.nkpoints, self.bse_nb,self.bse_nb,3),dtype=np.complex128)
+            for t in range(0,self.nbsetransitions): 
+                ik = self.BSE_table[t][0]
+                iv = self.BSE_table[t][1]
+                ic = self.BSE_table[t][2]
+                w = self.eigv[ik,ic]
+                E = self.eigv[ik,ic]
+                GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
+                GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
+                dipoles_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv,0] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                    np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                dipoles_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv,1] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                    np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                dipoles_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv,2] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                    np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))            
             # Determine the dimension of hlm
-            dim_hlm = 3 if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
+            #dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
 
-            # Extract k, v, c from T_table
-            k_indices, v_indices, c_indices = self.T_table.T
-            # k_indices = np.array(k_indices)[:, np.newaxis]
+            # # Extract k, v, c from T_table
+            # k_indices, v_indices, c_indices = self.T_table.T
+            # # k_indices = np.array(k_indices)[:, np.newaxis]
 
 
-            # Compute Green's function for all transitions
-            E = self.eigv[k_indices, c_indices] - self.eigv[k_indices, v_indices]
-            GR = GreensFunctions(w=E, E=0, eta=self.eta).GR
+            # # Compute Green's function for all transitions
+            # E = self.eigv[k_indices, c_indices] - self.eigv[k_indices, v_indices]
+            # GR = GreensFunctions(w=E, E=0, eta=self.eta).GR
 
-            # Initialize dipoles array
+            # # Initialize dipoles array
+            # # dipoles = np.zeros((self.nbsetransitions, dim_hlm), dtype=np.complex128)
+            # print(self.nbsetransitions)
+            # print(self.bse_nb)
+            # print(self.nkpoints)
+
             # dipoles = np.zeros((self.nbsetransitions, dim_hlm), dtype=np.complex128)
-            print(self.nbsetransitions)
-            print(self.bse_nb)
-            print(self.nkpoints)
+            # # Prepare eigenvectors
+            # eigvec_c = self.eigvec[k_indices, :, c_indices]
+            # eigvec_v = self.eigvec[k_indices, :, v_indices]
 
-            dipoles_cvk = np.zeros((self.nbsetransitions, self.bse_nc, self.bse_nv, self.nkpoints, dim_hlm), dtype=np.complex128)
-            # Prepare eigenvectors
-            eigvec_c = self.eigvec[k_indices, :, c_indices]
-            eigvec_v = self.eigvec[k_indices, :, v_indices]
-
-            # Compute dipoles
-            for dim in range(dim_hlm):
-                # Compute the dot product
-                dot_product = np.einsum('ij,ijk->ik', eigvec_v, self.hlm[k_indices, :, :, dim])
+            # # Compute dipoles
+            # for dim in range(dim_hlm):
+            #     # Compute the dot product
+            #     dot_product = np.einsum('ijk,ij->ik', self.hlm[k_indices, :, :, dim],eigvec_v)
                 
-                # Compute the vdot and multiply with GR and h2peigvec
-                dipoles_cvk[:, :, :, :, dim] = GR * self.h2peigvec[:,:, self.bse_nv-self.nv+v_indices, c_indices-self.nv, k_indices] * np.sum(np.conjugate(eigvec_c) * dot_product, axis=1)
+            #     # Compute the vdot and multiply with GR and h2peigvec
+            #     dipoles_cvk[:, :, :, :, dim] = GR * self.h2peigvec[:,:, self.bse_nv-self.nv+v_indices, c_indices-self.nv, k_indices] * np.sum(np.conjugate(eigvec_c) * dot_product, axis=1)
 
             # Reshape dipoles to match your original shape
-            final_dipoles = np.zeros((self.nbsetransitions, self.bse_nc, self.bse_nv, self.nkpoints, dim_hlm), dtype=np.complex128)
-            final_dipoles[np.arange(self.nbsetransitions), c_indices-self.nv, self.bse_nv-self.nv+v_indices, self.nkpoints,:dim_hlm] = dipoles_cvk
+            # final_dipoles = np.zeros((self.nbsetransitions, self.bse_nc, self.bse_nv, self.nkpoints, dim_hlm), dtype=np.complex128)
+            # final_dipoles[np.arange(self.nbsetransitions), c_indices-self.nv, self.bse_nv-self.nv+v_indices, self.nkpoints,:dim_hlm] = dipoles_cvk
 
-            self.dipoles_bse = final_dipoles
+            self.dipoles_bse_kcv = dipoles_bse_kcv
 
         print("BSE Dipoles matrix computed successfully.")
         print(f"Time for BSE Dipoles matrix formation: {time.time() - t0:.2f}")
