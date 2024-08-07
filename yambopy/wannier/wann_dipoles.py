@@ -40,7 +40,7 @@ class TB_dipoles():
         # self.dipoles = self._get_dipoles(method)
         # self.d_knm = self._get_dipoles_nm(method)
         if (h2peigvec_vck is not None):
-            self.h2peigvec = h2peigvec_vck
+            self.h2peigvec_vck = h2peigvec_vck
             # self.dipoles_bse = self._get_dipoles_bse(method)
             self.BSE_table = BSE_table
             self._get_dipoles_bse(method=method)
@@ -146,21 +146,22 @@ class TB_dipoles():
             import time
             print("Starting BSE dipole matrix formation.\n")
             t0 = time.time()
-            dipoles_bse_kcv = np.zeros((self.nkpoints, self.bse_nb,self.bse_nb,3),dtype=np.complex128)
-            for t in range(0,self.nbsetransitions): 
-                ik = self.BSE_table[t][0]
-                iv = self.BSE_table[t][1]
-                ic = self.BSE_table[t][2]
-                w = self.eigv[ik,ic]
-                E = self.eigv[ik,ic]
-                GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
-                GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
-                dipoles_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv,0] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
-                    np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                dipoles_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv,1] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
-                    np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                dipoles_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv,2] = GR*self.h2peigvec[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
-                    np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))            
+            dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nb,self.bse_nb,3),dtype=np.complex128)
+            for t in range(0,self.nbsetransitions):
+                for tp in range(0,self.nbsetransitions): 
+                    ik = self.BSE_table[tp][0]
+                    iv = self.BSE_table[tp][1]
+                    ic = self.BSE_table[tp][2]
+                    w = self.eigv[ik,ic]
+                    E = self.eigv[ik,ic]
+                    GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
+                    GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
+                    dipoles_bse_kcv[t, ik, ic, iv,0] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                    dipoles_bse_kcv[t,ik, ic, iv,1] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                    dipoles_bse_kcv[t,ik, ic, iv,2] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))            
             # Determine the dimension of hlm
             #dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
 
@@ -227,32 +228,42 @@ class TB_dipoles():
         print('Computing oscillator strenght')
         import time
         t0 = time.time()
-        dipoles = self.dipoles
+        dipoles_bse_kcv = self.dipoles_bse_kcv
         F_kcv = np.zeros((self.ntransitions, 3, 3), dtype=np.complex128)   
-        print(f"nonzero in dipoles: {np.count_nonzero(self.dipoles[:,:,:,:,0])}")
-        print(f"nonzero in dipoles: {np.count_nonzero(self.dipoles[:,:,:,:,1])}")
-        print(f"nonzero in dipoles: {np.count_nonzero(self.dipoles[:,:,:,:,2])}")
+        tmp_F_left = np.zeros((self.ntransitions,3), dtype=np.complex128)
+        tmp_F_right = np.zeros((self.ntransitions,3), dtype=np.complex128)
+
 
         if (method == 'real'):
-            for i, t in enumerate(dipoles):
-                ik = self.T_table[i][0]
-                iv = self.T_table[i][1]
-                ic = self.T_table[i][2]
-                factorRx = t[ik, ic,iv, 0]
-                factorLx = factorRx.conj() 
-                factorRy = t[ik, ic,iv, 1]
-                factorLy = factorRy.conj() 
-                factorRz = t[ik, ic-self.nv, self.bse_nv-self.nv+iv, 2]
-                factorLz = factorRz.conj() 
-                F_kcv[i,0,0] = factorRx*factorLx
-                F_kcv[i,0,1] = factorRx*factorLy
-                F_kcv[i,0,2] = factorRx*factorLz
-                F_kcv[i,1,0] = factorRy*factorLx
-                F_kcv[i,1,1] = factorRy*factorLy
-                F_kcv[i,1,2] = factorRy*factorLz
-                F_kcv[i,2,0] = factorRz*factorLx
-                F_kcv[i,2,1] = factorRz*factorLy
-                F_kcv[i,2,2] = factorRz*factorLz
+            for t in range(0,self.nbsetransitions):
+                for idip, dip_bse_kcv in enumerate(dipoles_bse_kcv):
+                    ik = self.BSE_table[idip][0]
+                    iv = self.BSE_table[idip][1]
+                    ic = self.BSE_table[idip][2]
+                    factorLx = dip_bse_kcv[ik, ic,iv, 0]
+                    factorRx = factorLx.conj() 
+                    factorLy = dip_bse_kcv[ik, ic, iv, 1]
+                    factorRy = factorLy.conj() 
+                    factorLz = dip_bse_kcv[ik, ic, iv, 2]
+                    factorRz = factorLz.conj() 
+                    tmp_F_left[t,0] += factorLx
+                    tmp_F_left[t,1] += factorLy
+                    tmp_F_left[t,2] += factorLz
+                    tmp_F_right[t,0] += factorRx
+                    tmp_F_right[t,1] += factorRy
+                    tmp_F_right[t,2] += factorRz
+
+                F_kcv[t,0,0] = tmp_F_left[0]*tmp_F_right[0]
+                F_kcv[t,0,1] = tmp_F_left[0]*tmp_F_right[1]    
+                F_kcv[t,0,2] = tmp_F_left[0]*tmp_F_right[2]    
+                F_kcv[t,1,0] = tmp_F_left[1]*tmp_F_right[0]
+                F_kcv[t,1,1] = tmp_F_left[1]*tmp_F_right[1]    
+                F_kcv[t,1,2] = tmp_F_left[1]*tmp_F_right[2]
+                F_kcv[t,2,0] = tmp_F_left[2]*tmp_F_right[0]
+                F_kcv[t,2,1] = tmp_F_left[2]*tmp_F_right[1]    
+                F_kcv[t,2,2] = tmp_F_left[2]*tmp_F_right[2]                                        
+
+                
 
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')

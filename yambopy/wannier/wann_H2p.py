@@ -588,8 +588,9 @@ class H2P():
         #     h2peigvec = self.h2peigvec[self.q0index]
         #     h2peigv = self.h2peigv[self.q0index]
 
+        #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table, \
-                                h2peigvec_vck=None, method='real')
+                                h2peigvec_vck=self.h2peigvec_vck, method='real')
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
         self.dipoles = tb_dipoles.dipoles
