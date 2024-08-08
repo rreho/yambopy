@@ -156,11 +156,12 @@ class TB_dipoles():
                     E = self.eigv[ik,ic]
                     GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
                     GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
-                    dipoles_bse_kcv[t, ik, ic, iv,0] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                    #dipoles_bse_kck lives in the BSE kernel subset that's why we use the indices ic-self.nv and self.bse_nv-self.nv+iv
+                    dipoles_bse_kcv[t, ik, ic-self.nv, self.bse_nv-self.nv+iv,0] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
                         np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                    dipoles_bse_kcv[t,ik, ic, iv,1] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                    dipoles_bse_kcv[t,ik, ic-self.nv, self.bse_nv-self.nv+iv,1] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
                         np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                    dipoles_bse_kcv[t,ik, ic, iv,2] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                    dipoles_bse_kcv[t,ik, ic-self.nv, self.bse_nv-self.nv+iv,2] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
                         np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))            
             # Determine the dimension of hlm
             #dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
@@ -221,7 +222,7 @@ class TB_dipoles():
             print('Warning! position gauge not implemented yet')
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
-        self.dipoles = dipoles                        
+            #self.dipoles = dipoles Perhaps if method is yambo we want to store dipoles differently                       
     
     def _get_osc_strength(self,method):
         '''computes osc strength from dipoles'''
@@ -240,11 +241,11 @@ class TB_dipoles():
                     ik = self.BSE_table[idip][0]
                     iv = self.BSE_table[idip][1]
                     ic = self.BSE_table[idip][2]
-                    factorLx = dip_bse_kcv[ik, ic,iv, 0]
+                    factorLx = dip_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv, 0]
                     factorRx = factorLx.conj() 
-                    factorLy = dip_bse_kcv[ik, ic, iv, 1]
+                    factorLy = dip_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv, 1]
                     factorRy = factorLy.conj() 
-                    factorLz = dip_bse_kcv[ik, ic, iv, 2]
+                    factorLz = dip_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv, 2]
                     factorRz = factorLz.conj() 
                     tmp_F_left[t,0] += factorLx
                     tmp_F_left[t,1] += factorLy
@@ -253,15 +254,15 @@ class TB_dipoles():
                     tmp_F_right[t,1] += factorRy
                     tmp_F_right[t,2] += factorRz
 
-                F_kcv[t,0,0] = tmp_F_left[0]*tmp_F_right[0]
-                F_kcv[t,0,1] = tmp_F_left[0]*tmp_F_right[1]    
-                F_kcv[t,0,2] = tmp_F_left[0]*tmp_F_right[2]    
-                F_kcv[t,1,0] = tmp_F_left[1]*tmp_F_right[0]
-                F_kcv[t,1,1] = tmp_F_left[1]*tmp_F_right[1]    
-                F_kcv[t,1,2] = tmp_F_left[1]*tmp_F_right[2]
-                F_kcv[t,2,0] = tmp_F_left[2]*tmp_F_right[0]
-                F_kcv[t,2,1] = tmp_F_left[2]*tmp_F_right[1]    
-                F_kcv[t,2,2] = tmp_F_left[2]*tmp_F_right[2]                                        
+                F_kcv[t,0,0] = tmp_F_left[t,0]*tmp_F_right[t,0]
+                F_kcv[t,0,1] = tmp_F_left[t,0]*tmp_F_right[t,1]    
+                F_kcv[t,0,2] = tmp_F_left[t,0]*tmp_F_right[t,2]    
+                F_kcv[t,1,0] = tmp_F_left[t,1]*tmp_F_right[t,0]
+                F_kcv[t,1,1] = tmp_F_left[t,1]*tmp_F_right[t,1]    
+                F_kcv[t,1,2] = tmp_F_left[t,1]*tmp_F_right[t,2]
+                F_kcv[t,2,0] = tmp_F_left[t,2]*tmp_F_right[t,0]
+                F_kcv[t,2,1] = tmp_F_left[t,2]*tmp_F_right[t,1]    
+                F_kcv[t,2,2] = tmp_F_left[t,2]*tmp_F_right[t,2]                                        
 
                 
 

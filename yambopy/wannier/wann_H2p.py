@@ -340,7 +340,7 @@ class H2P():
 
     def _buildH2P_fromcpot(self):
         'build resonant h2p from model coulomb potential'
-        if (self.nq == 1):        
+        if (self.nq_double == 1):        
             H2P = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
             for t in range(self.dimbse):
                 for tp in range(self.dimbse):
@@ -360,9 +360,9 @@ class H2P():
                         #else:                                            
             return H2P
         else:
-            H2P = np.zeros((self.nq,self.dimbse,self.dimbse),dtype=np.complex128)
+            H2P = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
             t0 = time()
-            for iq in range(self.nq):
+            for iq in range(self.nq_double):
                 for t in range(self.dimbse):
                     for tp in range(self.dimbse):
                         ik = self.BSE_table[t][0]
@@ -582,18 +582,18 @@ class H2P():
         for i in range(eps.shape[0]):
             np.fill_diagonal(eps[i,:,:], 1)
         # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
-        # if(self.nq != 1): 
-        #     h2peigvec_vck=self.h2peigvec_vck[self.q0index]
-        #     h2peigv_vck = self.h2peigv_vck[self.q0index]
-        #     h2peigvec = self.h2peigvec[self.q0index]
-        #     h2peigv = self.h2peigv[self.q0index]
+        if(self.nq_double != 1): 
+            h2peigvec_vck=self.h2peigvec_vck[self.q0index]
+            h2peigv_vck = self.h2peigv_vck[self.q0index]
+            h2peigvec = self.h2peigvec[self.q0index]
+            h2peigv = self.h2peigv[self.q0index]
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table, \
-                                h2peigvec_vck=self.h2peigvec_vck, method='real')
+                                h2peigvec_vck=h2peigvec_vck, method='real')
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
-        self.dipoles = tb_dipoles.dipoles
+        #self.dipoles = tb_dipoles.dipoles # ??? gargabe now
 
         F_kcv = tb_dipoles.F_kcv
         self.F_kcv = F_kcv
@@ -602,11 +602,11 @@ class H2P():
         #pl = eps
         for ies, es in enumerate(w):
             for t in range(0,self.dimbse):
-                eps[ies,:,:] += 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(self.h2peigv[t]-es)/(np.abs(es-self.h2peigv[t])**2+eta**2) \
-                    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-self.h2peigv[t])**2+eta**2) 
+                eps[ies,:,:] += 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
                 #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                 #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-        print('Excitonic Direct Ground state: ', self.h2peigv[0], ' [eV]')
+        print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
         #self.pl = pl
         # self.w = w
         # self.eps_0 = eps_0
