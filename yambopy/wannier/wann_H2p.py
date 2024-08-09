@@ -843,23 +843,22 @@ class H2P():
                 f_out.write(f'\t{iq+1}\t{iqpb+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
         f_out.write('end nnkpts')
 
-    def write_exc_amn(self,infile, seedname='wannier90_exc', trange = [0]):
-        self.projection_infile = infile
+    def write_exc_amn(self, seedname='wannier90_exc', trange = [0], tprange = [0]):
         if (self.Amn is None):
-            self.get_exc_amn(trange)
+            self.get_exc_amn(trange, tprange)
 
         f_out = open(f'{seedname}.amn', 'w')
 
         from datetime import datetime
-        lrange = np.arange(0,self.Amn.shape[1])
+
         current_datetime = datetime.now()
         date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
         f_out.write(f'Created on {date_time_string}\n')
-        f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{len(lrange)}\n') 
+        f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{len(tprange)}\n') 
         for iq, q in enumerate(self.kindices_table):
-            for ilp,lp in enumerate(lrange):
+            for itp,tp in enumerate(tprange):
                 for it, t in enumerate(trange):                
-                    f_out.write(f'\t{it+1}\t{ilp+1}\t{iq+1}\t{np.real(self.Amn[it,ilp,iq])}\t\t{np.imag(self.Amn[it,ilp,iq])}\n')
+                    f_out.write(f'\t{it+1}\t{itp+1}\t{iq+1}\t{np.real(self.Amn[it,itp,iq])}\t\t{np.imag(self.Amn[it,itp,iq])}\n')
 
     def _get_BSE_table(self):
         ntransitions = self.nk*self.bse_nc*self.bse_nv
