@@ -597,6 +597,8 @@ class H2P():
 
         F_kcv = tb_dipoles.F_kcv
         self.F_kcv = F_kcv
+        # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
+        self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
         # compute eps and pl
         #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
         #pl = eps

@@ -127,12 +127,12 @@ class TBMODEL(tbmodels.Model):
             self.pos = pos
             return pos
 
-    def get_hlm (self ,lat, hr, from_hr=True):
+    def get_hlm(self ,lat, hr, from_hr=True):
         ''' computes light mater interaction hamiltonian for grid of points
         k is one k-point in reduced coordinates
         hrx = P_\alpha = dH(k)\dk_\alpha = \sum_{R=1}^N e^{ikR}iR_\alpha H_{R}
         here we get iR_\alpha*H_{R} as h_x,hy,hz
-        ''' 
+        '''
   
         hlm = np.zeros((self.mpgrid.nkpoints,hr.num_wann, hr.num_wann,3), dtype=np.complex128)       
   
@@ -175,14 +175,14 @@ class TBMODEL(tbmodels.Model):
             if (np.array_equal(irpos[i],[0.0,0.0,0.0])):
                 hr_mn_p = np.copy(hr.HR_mn[i,:,:])
                 np.fill_diagonal(hr_mn_p,complex(0.0))
-                hlm_k[:,:,0] = hlm_k[:,:,0] +kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] = hlm_k[:,:,1] +kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] = hlm_k[:,:,2] +kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,0] = kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] = kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] = kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
             else:
                 hr_mn_p = hr.HR_mn[i,:,:]
-                hlm_k[:,:,0] = hlm_k[:,:,0] +kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] = hlm_k[:,:,1] +kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] = hlm_k[:,:,2] +kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,0] = kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] = kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] = kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
         
         return hlm_k
 

@@ -146,7 +146,7 @@ class TB_dipoles():
             import time
             print("Starting BSE dipole matrix formation.\n")
             t0 = time.time()
-            dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nb,self.bse_nb,3),dtype=np.complex128)
+            dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
             for t in range(0,self.nbsetransitions):
                 for tp in range(0,self.nbsetransitions): 
                     ik = self.BSE_table[tp][0]
@@ -157,11 +157,11 @@ class TB_dipoles():
                     GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
                     GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
                     #dipoles_bse_kck lives in the BSE kernel subset that's why we use the indices ic-self.nv and self.bse_nv-self.nv+iv
-                    dipoles_bse_kcv[t, ik, ic-self.nv, self.bse_nv-self.nv+iv,0] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                    dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.nv,0] = GR*self.h2peigvec_vck[t,iv-self.nv,ic-self.nv,ik]* \
                         np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                    dipoles_bse_kcv[t,ik, ic-self.nv, self.bse_nv-self.nv+iv,1] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                    dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.nv,1] = GR*self.h2peigvec_vck[t,iv-self.nv,ic-self.nv,ik]* \
                         np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                    dipoles_bse_kcv[t,ik, ic-self.nv, self.bse_nv-self.nv+iv,2] = GR*self.h2peigvec_vck[t,self.bse_nv-self.nv+iv,ic-self.nv,ik]* \
+                    dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.nv,2] = GR*self.h2peigvec_vck[t,iv-self.nv,ic-self.nv,ik]* \
                         np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))            
             # Determine the dimension of hlm
             #dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
@@ -230,22 +230,23 @@ class TB_dipoles():
         import time
         t0 = time.time()
         dipoles_bse_kcv = self.dipoles_bse_kcv
-        F_kcv = np.zeros((self.ntransitions, 3, 3), dtype=np.complex128)   
-        tmp_F_left = np.zeros((self.ntransitions,3), dtype=np.complex128)
-        tmp_F_right = np.zeros((self.ntransitions,3), dtype=np.complex128)
+        F_kcv = np.zeros((self.nbsetransitions, 3, 3), dtype=np.complex128)   
+
 
 
         if (method == 'real'):
             for t in range(0,self.nbsetransitions):
+                tmp_F_left = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
+                tmp_F_right = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
                 for idip, dip_bse_kcv in enumerate(dipoles_bse_kcv):
                     ik = self.BSE_table[idip][0]
                     iv = self.BSE_table[idip][1]
                     ic = self.BSE_table[idip][2]
-                    factorLx = dip_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv, 0]
+                    factorLx = dip_bse_kcv[ik, ic-self.nv, iv-self.nv, 0]
                     factorRx = factorLx.conj() 
-                    factorLy = dip_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv, 1]
+                    factorLy = dip_bse_kcv[ik, ic-self.nv, iv-self.nv, 1]
                     factorRy = factorLy.conj() 
-                    factorLz = dip_bse_kcv[ik, ic-self.nv, self.bse_nv-self.nv+iv, 2]
+                    factorLz = dip_bse_kcv[ik, ic-self.nv, iv-self.nv, 2]
                     factorRz = factorLz.conj() 
                     tmp_F_left[t,0] += factorLx
                     tmp_F_left[t,1] += factorLy
