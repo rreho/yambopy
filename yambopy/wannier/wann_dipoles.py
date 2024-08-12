@@ -225,7 +225,9 @@ class TB_dipoles():
             #self.dipoles = dipoles Perhaps if method is yambo we want to store dipoles differently                       
     
     def _get_osc_strength(self,method):
-        '''computes osc strength from dipoles'''
+        '''computes osc strength from dipoles
+        F_{\alpha, \beta}^{n, BSE} = ( \Sum_c,v,k = \dfrac{A^n_{c,v,k,0} < c,k | P_{\alpha} |v,k >}{E_{c,k} - E{v,k} + i \eta_1} ) * c.c
+        '''
         print('Computing oscillator strenght')
         import time
         t0 = time.time()
@@ -238,15 +240,15 @@ class TB_dipoles():
             for t in range(0,self.nbsetransitions):
                 tmp_F_left = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
                 tmp_F_right = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
-                for idip, dip_bse_kcv in enumerate(dipoles_bse_kcv):
+                for idip, _ in enumerate(dipoles_bse_kcv):
                     ik = self.BSE_table[idip][0]
                     iv = self.BSE_table[idip][1]
                     ic = self.BSE_table[idip][2]
-                    factorLx = dip_bse_kcv[ik, ic-self.nv, iv-self.nv, 0]
+                    factorLx = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.nv, 0]
                     factorRx = factorLx.conj() 
-                    factorLy = dip_bse_kcv[ik, ic-self.nv, iv-self.nv, 1]
+                    factorLy = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.nv, 1]
                     factorRy = factorLy.conj() 
-                    factorLz = dip_bse_kcv[ik, ic-self.nv, iv-self.nv, 2]
+                    factorLz = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.nv, 2]
                     factorRz = factorLz.conj() 
                     tmp_F_left[t,0] += factorLx
                     tmp_F_left[t,1] += factorLy
