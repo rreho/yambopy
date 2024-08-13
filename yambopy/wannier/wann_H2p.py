@@ -279,6 +279,7 @@ class H2P():
         
     def _buildH2Peigv(self):
         if self.skip_diago:
+            H2P = None
             full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
 
             if self.nq_double == 1:
@@ -332,7 +333,7 @@ class H2P():
                 tmp_t = np.arange(0,self.dimslepc)
                 #first t index should be called normally, second with inverse_aux_t
                 h2peigvec_vck[idx, tmp_t[:,None], self.bse_nv - self.nv + ivp_indices[None,:], icp_indices[None,:] - self.nv, ikp_indices[None,:]] = tmph2peigvec[:, :]
-
+            self.H2P = H2P
             print(f"Reading excitonic eigenvalues and eigenvectors in {time() - t0:.2f} seconds.")
             return h2peigv, h2peigvec, h2peigv_vck, h2peigvec_vck
         else:
@@ -401,7 +402,7 @@ class H2P():
             h2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
             (self.h2peigv, self.h2peigvec) = np.linalg.eigh(self.H2P)
             self.deg_h2peigvec = self.find_degenerate_eigenvalues(self.h2peigv, self.h2peigvec)
-            #(self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec)
+            #(self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec)  # this needs fixing
             for t in range(self.dimbse):
                 ik, iv, ic = self.BSE_table[t]
                 h2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = self.h2peigvec[:,t]   
@@ -428,7 +429,7 @@ class H2P():
                 tmph2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
                 (tmph2peigv, tmph2peigvec) = np.linalg.eigh(self.H2P[iq])
                 deg_h2peigvec = np.append(deg_h2peigvec, self.find_degenerate_eigenvalues(tmph2peigv, tmph2peigvec))
-                #(self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec)
+                # (self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec) # this needs fixing
                 for t in range(self.dimbse):
                     ik, iv, ic = self.BSE_table[t]
                     tmph2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigvec[:, t]   
@@ -701,7 +702,6 @@ class H2P():
             ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
             ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
             ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
-
             term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
             term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
@@ -719,6 +719,10 @@ class H2P():
         tprange = np.array(tprange)
 
         il, ilp, iq, ib = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), np.arange(self.qmpgrid.nnkpts), indexing='ij')
+        print(f"eigvec count: {np.count_nonzero(self.eigvec)}")
+        print(f"h2peigvec_vck count: {np.count_nonzero(self.h2peigvec_vck)}")
+
+
 
         vectorized_overlap_ttp = np.vectorize(self._get_exc_overlap_ttp, signature='(),(),(),(),()->()')
         Mssp = vectorized_overlap_ttp(il, ilp, iq, self.kindices_table[iq], ib)
