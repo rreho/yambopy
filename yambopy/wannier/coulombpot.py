@@ -40,7 +40,11 @@ class CoulombPotentials:
         alpha3 = 0.0
         lc = self.lc
         ediel = self.ediel
-        a0 = self.lattice.alat[0]/2+self.lattice.alat[1]/2
+        vsize = np.zeros(3,dtype = np.float128)
+        vsize[0] = np.linalg.norm(self.rlat[0])
+        vsize[1] = np.linalg.norm(self.rlat[1])
+        vsize[2] = np.linalg.norm(self.rlat[2])
+        a0 = vsize[0]/2+vsize[1]/2        
         modk = modvec(kpt1, kpt2)
         #compute area of unit cell
         vc = np.linalg.norm(np.cross(self.lattice.alat[0],self.lattice.alat[1]))
