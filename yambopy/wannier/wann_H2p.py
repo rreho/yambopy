@@ -87,9 +87,10 @@ class H2P():
     '''Build the 2-particle resonant Hamiltonian H2P
         Easy to use only requires the model as input. 
     '''
-    def __init__(self, model, savedb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
+    def __init__(self, model, savedb_path=None, qmpgrid=None, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
                  ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8):
+                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,\
+                    nbandsv=1,nbandsc=1):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -121,9 +122,16 @@ class H2P():
         except ValueError:
             print('Warning! Q=0 index not found')
         self.dimbse = self.bse_nv*self.bse_nc*self.nk
-        self.savedb = YamboSaveDB.from_db_file(f'{savedb_path}')
-        self.latdb = YamboLatticeDB.from_db_file(f'{savedb_path}/ns.db1')
-        self.offset_nv = self.savedb.nbandsv-self.nv  
+        if savedb_path:
+            self.savedb = YamboSaveDB.from_db_file(f'{savedb_path}')
+            self.latdb = YamboLatticeDB.from_db_file(f'{savedb_path}/ns.db1')
+            self.offset_nv = self.savedb.nbandsv-self.nv
+        else:
+            self.savedb = None
+            self.latdb = None
+            self.nbandsv = nbandsv
+            self.offset_nv = self.nbandsv = self.nv
+          
         self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
         self.ctype = ctype
@@ -144,7 +152,7 @@ class H2P():
             self.f_kn = f_kn
         if(self.method=='model' and cpot is not None):
             (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
-            (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
+            #(self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE
             print('\n Building H2P from model Coulomb potentials. Default is v2dt2\n')
             self.cpot = cpot
             self.H2P = self._buildH2P_fromcpot()
@@ -743,7 +751,7 @@ class H2P():
     def _get_amn_ttp(self, t, l , iq,ikq, B):
         if(self.method=='skip-diago'):
             Ammn_ttp=0
-            offset_nb = self.savedb.nbandsv-self.nv
+            offset_nb = self.offset_nv
             for il in range(self.dimslepc):                
                 ik = self.BSE_table[self.inverse_aux_t[il]][0]
                 iv = self.BSE_table[self.inverse_aux_t[il]][1] 
