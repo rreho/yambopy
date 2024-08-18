@@ -319,7 +319,7 @@ class TBMODEL(tbmodels.Model):
     def _get_occupations(cls, nk, nb, eigv, fermie):
         occupations = np.zeros((nk, nb))
         occupations = fermi_dirac(eigv,fermie)
-        cls.f_kn = np.real(occupations)
+        cls.f_kn = np.complex128(occupations)
     
     def _build_Umn(self):
         '''A = PDA^\dagger where D is a diagonal matrix but then D = P\daggerA P. The eigenvectors obtained via numpy diagonalization

@@ -348,13 +348,13 @@ class tb_symm_grid():
         return ibzgrid, fullbzgrid
     
 class mp_grid(GridUtilities):
-    def __init__(self, nx, ny, nz,latdb, nnkpts=8):
+    def __init__(self, nx, ny, nz,latdb, nnkpts=8, shift = np.array([0.0,0.0,0.0])):
         super().__init__()
         self.nnkpts = 8 
         self.nx = nx 
         self.ny = ny 
         self.nz = nz
-        self.k = self._generate_k_grid()
+        self.k = self._generate_k_grid(shift)
         self.nkpoints = len(self.k)
         self.b_grid = self._find_neighbors()
         self.iG = np.zeros((self.nkpoints*8,3),dtype=int) # for now hard coded to zeros. Note also that when we
@@ -363,14 +363,14 @@ class mp_grid(GridUtilities):
         # We might want in the future to define a general lattice class.
         self.car_kpoints = red_car(self.k, self.latdb.rec_lat)
 
-    def _generate_k_grid(self):
+    def _generate_k_grid(self,shift):
         # Generate the k-point grid using np.meshgrid and ravel
         ix, iy, iz = np.meshgrid(np.arange(self.nx), np.arange(self.ny), np.arange(self.nz), indexing='ij')
-        kx = ix.ravel() / self.nx - 0.5
-        ky = iy.ravel() / self.ny - 0.5
-        kz = iz.ravel() / self.nz - 0.5 
+        kx = ix.ravel() / self.nx - 0.5 + shift[0]
+        ky = iy.ravel() / self.ny - 0.5 + shift[1]
+        kz = iz.ravel() / self.nz - 0.5 + shift[2] 
         k_grid = np.vstack((kx, ky, kz)).T
-        return k_grid        
+        return self.fold_into_bz(k_grid)        
 
     def _find_neighbors(self):
         # Initialize the b_grid array
@@ -393,3 +393,11 @@ class mp_grid(GridUtilities):
         
         return b_grid   
     
+class k_list(GridUtilities):
+    def __init__(self, qlist, latdb, nnkpts = 8):
+        self.nnkpts = 8
+        self.k = qlist
+        self.nkpoints = len(self.k)
+        self.iG = np.zeros((self.nkpoints*8,3),dtype=int)
+        self.latdb = latdb # note here we pass tmp_lat that I defined in the example notebook.
+        self.car_kpoints = red_car(self.k, self.latdb.rec_lat)
