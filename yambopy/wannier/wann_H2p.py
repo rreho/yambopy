@@ -431,7 +431,7 @@ class H2P():
                         # if (self.TD==True):
                         #     H2P[iq,t,tp] = 0.0
                     else:
-                        H2P[iq,t,tp] =(self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_Ex - K_direct)
+                        H2P[iq,t,tp] =(self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_direct - K_Ex)
         return H2P                    
 
 
