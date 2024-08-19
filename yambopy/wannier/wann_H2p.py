@@ -90,7 +90,8 @@ class H2P():
     def __init__(self, model, savedb_path=None, qmpgrid=None, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
                  ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
                  TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,\
-                    nbandsv=1,nbandsc=1, bse_bands=False, qlist=np.array([0.0,0.0,0.0])):
+                    nbandsv=1,nbandsc=1, bse_bands=False, qlist=np.array([0.0,0.0,0.0]),\
+                        K_ex= 0.0, K_d = 0.0):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, savedb, latdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -158,6 +159,8 @@ class H2P():
                 print('computing bse bands ')
                 self.qlist = qlist
                 self.model = model 
+                self.K_ex = K_ex
+                self.K_d = K_d
                 self.H2P = self._bse_bands()              
             else:
                 (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
@@ -424,7 +427,7 @@ class H2P():
                     K_direct = self._getKdq(ik,iv,ic,ikp,ivp,icp,iq) 
                     K_Ex = self._getKEx(ik,iv,ic,ikp,ivp,icp,iq)
                     if(t == tp):
-                        H2P[iq,t,tp] = self.eigv[ik,ic]-self.eigv_kminusq[ikminusq,iv] + (self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_Ex - K_direct)
+                        H2P[iq,t,tp] = self.eigv[ik,ic]-self.eigv_kminusq[ikminusq,iv] + (self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_direct - K_Ex)
                         # if (self.TD==True):
                         #     H2P[iq,t,tp] = 0.0
                     else:
@@ -503,7 +506,7 @@ class H2P():
     
     def _getKd(self,ik,iv,ic,ikp,ivp,icp):
         if (self.ktype =='IP'):
-            K_direct = 0.0
+            K_direct = self.K_d*np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])
 
             return K_direct
         
@@ -539,8 +542,10 @@ class H2P():
         return K_direct
 
     def _getKdq(self,ik,iv,ic,ikp,ivp,icp,iq):
-        if (self.ktype =='IP'):
-            K_direct = 0.0
+        if (self.ktype =='IP' and not self.bse_bands):
+            K_direct = self.K_d * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+        if (self.ktype =='IP' and self.bse_bands):
+            K_direct = self.K_d * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec_kminusq[ik,:, iv])
 
             return K_direct
         
@@ -615,8 +620,10 @@ class H2P():
         return K_direct
     
     def _getKEx(self,ik,iv,ic,ikp,ivp,icp,iq):
-        if (self.ktype =='IP'):
-            K_ex = 0.0
+        if (self.ktype =='IP' and not self.bse_bands):
+            K_ex = self.K_ex * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
+        if (self.ktype =='IP' and self.bse_bands):
+            K_ex = self.K_ex * np.vdot(self.eigvec[ik,:, ic],self.eigvec_kminusq[ik,:, iv])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec[ikp,: ,icp])
 
             return K_ex
         if(self.method=='model' and not self.bse_bands):
