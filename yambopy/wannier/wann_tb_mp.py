@@ -363,14 +363,19 @@ class mp_grid(GridUtilities):
         # We might want in the future to define a general lattice class.
         self.car_kpoints = red_car(self.k, self.latdb.rec_lat)
 
-    def _generate_k_grid(self,shift):
-        # Generate the k-point grid using np.meshgrid and ravel
+    def _generate_k_grid(self, shift = np.array([0.0,0.0,0.0])):
+        # Generate the Monkhorst-Pack k-point grid
+        # ix, iy, iz are indices running from 0 to nx-1, ny-1, nz-1 respectively
         ix, iy, iz = np.meshgrid(np.arange(self.nx), np.arange(self.ny), np.arange(self.nz), indexing='ij')
-        kx = ix.ravel() / self.nx - 0.5 + shift[0]
-        ky = iy.ravel() / self.ny - 0.5 + shift[1]
-        kz = iz.ravel() / self.nz - 0.5 + shift[2] 
-        k_grid = np.vstack((kx, ky, kz)).T
-        return self.fold_into_bz(k_grid)        
+        # Calculate the grid point positions in reciprocal space
+        kx = (ix ) / self.nx  + shift[0]
+        ky = (iy ) / self.ny  + shift[1]
+        kz = (iz ) / self.nz  + shift[2]
+        
+        # Stack the kx, ky, kz arrays to form the k-grid
+        k_grid = np.vstack((kx.ravel(), ky.ravel(), kz.ravel())).T
+        
+        return k_grid  
 
     def _find_neighbors(self):
         # Initialize the b_grid array
@@ -382,14 +387,13 @@ class mp_grid(GridUtilities):
         # Iterate over all k-points to find their neighbors
         for i in range(self.nkpoints):
             ix, iy, iz = np.unravel_index(i, (self.nx, self.ny, self.nz))
-            
             # Calculate neighbor indices with periodic boundary conditions
             for j, shift in enumerate(shifts):
                 nix = (ix + shift[0]) % self.nx
                 niy = (iy + shift[1]) % self.ny
                 niz = (iz + shift[2]) % self.nz
                 neighbor_index = np.ravel_multi_index((nix, niy, niz), (self.nx, self.ny, self.nz))
-                b_grid[8*i+j] = self.fold_into_bz(self.k[neighbor_index]-self.k[i])
+                b_grid[8*i+j] = self.k[neighbor_index]-self.k[i]
         
         return b_grid   
     
