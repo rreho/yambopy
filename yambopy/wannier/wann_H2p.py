@@ -5,6 +5,7 @@ from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
 from yambopy.wannier.wann_io import AMN
+from yambopy.lattice import modvec
 from time import time
 import gc
 
@@ -146,6 +147,8 @@ class H2P():
         self.skip_diago = False
         self.nproc = nproc
         self.bse_bands = bse_bands
+        self.K_ex = K_ex
+        self.K_d = K_d        
         # consider to build occupations here in H2P with different occupation functions
         if (f_kn == None):
             self.f_kn = np.zeros((self.nk,self.nb),dtype=np.complex128)
@@ -159,12 +162,10 @@ class H2P():
                 print('computing bse bands ')
                 self.qlist = qlist
                 self.model = model 
-                self.K_ex = K_ex
-                self.K_d = K_d
                 self.H2P = self._bse_bands()              
             else:
                 (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
-                (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE                
+                #(self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.savedb) # used in building BSE                
                 self.H2P = self._buildH2P_fromcpot()
 
         elif(self.method=='kernel' and cpot is None):
@@ -546,7 +547,7 @@ class H2P():
         if (self.ktype =='IP' and not self.bse_bands):
             K_direct = self.K_d * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
         if (self.ktype =='IP' and self.bse_bands):
-            K_direct = self.K_d * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec_kminusq[ik,:, iv])
+            K_direct = self.K_d * np.cos(modvec(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:]))#np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec_kminusq[ik,:, iv])
 
             return K_direct
         
