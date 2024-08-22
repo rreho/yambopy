@@ -217,9 +217,12 @@ class GridUtilities:
         self.qplaquette_grid = qplaquette_grid
 
 class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack, GridUtilities):
-    def __init__(self, nx, ny, nz, latdb, *args, **kwargs):
+    def __init__(self, nx, ny, nz, latdb,shift=np.array([0.0,0.0,0.0]), *args, **kwargs):
         #remember to pass with trs=False
         super().__init__(*args, **kwargs)
+        self._k_override = None
+        if shift is not None:
+            self.k = self.fold_into_bz(self.k+shift)
         self.car_kpoints = self.tocartesian(self.k)
         self.nkpoints = len(self.k)
         self.nnkpts = 8
@@ -230,8 +233,22 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack, GridUtilities):
         self.iG = np.zeros((self.nkpoints*8,3),dtype=int) # for now hard coded to zeros. Note also that when we
         # fold into bz we get some G vctors which we don't care for now
         self.latdb = latdb # note here we pass tmp_lat that I defined in the example notebook.
+        self.lat = latdb.lat
+        self.rlat = latdb.rec_lat        
         # We might want in the future to define a general lattice class.
         #self.car_kpoints = red_car(self.k, self.latdb.rec_lat)
+
+    @property
+    def k(self):
+        # Return the overridden value if it exists, otherwise return the parent class's k
+        if self._k_override is not None:
+            return self._k_override
+        return super().k
+
+    @k.setter
+    def k(self, value):
+        # Allow setting a new value for k, which will override the parent class's k
+        self._k_override = value
 
     def _find_neighbors(self):
         # Initialize the b_grid array
