@@ -231,7 +231,7 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack, GridUtilities):
         # fold into bz we get some G vctors which we don't care for now
         self.latdb = latdb # note here we pass tmp_lat that I defined in the example notebook.
         # We might want in the future to define a general lattice class.
-        self.car_kpoints = red_car(self.k, self.latdb.rec_lat)
+        #self.car_kpoints = red_car(self.k, self.latdb.rec_lat)
 
     def _find_neighbors(self):
         # Initialize the b_grid array

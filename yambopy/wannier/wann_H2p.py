@@ -1,5 +1,5 @@
 import numpy as np
-from yambopy.wannier.wann_tb_mp import tb_Monkhorst_Pack, mp_grid
+from yambopy.wannier.wann_tb_mp import tb_Monkhorst_Pack
 from yambopy.wannier.wann_utils import *
 from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
@@ -411,7 +411,10 @@ class H2P():
         t0 = time()
         for iq, q in enumerate(self.qlist.k):
             # generate k-q grid
-            kminusq_grid = mp_grid(self.kmpgrid.nx, self.kmpgrid.ny,self.kmpgrid.nz, self.kmpgrid.latdb, shift = q)
+            kminusq_grid = tb_Monkhorst_Pack(nx = self.kmpgrid.nx, ny = self.kmpgrid.ny, nz = self.kmpgrid.nz, \
+                                            latdb = self.kmpgrid.latdb, nkpt = [self.kmpgrid.nx, self.kmpgrid.ny, self.kmpgrid.nz],\
+                                            parent = self.kmpgrid.latdb.lat, displacement = q,\
+                                            trs=False)
             eigv_kminusq, eigvec_kminusq = self.model.pythtb_model.solve_all(kminusq_grid.k, eig_vectors=True)
             self.eigv_kminusq = np.complex128(eigv_kminusq.swapaxes(0,1))
             self.eigvec_kminusq = np.complex128(eigvec_kminusq.transpose(1, 2, 0))
@@ -545,13 +548,18 @@ class H2P():
 
     def _getKdq(self,ik,iv,ic,ikp,ivp,icp,iq):
         if (self.ktype =='IP' and not self.bse_bands):
+            ikplusq = self.kplusq_table[ik,iq]
+            ikminusq = self.kminusq_table[ik,iq]      
+            ikpplusq = self.kplusq_table[ikp,iq]
+            ikpminusq = self.kminusq_table[ikp,iq]                  
             K_direct = self.K_d * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            return K_direct
         if (self.ktype =='IP' and self.bse_bands):
-            K_direct = self.K_d * np.cos(modvec(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:]))#np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec_kminusq[ik,:, iv])
+            K_direct = self.K_d * np.cos(modvec(self.kmpgrid.k[ik,:],self.kmpgrid.k[ikp,:]))#np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec_kminusq[ik,:, iv])
 
             return K_direct
         
-        if (self.method =='model' and not self.bse_bands):
+        if (self.method =='model' and not self.bse_bands and not self.ktype =='IP'):
             ikplusq = self.kplusq_table[ik,iq]
             ikminusq = self.kminusq_table[ik,iq]      
             ikpplusq = self.kplusq_table[ikp,iq]
@@ -623,12 +631,17 @@ class H2P():
     
     def _getKEx(self,ik,iv,ic,ikp,ivp,icp,iq):
         if (self.ktype =='IP' and not self.bse_bands):
+            ikplusq = self.kplusq_table[ik,iq]
+            ikminusq = self.kminusq_table[ik,iq]      
+            ikpplusq = self.kplusq_table[ikp,iq]
+            ikpminusq = self.kminusq_table[ikp,iq]                
             K_ex = self.K_ex * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
+            return K_ex
         if (self.ktype =='IP' and self.bse_bands):
             K_ex = self.K_ex * np.vdot(self.eigvec[ik,:, ic],self.eigvec_kminusq[ik,:, iv])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec[ikp,: ,icp])
 
             return K_ex
-        if(self.method=='model' and not self.bse_bands):
+        if(self.method=='model' and not self.bse_bands and not self.ktype =='IP'):
 
             ikplusq = self.kplusq_table[ik,iq]
             ikminusq = self.kminusq_table[ik,iq]      
