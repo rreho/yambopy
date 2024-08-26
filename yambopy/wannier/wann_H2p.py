@@ -554,7 +554,7 @@ class H2P():
             K_direct = self.K_d * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
             return K_direct
         if (self.ktype =='IP' and self.bse_bands):
-            K_direct = self.K_d * np.cos(modvec(self.kmpgrid.k[ik,:],self.kmpgrid.k[ikp,:]))#np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec_kminusq[ik,:, iv])
+            K_direct = self.K_d  * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec_kminusq[ik,:, iv])#* np.cos(modvec(self.kmpgrid.k[ik,:],self.kmpgrid.k[ikp,:]))#np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec_kminusq[ik,:, iv])
 
             return K_direct
         
@@ -637,7 +637,7 @@ class H2P():
             K_ex = self.K_ex * np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
             return K_ex
         if (self.ktype =='IP' and self.bse_bands):
-            K_ex = self.K_ex * np.vdot(self.eigvec[ik,:, ic],self.eigvec_kminusq[ik,:, iv])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec[ikp,: ,icp])
+            K_ex = self.K_ex #* np.vdot(self.eigvec[ik,:, ic],self.eigvec_kminusq[ik,:, iv])*np.vdot(self.eigvec_kminusq[ikp,:, ivp],self.eigvec[ikp,: ,icp])
 
             return K_ex
         if(self.method=='model' and not self.bse_bands and not self.ktype =='IP'):
