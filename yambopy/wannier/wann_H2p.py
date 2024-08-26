@@ -827,8 +827,8 @@ class H2P():
             f_out.write(f'\t{dim[0]:.7f}\t{dim[1]:.7f}\t{dim[2]:.7f}\n')
         f_out.write('end recip_lattice\n\n')
 
-        f_out.write(f'begin kpoints\n\t {len(self.kmpgrid.red_kpoints)}\n')
-        for i, dat in enumerate(self.kmpgrid.red_kpoints):
+        f_out.write(f'begin kpoints\n\t {len(self.qmpgrid.red_kpoints)}\n')
+        for i, dat in enumerate(self.qmpgrid.red_kpoints):
             f_out.write(f'   {dat[0]:11.8f}\t{dat[1]:11.8f}\t{dat[2]:11.8f}\n')
         f_out.write(f'end kpoints\n\n')
 
