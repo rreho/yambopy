@@ -119,8 +119,8 @@ class NNKP_Grids(NNKP):
         for ik, k in enumerate(self.k):
             for iq, q in enumerate(qmpgrid.k):
                 tmp_kmq, tmp_Gvec = self.fold_into_bz_Gs(k-q)
-                kmq_grid[ik,iq] = tmp_kmq
                 idxkmq = self.find_closest_kpoint(tmp_kmq)
+                kmq_grid[ik,iq] = tmp_kmq
                 kmq_grid_table[ik,iq] = [ik, idxkmq, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
 
         self.kmq_grid = kmq_grid
@@ -140,8 +140,8 @@ class NNKP_Grids(NNKP):
         for iq, q in enumerate(qmpgrid.k):
             for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
                 tmp_qpb, tmp_Gvec = qmpgrid.fold_into_bz_Gs(q+b)
-                qpb_grid[iq, ib] = tmp_qpb
                 idxqpb = self.find_closest_kpoint(tmp_qpb)
+                qpb_grid[iq, ib] = tmp_qpb
                 # here it should be tmp_Gvec, but with yambo grid I have inconsistencies because points are at 0.75
                 qpb_grid_table[iq,ib] = [iq, idxqpb, int(qmpgrid.iG[ib+qmpgrid.nnkpts*iq,0]), int(qmpgrid.iG[ib+qmpgrid.nnkpts*iq,1]), int(qmpgrid.iG[ib+qmpgrid.nnkpts*iq,2])]
         
@@ -156,11 +156,14 @@ class NNKP_Grids(NNKP):
         #qmpgrid is meant to be an nnkp object
         kpbover2_grid = np.zeros((self.nkpoints, qmpgrid.nnkpts, 3))
         kpbover2_grid_table = np.zeros((self.nkpoints, qmpgrid.nnkpts, 5),dtype= int)
+        print(self.k)
         for ik, k in enumerate(self.k):
-            for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*ik:qmpgrid.nnkpts*(ik+1)]):
-                tmp_kpbover2, tmp_Gvec = self.fold_into_bz_Gs(k+b/2)
-                kpbover2_grid[ik,ib] = tmp_kpbover2
+            print('ciao', ik)
+            for ib, b in enumerate(self.b_grid[self.nnkpts*ik:self.nnkpts*(ik+1)]):
+                tmp_kpbover2, tmp_Gvec = self.fold_into_bz_Gs(k+b)
                 idxkpbover2 = self.find_closest_kpoint(tmp_kpbover2)
+                kpbover2_grid[ik,ib] = tmp_kpbover2
+                print(ik, ib, k, b, kpbover2_grid[ik,ib],tmp_kpbover2)
                 kpbover2_grid_table[ik,ib] = [ik, idxkpbover2, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
 
         self.kpbover2_grid = kpbover2_grid
@@ -175,10 +178,10 @@ class NNKP_Grids(NNKP):
         kmqmbover2_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, qmpgrid.nnkpts,5),dtype=int)
         for ik, k in enumerate(self.k):
             for iq, q in enumerate(qmpgrid.k):
-                for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
-                    tmp_kmqmbover2, tmp_Gvec = self.fold_into_bz_Gs(k -q - b/2)
-                    kmqmbover2_grid[ik, iq, ib] = tmp_kmqmbover2
+                for ib, b in enumerate(self.b_grid[self.nnkpts*iq:self.nnkpts*(iq+1)]):
+                    tmp_kmqmbover2, tmp_Gvec = self.fold_into_bz_Gs(k -q - b)
                     idxkmqmbover2 = self.find_closest_kpoint(tmp_kmqmbover2)
+                    kmqmbover2_grid[ik, iq, ib] = tmp_kmqmbover2
                     kmqmbover2_grid_table[ik, iq, ib] = [ik, idxkmqmbover2, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
 
         self.kmqmbover2_grid = kmqmbover2_grid
