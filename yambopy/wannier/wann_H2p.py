@@ -674,9 +674,9 @@ class H2P():
         if self.method == 'skip-diago':
             indices = self.inverse_aux_t
         else:
-            indices = slice(None)
+            indices = np.arange(0,self.dimbse,1)
         chunk_size=int(self.dimbse/100.0)
-        if (chunk_size < 1): chun_size=self.dimbse
+        if (chunk_size < 1): chunk_size=self.dimbse
         # Chunk the indices to manage memory usage
         ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
         iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
@@ -688,23 +688,21 @@ class H2P():
             ik = np.array(ik)[:, np.newaxis]
             iv = np.array(iv)[:, np.newaxis]
             ic = np.array(ic)[:, np.newaxis]
+            for ivp, icp in zip(iv_chunks,ic_chunks):
+                ivp = iv
+                icp = icp
 
-            ikp = ik.T
-            ivp = iv.T
-            icp = ic.T
+                iqpb = self.kmpgrid.qpb_grid_table[iq, ib, 1]
+                ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
+                ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
+                ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
 
-            iqpb = self.kmpgrid.qpb_grid_table[iq, ib, 1]
-            ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
-            ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
-            ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
+                term1 = np.conjugate(self.h2peigvec_vck[ikq, indices[t], self.bse_nv - self.nv + iv, ic - self.nv, ik])
+                term2 = self.h2peigvec_vck[iqpb, indices[tp], self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
-            term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-            term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
-
-            term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
-            term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
-
-            Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
+                term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
+                term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
+                Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
 
         return Mssp_ttp
 
@@ -732,23 +730,26 @@ class H2P():
     #     self.Mssp = Mssp   
     
 
-    def _get_amn_ttp(self, t, tp, iq):
-        ik = self.BSE_table[t][0]
-        iv = self.BSE_table[t][1] 
-        ic = self.BSE_table[t][2] 
-        ikp = self.BSE_table[tp][0]
-        ivp = self.BSE_table[tp][1] 
-        icp = self.BSE_table[tp][2] 
-        ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
-        Ammn_ttp = self.h2peigvec_vck[iq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
+    def _get_amn_ttp(self, t, tp, ikq):
+        # A_squared = np.abs(self.h2peigv_vck)**2
+        # w_qk = np.sum(A_squared, axis = (2,3))
+        # ik = self.BSE_table[t][0]
+        # iv = self.BSE_table[t][1] 
+        # ic = self.BSE_table[t][2] 
+        #ikp = self.BSE_table[tp][0]
+        #ivp = self.BSE_table[tp][1] 
+        #icp = self.BSE_table[tp][2] 
+        #ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
+        #Ammn_ttp = w_qk[ikq, t] #self.h2peigvec_vck[iq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]#*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
+        Ammn_ttp = np.sum(self.h2peigvec_vck[ikq, t, :, :, :] * np.conjugate(self.h2peigvec_vck[ikq, tp, :, :, :]))
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0], tprange = [0]):
         Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
         for it,t in enumerate(trange):
             for itp, tp in enumerate(tprange):
-                for iq in range(self.qmpgrid.nkpoints):
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp,iq)        
+                for iq, ikq in enumerate(self.kindices_table):
+                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, ikq)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):

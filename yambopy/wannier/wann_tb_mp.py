@@ -156,14 +156,11 @@ class NNKP_Grids(NNKP):
         #qmpgrid is meant to be an nnkp object
         kpbover2_grid = np.zeros((self.nkpoints, qmpgrid.nnkpts, 3))
         kpbover2_grid_table = np.zeros((self.nkpoints, qmpgrid.nnkpts, 5),dtype= int)
-        print(self.k)
         for ik, k in enumerate(self.k):
-            print('ciao', ik)
             for ib, b in enumerate(self.b_grid[self.nnkpts*ik:self.nnkpts*(ik+1)]):
                 tmp_kpbover2, tmp_Gvec = self.fold_into_bz_Gs(k+b)
                 idxkpbover2 = self.find_closest_kpoint(tmp_kpbover2)
                 kpbover2_grid[ik,ib] = tmp_kpbover2
-                print(ik, ib, k, b, kpbover2_grid[ik,ib],tmp_kpbover2)
                 kpbover2_grid_table[ik,ib] = [ik, idxkpbover2, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
 
         self.kpbover2_grid = kpbover2_grid
