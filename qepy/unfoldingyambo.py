@@ -56,6 +56,8 @@ class UnfoldingYambo():
         
         pc_xml = PwXML(prefix=self.prefix_pc,path=self.path_pc)
         sc_xml = PwXML(prefix=self.prefix_sc,path=self.path_sc)
+        self.pc_xml = pc_xml
+        self.sc_xml = sc_xml    
 
         self.nkpoints_pc = pc_xml.nkpoints
         self.nkpoints_sc = sc_xml.nkpoints
@@ -72,11 +74,11 @@ class UnfoldingYambo():
         self.cell_pc = pc_xml.cell
         self.cell_sc = sc_xml.cell
 
-        self.rcell_pc = array(pc_xml.rcell)/pc_xml.celldm[0]   # Dont remember if we need to write the reciprocal vectors in cart. units?
-        self.rcell_sc = array(sc_xml.rcell)/sc_xml.celldm[0]
+        self.rcell_pc = array(pc_xml.rcell)/pc_xml.acell[0]   # Dont remember if we need to write the reciprocal vectors in cart. units?
+        self.rcell_sc = array(sc_xml.rcell)/sc_xml.acell[0]
 
-        self.eigen_pc = array(pc_xml.eigen)
-        self.eigen_sc = array(sc_xml.eigen)
+        self.eigen_pc = array(pc_xml.eigen1)
+        self.eigen_sc = array(sc_xml.eigen1)
 
         format_string = "%12.4lf %12.4lf %12.4lf"
         n_decs = 8
@@ -95,11 +97,11 @@ class UnfoldingYambo():
 
         self.projection = zeros([self.nkpoints_sc,self.nbands_sc-self.band_min])
 
-        save_pc = YamboSaveDB.from_db_file(folder="%s/%s.save/SAVE" % (self.path_pc,self.prefix_pc))
-        save_sc = YamboSaveDB.from_db_file(folder="%s/%s.save/SAVE" % (self.path_sc,self.prefix_sc))
+        self.save_pc = YamboSaveDB.from_db_file(folder="%s/%s.save/SAVE" % (self.path_pc,self.prefix_pc))
+        self.save_sc = YamboSaveDB.from_db_file(folder="%s/%s.save/SAVE" % (self.path_sc,self.prefix_sc))
 
-        self.wf_pc = YamboWFDB(save_pc,path=self.path_pc)
-        self.wf_sc = YamboWFDB(save_sc,path=self.path_sc)
+        self.wf_pc = YamboWFDB(path="%s/%s.save/SAVE" % (self.path_pc,self.prefix_pc))
+        self.wf_sc = YamboWFDB(path="%s/%s.save/SAVE" % (self.path_sc,self.prefix_sc))
 
         print(self.wf_pc)
 
@@ -111,31 +113,31 @@ class UnfoldingYambo():
                load(ik,self.nkpoints_sc)
                #def convert_dat_xml(self):  Bring this to a function
                
-               file_dat = "%s/%s.save/K%05d/%s" % (self.path_pc,self.prefix_pc,(ik + 1),self._gkv_dat)
-               file_xml = "%s/%s.save/K%05d/%s" % (self.path_pc,self.prefix_pc,(ik + 1),self._gkv_xml)
+               file_dat = "%s/%s.save/%s" % (self.path_pc,self.prefix_pc,self._gkv_dat)
+               file_xml = "%s/%s.save/%s" % (self.path_pc,self.prefix_pc,self._gkv_xml)
                os.system('iotk convert %s %s' % (file_dat,file_xml))
    
-               file_dat = "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._gkv_dat)
-               file_xml = "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._gkv_xml)
+               file_dat = "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._gkv_dat)
+               file_xml = "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._gkv_xml)
                os.system('iotk convert %s %s' % (file_dat,file_xml))
                
-               #file_dat = "%s/%s.save/K%05d/%s" % (self.path_pc,self.prefix_pc,(ik + 1),self._evc_dat)
-               #file_xml = "%s/%s.save/K%05d/%s" % (self.path_pc,self.prefix_pc,(ik + 1),self._evc_xml)
+               #file_dat = "%s/%s.save/%s" % (self.path_pc,self.prefix_pc,self._evc_dat)
+               #file_xml = "%s/%s.save/%s" % (self.path_pc,self.prefix_pc,self._evc_xml)
                #os.system('iotk convert %s %s' % (file_dat,file_xml))
 
                if spin == "none":
             
-                  file_dat = "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._evc_dat)
-                  file_xml = "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._evc_xml)
+                  file_dat = "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._evc_dat)
+                  file_xml = "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._evc_xml)
                   os.system('iotk convert %s %s' % (file_dat,file_xml))
             
                if spin == "spinor":
             
-                  file_dat = "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._evc1_dat)
-                  file_xml = "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._evc1_xml)
+                  file_dat = "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._evc1_dat)
+                  file_xml = "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._evc1_xml)
                   os.system('iotk convert %s %s' % (file_dat,file_xml))
-                  file_dat = "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._evc2_dat)
-                  file_xml = "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._evc2_xml)
+                  file_dat = "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._evc2_dat)
+                  file_xml = "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._evc2_xml)
                   os.system('iotk convert %s %s' % (file_dat,file_xml))
            print("done!") 
         ''' 
@@ -144,62 +146,51 @@ class UnfoldingYambo():
 
         #gkvectors = []
         print("Dictionary of G-vectors and projection")
-        for ik in range(self.nkpoints_sc):
 
-            load(ik,self.nkpoints_sc)
+        gk_sc = self.save_sc.g_vectors.T
+        gk_pc = self.save_pc.g_vectors.T
 
-            # Reading the G-vectors and g-vectors
-            tree_gk_sc = ET.parse( "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._gkv_xml) )
-            tree_gk_pc = ET.parse( "%s/%s.save/K%05d/%s" % (self.path_pc,self.prefix_pc,(ik + 1),self._gkv_xml) )
-            root_gk_sc = tree_gk_sc.getroot()
-            root_gk_pc = tree_gk_pc.getroot()
 
-            #get the number of g-vectors
-            n_gvec_sc = int(root_gk_sc.find("GRID").get('size'))
-            n_gvec_pc = int(root_gk_pc.find("GRID").get('size'))
-            self.ng_sc = int(n_gvec_sc/3)
-            self.ng_pc = int(n_gvec_pc/3)
-            g_sc= dict() 
+        n_gvec_sc = gk_sc.size
+        n_gvec_pc = gk_pc.size
+        self.ng_sc = int(n_gvec_sc/3)
+        self.ng_pc = int(n_gvec_pc/3)
+        g_sc= dict() 
             #print("Dimension G- and g-vectors", self.ng_sc, self.ng_pc)
 
-            #check this point
-            for GRID in root_gk_sc.findall("GRID"):
-                gkold = GRID.text.split("\n")
+        #check this point
+        gkold = gk_sc[:]
 
-            g_sc_int = dict()  # dictionary of integers
+        g_sc_int = dict()  # dictionary of integers
             #print('Reading Supercell G-vectors')
-            for ig in arange(self.ng_sc):  # ATTENTION: Why was it xrange?
+        for ig in arange(self.ng_sc):  # ATTENTION: Why was it xrange?
                 #print("Reading Supercell G-vectors") 
                 #load(ig,self.ng_sc)
 
-                x,y,z = map( float, gkold[ig+1].split())
-                g_sc_int[(int(x),int(y),int(z))] = ig
-                w = x*self.rcell_sc[:][0] + y*self.rcell_sc[:][1] + z*self.rcell_sc[:][2] #scaling
-                w = dot(self.rot,w) #rotations
-                w = np.around(w, decimals=n_decs)+array([0,0,0]) #round and clean
-                w = format_string % (w[0],w[1],w[2]) #truncation
-                g_sc[w] = ig #create dictionary
-    
+            x,y,z = map( float, gkold[ig])
+            g_sc_int[(int(x),int(y),int(z))] = ig
+            w = x*self.rcell_sc[:][0] + y*self.rcell_sc[:][1] + z*self.rcell_sc[:][2] #scaling
+            w = dot(self.rot,w) #rotations
+            w = np.around(w, decimals=n_decs)+array([0,0,0]) #round and clean
+            w = format_string % (w[0],w[1],w[2]) #truncation
+            g_sc[w] = ig #create dictionary
+        
             #print('Assigning Primitive cell g-vectors')
 
-            g_contain = [0]*self.ng_pc
+        g_contain = [0]*self.ng_pc
 
-            for GRID in root_gk_pc.findall("GRID"):
-                gkold = GRID.text.split("\n")
+        gkold = gk_pc[:]
 
-            for ig in arange(self.ng_pc):
+        for ig in arange(self.ng_pc):
                 #load(ig,self.ng_pc)
 
-                x,y,z = map( float, gkold[ig+1].split())
-                #print(ig,int(x),int(y),int(z))
-                w = x*self.rcell_pc[:][0] + y*self.rcell_pc[:][1] + z*self.rcell_pc[:][2] #scaling
-                w = np.around(w, decimals=n_decs)+array([0,0,0]) #round and clean
-                w = format_string % (w[0],w[1],w[2]) #truncation
-                try:
-                    g_contain[ig] = g_sc[w]
-                except KeyError:
-                    print("Missing k-point %d" % ig)
-                    print(w)
+            x,y,z = map( float, gkold[ig])
+            #print(ig,int(x),int(y),int(z))
+            w = x*self.rcell_pc[:][0] + y*self.rcell_pc[:][1] + z*self.rcell_pc[:][2] #scaling
+            w = np.around(w, decimals=n_decs)+array([0,0,0]) #round and clean
+            w = format_string % (w[0],w[1],w[2]) #truncation
+            g_contain[ig] = g_sc[w]
+
                     #print("g_sc ")
                     #print(w,g_sc[w])
                     #print("g_contain ")
@@ -223,40 +214,40 @@ class UnfoldingYambo():
 
             # Reading the Super-cell Eigenvectors
 
-            if spin == "none":
-
-               tree_evc_sc = ET.parse( "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._evc_xml) )
-               root_evc_sc = tree_evc_sc.getroot()
+        if spin == "none":
+           tree_evc_sc = ET.parse( "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,'data-file-schema.xml') )
+           root_evc_sc = tree_evc_sc.getroot()
                
-            if spin == "spinor":
+        if spin == "spinor":
 
-               tree_evc1_sc = ET.parse( "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._evc1_xml) )
-               root_evc1_sc = tree_evc1_sc.getroot()
-               tree_evc2_sc = ET.parse( "%s/%s.save/K%05d/%s" % (self.path_sc,self.prefix_sc,(ik + 1),self._evc2_xml) )
-               root_evc2_sc = tree_evc2_sc.getroot()
+            tree_evc1_sc = ET.parse( "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._evc1_xml) )
+            root_evc1_sc = tree_evc1_sc.getroot()
+            tree_evc2_sc = ET.parse( "%s/%s.save/%s" % (self.path_sc,self.prefix_sc,self._evc2_xml) )
+            root_evc2_sc = tree_evc2_sc.getroot()
 
-            if spin == "none":
+        if spin == "none":
 
-               eivecs = []
-               for ib in range(self.band_min,self.nbands_sc):
-                   eivec = root_evc_sc.find("evc."+str(ib+1)).text.split("\n")
-                   eivecs.append( map(lambda x: complex( float(x.split(",")[0]), float(x.split(",")[1]) ), eivec[1:-1]) )
-                   if ib==0:
-                      x = 0.0
-                      for ig in range(self.ng_sc):
-                          x += eivecs[-1][ig]*eivecs[-1][ig].conjugate()
+            eivecs = []
+            
+            for ib in range(self.band_min,self.nbands_sc):
+               eivec = root_evc_sc.find("evc."+str(ib+1)).text.split("\n")
+               eivecs.append( map(lambda x: complex( float(x.split(",")[0]), float(x.split(",")[1]) ), eivec[1:-1]) )
+               if ib==0:
+                  x = 0.0
+                  for ig in range(self.ng_sc):
+                      x += eivecs[-1][ig]*eivecs[-1][ig].conjugate()
 
-            if spin == "spinor":
+        if spin == "spinor":
 
-               eivecs1, eivecs2 = [], []
-               for ib in range(self.band_min,self.nbands_sc):
+            eivecs1, eivecs2 = [], []
+            for ib in range(self.band_min,self.nbands_sc):
                    #print("Reading Supercell Wave functions") 
                    #load(ib,self.nbands_sc)
 
-                   eivec1 = root_evc1_sc.find("evc."+str(ib+1)).text.split("\n")
-                   eivec2 = root_evc2_sc.find("evc."+str(ib+1)).text.split("\n")
-                   eivecs1.append(list( map(lambda x: complex( float(x.split(",")[0]), float(x.split(",")[1]) ), eivec1[1:-1]) ) )
-                   eivecs2.append(list( map(lambda x: complex( float(x.split(",")[0]), float(x.split(",")[1]) ), eivec2[1:-1]) ) )
+               eivec1 = root_evc1_sc.find("evc."+str(ib+1)).text.split("\n")
+               eivec2 = root_evc2_sc.find("evc."+str(ib+1)).text.split("\n")
+               eivecs1.append(list( map(lambda x: complex( float(x.split(",")[0]), float(x.split(",")[1]) ), eivec1[1:-1]) ) )
+               eivecs2.append(list( map(lambda x: complex( float(x.split(",")[0]), float(x.split(",")[1]) ), eivec2[1:-1]) ) )
                #print(eivecs1.shape) 
                #print(eivecs2.shape) 
                    #Why is this here? Was it a test?
@@ -278,33 +269,33 @@ class UnfoldingYambo():
         #sc.convert_dat_xml()
 
         # Projection
-            if spin == "none":
+        if spin == "none":
 
-               for ib in range(self.nbands_sc-self.band_min): 
-                   x = 0.0
-                   for ig in range(self.ng_pc): #ndim_gcontain):
-                       x += eivecs[ib][g_contain[ig]]*(eivecs[ib][g_contain[ig]].conjugate())
+           for ib in range(self.nbands_sc-self.band_min): 
+               x = 0.0
+               for ig in range(self.ng_pc): #ndim_gcontain):
+                   x += eivecs[ib][g_contain[ig]]*(eivecs[ib][g_contain[ig]].conjugate())
                     #if ib==0:
                     #   print(ib,ig,g_contain[ig],eivecs[ib][g_contain[ig]])
                     #if ib==0:
                        #print(eivecs[ib][g_contain[ig]])
-                   self.projection[ik][ib] = abs(x)
+                   self.projection[ib] = abs(x)
 
-            if spin == "spinor":
+        if spin == "spinor":
                   
                #print(eivecs1)
                #exit()
 
-               for ib in range(self.nbands_sc-self.band_min): 
-                   x = 0.0
-                   for ig in range(self.ng_pc): #ndim_gcontain):
-                       x += eivecs1[ib][g_contain[ig]]*(eivecs1[ib][g_contain[ig]].conjugate())
-                       x += eivecs2[ib][g_contain[ig]]*(eivecs2[ib][g_contain[ig]].conjugate())
+           for ib in range(self.nbands_sc-self.band_min): 
+                x = 0.0
+                for ig in range(self.ng_pc): #ndim_gcontain):
+                    x += eivecs1[ib][g_contain[ig]]*(eivecs1[ib][g_contain[ig]].conjugate())
+                    x += eivecs2[ib][g_contain[ig]]*(eivecs2[ib][g_contain[ig]].conjugate())
                     #if ib==0:
                     #   print(ib,ig,g_contain[ig],eivecs[ib][g_contain[ig]])
                     #if ib==0:
                        #print(eivecs[ib][g_contain[ig]])
-                   self.projection[ik][ib] = abs(x)
+                    self.projection[ib] = abs(x)
 
         print("Done!")
 

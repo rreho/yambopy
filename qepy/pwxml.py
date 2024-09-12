@@ -61,7 +61,7 @@ class PwXML():
             self.lsda = True
 
         #get acell
-        self.celldm = [ float(x) for x in self.datafile_xml.findall("CELL/CELL_DIMENSIONS")[0].text.strip().split('\n') ]
+        self.celldm = np.array([ float(x) for x in self.datafile_xml.findall("CELL/CELL_DIMENSIONS")[0].text.strip().split('\n') ])
 
         #get cell
         self.cell = []
@@ -74,7 +74,7 @@ class PwXML():
         for i in range(1,4):
             rcell_lat = self.datafile_xml.findall("CELL/RECIPROCAL_LATTICE_VECTORS/b%d"%i)[0].text
             self.rcell.append([float(x) for x in rcell_lat.strip().split()])
-
+        self.rcell = np.array(self.rcell)
         #get atoms
         self.natoms = int(self.datafile_xml.findall("IONS/NUMBER_OF_ATOMS")[0].text)
         self.atoms = []
@@ -196,16 +196,16 @@ class PwXML():
         for i in range(1,4):
             cell_lat = self.datafile_xml.findall("output/atomic_structure/cell/a%d"%i)[0].text
             self.cell.append([float(x) for x in cell_lat.strip().split()])
-
+        self.cell = np.array(self.cell)
         #calculate acell
-        self.acell = [ np.linalg.norm(a) for a in self.cell ]
+        self.acell = np.array([ np.linalg.norm(a) for a in self.cell ])
 
         #get reciprocal cell
         self.rcell = []
         for i in range(1,4):
             rcell_lat = self.datafile_xml.findall("output/basis_set/reciprocal_lattice/b%d"%i)[0].text
             self.rcell.append([float(x) for x in rcell_lat.strip().split()])
-
+        self.rcell = np.array(self.rcell)
         #get atoms
         self.natoms = int(self.datafile_xml.findall("output/atomic_structure")[0].get('nat'))
         self.atoms = []
@@ -246,7 +246,7 @@ class PwXML():
         for i in range(self.nkpoints):
             kpoint = [float(x) for x in kstates[i].findall('k_point')[0].text.strip().split()]
             self.kpoints.append( kpoint )
-
+        self.kpoints = np.array(self.kpoints)
         #get fermi (it depends on the occupations)
         if self.occ_type == 'fixed':
            self.fermi = float(self.datafile_xml.find("output/band_structure/highestOccupiedLevel").text)*HatoeV

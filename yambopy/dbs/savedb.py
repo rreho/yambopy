@@ -38,7 +38,7 @@ class YamboSaveDB():
         ``nkpoints`` : number of kpoints
     """
     def __init__(self,atomic_numbers,car_atomic_positions,eigenvalues,sym_car,kpts_iku,
-                 lat,alat,temperature,electrons,spin,time_rev,spinor):
+                 lat,alat,temperature,electrons,spin,time_rev,spinor, gvectors, gvectors_car):
 
         self.atomic_numbers       = atomic_numbers   
         self.car_atomic_positions = car_atomic_positions
@@ -52,6 +52,8 @@ class YamboSaveDB():
         self.spin                 = spin            
         self.time_rev             = time_rev
         self.spinor               = spinor
+        self.gvectors            = gvectors
+        self.gvectors_car        = gvectors_car
 
         #TODO: remove this
         self.expanded = False
@@ -91,6 +93,8 @@ class YamboSaveDB():
                          spin                 = int(dimensions[11]),
                          time_rev             = dimensions[9],
                          spinor               = database.variables['EIGENVALUES'].shape[0],
+                         gvectors            = database['G-VECTORS'][:],
+                         gvectors_car        = np.array([ k/database.variables['LATTICE_PARAMETER'][:].T for k in database['G-VECTORS'][:].T])
                          )
 
         return cls(**args)
@@ -215,6 +219,16 @@ class YamboSaveDB():
             self._efermi = self.get_fermi
         return self._efermi
 
+    def get_g_index(self,g):
+        """
+        get the index of the gvectors.
+        If the gvector is not present return None
+        """
+        for ng,gvec in enumerate(self.gvectors_car):
+            if np.isclose(g,gvec).all():
+                return ng
+        return None
+    
     def get_fermi(self,inv_smear=0.001,verbose=0):
         """ Determine the fermi energy
         """

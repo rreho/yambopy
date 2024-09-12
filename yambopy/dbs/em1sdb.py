@@ -33,8 +33,10 @@ class YamboStaticScreeningDB(object):
                 database = Dataset("%s/%s"%(self.save,db1), 'r')
                 self.alat = database.variables['LATTICE_PARAMETER'][:]
                 self.lat  = database.variables['LATTICE_VECTORS'][:].T
-                gvectors_full = database.variables['G-VECTORS'][:].T
-                self.gvectors_full = np.array([ g/self.alat for g in gvectors_full ])
+                self.sym_car =  database.variables['SYMMETRY'][:]
+
+                # gvectors_full = database.variables['G-VECTORS'][:].T
+                # self.gvectors_full = np.array([ g/self.alat for g in gvectors_full ])
                 self.volume = np.linalg.det(self.lat)
                 self.rlat = rec_lat(self.lat)
             except:
@@ -59,15 +61,18 @@ class YamboStaticScreeningDB(object):
 
         #read gvectors used for em1s
         gvectors          = np.array(database.variables['X_RL_vecs'][:].T)
-        self.gvectors     = np.array([g/self.alat for g in gvectors])
-        self.red_gvectors = car_red(self.gvectors,self.rlat)
+        self.gvectors = gvectors
+        self.gvectors_car = np.array([ g/self.alat for g in self.gvectors ])
         self.ngvectors    = len(self.gvectors)
         
+        self.expanded = False
+
         #read q-points
-        self.iku_qpoints = database.variables['HEAD_QPT'][:].T
-        self.car_qpoints = np.array([ q/self.alat for q in self.iku_qpoints ]) #atomic units
-        self.red_qpoints = car_red(self.car_qpoints,self.rlat) 
-        self.nqpoints = len(self.car_qpoints)
+        self.kpts_iku = database.variables['HEAD_QPT'][:].T
+        self.car_kpoints = np.array([ iku/self.alat for iku in self.kpts_iku ])
+        self.red_kpoints =  car_red(self.car_kpoints, self.rlat)
+        np.array([ iku/self.alat for iku in self.kpts_iku ])
+        self.nkpoints = len(self.car_kpoints)
 
         try:
             database.variables['CUTOFF'][:]
@@ -76,7 +81,7 @@ class YamboStaticScreeningDB(object):
         
         #read fragments
         read_fragments=True
-        for iQ in range(self.nqpoints):
+        for iQ in range(self.nkpoints):
             if not os.path.isfile("%s/%s_fragment_%d"%(self.em1s,self.filename,iQ+1)): read_fragments=False
         if read_fragments: self.readDBs() # get sqrt(v)*X*sqrt(v)
 
@@ -89,8 +94,8 @@ class YamboStaticScreeningDB(object):
         """
 
         #create database to hold all the X data
-        self.X = np.zeros([self.nqpoints,self.size,self.size],dtype=np.complex64)
-        for nq in range(self.nqpoints):
+        self.X = np.zeros([self.nkpoints,self.size,self.size],dtype=np.complex64)
+        for nq in range(self.nkpoints):
 
             #open database for each k-point
             filename = "%s/%s_fragment_%d"%(self.em1s,self.filename,nq+1)
@@ -111,7 +116,191 @@ class YamboStaticScreeningDB(object):
          
             #close database
             database.close()
+    def expand_kpts(self):
+        """ Take a list of qpoints and symmetry operations and return the full brillouin zone
+        with the corresponding index in the irreducible brillouin zone
+        """
 
+        #check if the kpoints were already exapnded
+        if self.expanded == True: return self.kpoints_full, self.kpoints_indexes, self.symmetry_indexes
+
+        kpoints_indexes  = []
+        kpoints_full     = []
+        symmetry_indexes = []
+
+        #kpoints in the full brillouin zone organized per index
+        kpoints_full_i = {}
+
+        #expand using symmetries
+        for nk,k in enumerate(self.car_kpoints):
+            for ns,sym in enumerate(self.sym_car):
+                new_k = np.dot(sym,k)
+
+                #check if the point is inside the bounds
+                k_red = car_red([new_k],self.rlat)[0]
+                k_bz = (k_red+atol)%1
+
+                #if the index in not in the dicitonary add a list
+                if nk not in kpoints_full_i:
+                    kpoints_full_i[nk] = []
+
+                #if the vector is not in the list of this index add it
+                if not vec_in_list(k_bz,kpoints_full_i[nk]):
+                    kpoints_full_i[nk].append(k_bz)
+                    kpoints_full.append(new_k)
+                    kpoints_indexes.append(nk)
+                    symmetry_indexes.append(ns)
+
+        #calculate the weights of each of the kpoints in the irreducible brillouin zone
+        self.full_nkpoints = len(kpoints_full)
+        weights = np.zeros([self.nkpoints])
+        for nk in kpoints_full_i:
+            weights[nk] = float(len(kpoints_full_i[nk]))/self.full_nkpoints
+
+        #set the variables
+        self.expanded = True
+        self.weights = np.array(weights)
+        self.kpoints_full     = np.array(kpoints_full)
+        self.kpoints_indexes  = np.array(kpoints_indexes)
+        self.symmetry_indexes = np.array(symmetry_indexes)
+
+        print("%d kpoints expanded to %d"%(len(self.car_kpoints),len(kpoints_full)))
+
+        return self.kpoints_full, self.kpoints_indexes, self.symmetry_indexes
+
+    def XtoSupercell(self, db_sc):
+        """
+        Works for 2D supercell
+        """
+        from scipy.spatial import cKDTree
+
+        def gmod(v):
+            u = red_car(np.array([v]), db_sc.rlat)*2*np.pi 
+            return np.sqrt(np.dot(u[0],u[0]))
+
+        def sort_by_gmod(arr):
+            # Function to calculate gmod (magnitude) of a vector
+            # Sort the array based on gmod
+            threshold = 1.7164942
+            arr = np.array(arr)
+            gmods = np.array([gmod(v) for v in arr])
+            mask = gmods <= threshold
+            
+            filtered_arr = arr[mask]
+            filtered_gmods = gmods[mask]
+            
+            sorted_indices = np.argsort(filtered_gmods)
+            sorted_filtered_arr = filtered_arr[sorted_indices]
+            
+            return sorted_filtered_arr
+
+
+        def generate_g_vectors():
+            g_vectors = []
+            
+            x_y_values = np.arange(-8,8,step=1)
+            z_values = range(-17, 18)  # -9 to 9 inclusive
+            
+            for x in x_y_values:
+                for y in x_y_values:
+                    for z in z_values:
+                        g_vectors.append([x, y, z])
+            
+            sorted_gvecs = sort_by_gmod(g_vectors)
+
+            return np.array(sorted_gvecs)
+
+        def create_g_vector_map(self, db_sc):
+
+            g_vectors = generate_g_vectors()
+            g_vectors_car = np.round(red_car(g_vectors, db_sc.rlat), 8)
+            # g_vectors_car = np.unique(g_vectors_car, axis=0)
+            kdtree = cKDTree(g_vectors_car)
+            
+            return kdtree, g_vectors_car
+
+        def find_closest_g_vector(kdtree, query_vector, tolerance=1e-4):
+            query_vector_rounded = np.round(query_vector, decimals=8)
+            distance, index = kdtree.query(query_vector_rounded)
+            if distance <= tolerance:
+                return index
+            return None
+
+        def find_g_Q(Qpoint, qpoint, g_vectors):
+            g_Q = qpoint - Qpoint
+            if np.any(np.all(np.abs(car_red(np.array(g_Q- g_vectors), db_sc.rlat) ) < 0.0001, axis=1)):
+                return True
+
+            else: return False
+
+        self.expand_kpts()
+        db_sc.expand_kpts()
+        kdtree, g_vectors = create_g_vector_map(self, db_sc)
+        x_sc = np.zeros((len(db_sc.car_kpoints), len(g_vectors), len(g_vectors)), dtype=np.complex64)
+        qpoints_full = db_sc.kpoints_full
+        qpoints_folded_indexes = db_sc.kpoints_indexes
+        Qpoints_full = self.kpoints_full
+        Qpoints_folded_indexes = self.kpoints_indexes 
+            
+        for Qi, Qpoint in enumerate(Qpoints_full):
+            print(f"\nProcessing Qpoint: {Qpoint}")
+            for iG1, Gvec1 in enumerate(self.gvectors_car):
+                for iG2, Gvec2 in enumerate(self.gvectors_car):
+                    for qi, qpoint in enumerate(qpoints_full):
+                        # print(f"Qpoint: {Qpoint}, qpoint: {qpoint}")
+                        g_Q_flag = find_g_Q(Qpoint, qpoint, g_vectors)
+                        if g_Q_flag:
+                            g_Q = qpoint - Qpoint
+                            g1 = find_closest_g_vector(kdtree, g_Q + Gvec1)
+                            g2 = find_closest_g_vector(kdtree, g_Q + Gvec2)
+                            if g1 and g2:
+                                qpointindex = qpoints_folded_indexes[qi]
+                                Qpointindex = Qpoints_folded_indexes[Qi]
+
+                                if x_sc[qpointindex, g1, g2] != 0.0:
+                                    if x_sc[qpointindex, g1, g2] !=self.X[Qpointindex, iG1, iG2] :
+                                        print("Overwriting: ", x_sc[qpointindex, g1, g2], self.X[Qpointindex, iG1, iG2])
+                                        print(qpointindex, g1, g2, Qpointindex, iG1, iG2)
+                                        # break
+                                x_sc[qpointindex, g1, g2] = self.X[Qpointindex, iG1, iG2]
+
+                    # print(f"Matches found: {len(qg_map)}")
+
+        return x_sc
+        
+    def UnfoldxDBS(self,db_sc, path):
+        """
+        Save the database
+        """
+        import os
+        import shutil
+        # if os.path.isdir(path): shutil.rmtree(path)
+        # os.mkdir(path)
+
+        #copy all the files
+        oldpath = self.em1s
+        filename = self.filename
+        shutil.copyfile("%s/%s"%(oldpath,filename),"%s/%s"%(path,filename))
+        for nq in range(self.nkpoints):
+            fname = "%s_fragment_%d"%(filename,nq+1)
+            shutil.copyfile("%s/%s"%(oldpath,fname),"%s/%s"%(path,fname))
+        supercellsize = int(db_sc.alat[0]/self.alat[0])
+        ngvectors= len(self.gvectors)*supercellsize
+        #edit with the new wfs
+        X = self.XtoSupercell(db_sc)
+        fname = "%s"%(filename)
+        database = Dataset("%s/%s"%(path,fname),'r+') 
+        database.variables['X_RL_vecs'] = db_sc.gvectors[:ngvectors]
+        database.variables['HEAD_QPT'] = db_sc.kpts_iku
+
+
+        for nq in range(db_sc.nkpoints):
+            fname = "%s_fragment_%d"%(filename,nq+1)
+            database = Dataset("%s/%s"%(path,fname),'r+')
+            database.variables['X_Q_%d'%(nq+1)] = np.zeros((ngvectors,ngvectors,2))
+            database.variables['X_Q_%d'%(nq+1)][:,:,0] = X[nq].real
+            database.variables['X_Q_%d'%(nq+1)][:,:,1] = X[nq].imag
+            database.close()
     def saveDBS(self,path):
         """
         Save the database
@@ -120,16 +309,16 @@ class YamboStaticScreeningDB(object):
         os.mkdir(path)
 
         #copy all the files
-        oldpath = self.save
+        oldpath = self.em1s
         filename = self.filename
         shutil.copyfile("%s/%s"%(oldpath,filename),"%s/%s"%(path,filename))
-        for nq in range(self.nqpoints):
+        for nq in range(self.nkpoints):
             fname = "%s_fragment_%d"%(filename,nq+1)
             shutil.copyfile("%s/%s"%(oldpath,fname),"%s/%s"%(path,fname))
 
         #edit with the new wfs
         X = self.X
-        for nq in range(self.nqpoints):
+        for nq in range(self.nkpoints):
             fname = "%s_fragment_%d"%(filename,nq+1)
             database = Dataset("%s/%s"%(path,fname),'r+')
             database.variables['X_Q_%d'%(nq+1)][0,0,:] = X[nq].real
@@ -149,10 +338,12 @@ class YamboStaticScreeningDB(object):
         get the index of the gvectors.
         If the gvector is not present return None
         """
-        for ng,gvec in enumerate(self.gvectors):
+        for ng,gvec in enumerate(self.gvectors_car):
             if np.isclose(g,gvec).all():
                 return ng
         return None
+    
+    
 
     def get_Coulomb(self):
         """
@@ -181,11 +372,11 @@ class YamboStaticScreeningDB(object):
 
         else:
 
-            sqrt_V = np.zeros([self.nqpoints,self.ngvectors])
+            sqrt_V = np.zeros([self.nkpoints,self.ngvectors])
             nrm = np.linalg.norm
-            for iq in range(self.nqpoints):
+            for iq in range(self.nkpoints):
                 for ig in range(self.ngvectors):
-                        Q = 2.*np.pi*self.car_qpoints[iq]
+                        Q = 2.*np.pi*self.car_kpoints[iq]
                         G = 2.*np.pi*self.gvectors[ig]
                         QPG = nrm(Q+G)
                         if QPG==0.: QPG=1.e-5
@@ -212,7 +403,7 @@ class YamboStaticScreeningDB(object):
             _,_ = self.getem1s()
             X = self.trueX
 
-        x = [np.linalg.norm(q) for q in self.car_qpoints]
+        x = [np.linalg.norm(q) for q in self.car_kpoints]
         y = [np.linalg.inv(np.eye(self.ngvectors)+xq)[0,0] for xq in X ]
       
         #order according to the distance
@@ -235,7 +426,7 @@ class YamboStaticScreeningDB(object):
         Arguments:
             ng1 -> Choose local field component
         """
-        x = [np.linalg.norm(q) for q in self.car_qpoints]
+        x = [np.linalg.norm(q) for q in self.car_kpoints]
         y = [vq[ng1]**2. for vq in self.sqrt_V]
 
         #order according to the distance
@@ -259,7 +450,7 @@ class YamboStaticScreeningDB(object):
             ng1, ng2 -> Choose local field components
             volume   -> Normalize with the volume of the cell
         """
-        x = [np.linalg.norm(q) for q in self.car_qpoints]
+        x = [np.linalg.norm(q) for q in self.car_kpoints]
         y = [xq[ng2,ng1] for xq in self.X ]
       
         #order according to the distance
@@ -294,7 +485,7 @@ class YamboStaticScreeningDB(object):
             symm     -> True:  √v(q,g1) X_{g1,g2}(q) √v(q,g2)
                         False: v(q,g1) X_{g1,g2}(q) TO BE IMPLEMENTED
         """
-        trueX = np.zeros([self.nqpoints,self.size,self.size],dtype=np.complex64)
+        trueX = np.zeros([self.nkpoints,self.size,self.size],dtype=np.complex64)
 
         for ig1 in range(self.ngvectors):
             for ig2 in range(self.ngvectors):
@@ -302,7 +493,7 @@ class YamboStaticScreeningDB(object):
 
         self.trueX = trueX # Store trueX as attribute
 
-        x = [np.linalg.norm(q) for q in self.car_qpoints]
+        x = [np.linalg.norm(q) for q in self.car_kpoints]
         y = [xq[ng2,ng1] for xq in self.trueX ]
 
         #order according to the distance
@@ -357,7 +548,7 @@ class YamboStaticScreeningDB(object):
         lines = []; app=lines.append
         app(marquee(self.__class__.__name__))
 
-        app('nqpoints (ibz):   %d'%self.nqpoints)
+        app('nkpoints (ibz):   %d'%self.nkpoints)
         app('X size (G-space): %d'%self.size) 
         app('cutoff:           %s'%self.cutoff) 
 
