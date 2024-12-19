@@ -61,11 +61,11 @@ def isbetween(a,b,c,eps=1e-5):
     """
     return np.isclose(np.linalg.norm(a-c)+np.linalg.norm(b-c)-np.linalg.norm(a-b),0,atol=eps)
 
-def red_car(red,lat):
+def red_car(red,rlat):
     """
     Convert reduced coordinates to cartesian
     """
-    return np.einsum('ij,ji->i', red, lat.T)
+    return np.einsum('ij,jk->ik', red, rlat) # the transpose is not needed due to the einsum
 
 def car_red(car,lat):
     """
