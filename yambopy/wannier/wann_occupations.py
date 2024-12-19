@@ -14,7 +14,7 @@ class TB_occupations():
     def _get_fkn(self, method):
         nk = self.eigv.shape[0]
         nb = self.eigv.shape[1]
-        f_kn = np.zeros((nk,nb), dtype=np.float128)
+        f_kn = np.zeros((nk,nb), dtype=np.longdouble)
         if (method =='FD'):
             if (self.Tel==0):
                 f_kn = fermi_dirac(self.eigv, self.fermi)

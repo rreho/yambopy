@@ -33,15 +33,15 @@ class YamboLatticeDB(object):
     @classmethod
     def from_db(cls,filename='ns.db1',Expand=True,atol=1e-6):
         return cls.from_db_file(filename,Expand,atol)
-    
+     
     @classmethod
-    def from_db_file(cls,filename='ns.db1',Expand=True,atol=1e-6):
+    def from_db_file(cls,folder='.',filename='ns.db1',Expand=False, atol=1e-6):
         """ Initialize YamboLattice from a local dbfile """
+        path_filename = os.path.join(folder,filename)
+        if not os.path.isfile(path_filename):
+            raise FileNotFoundError(f"error opening %s in YamboLatticeDB"%path_filename)
 
-        if not os.path.isfile(filename):
-            raise FileNotFoundError("error opening %s in YamboLatticeDB"%filename)
-
-        with Dataset(filename) as database:
+        with Dataset(path_filename) as database:
 
             dimensions = database.variables['DIMENSIONS'][:]
 

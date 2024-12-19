@@ -302,7 +302,7 @@ class YamboElectronsDB():
         self.eigenvalues = self.eigenvalues_ibz[:,self.kpoints_indexes]
         self.nkpoints = len(self.eigenvalues)
 
-    def expand_kpoints(self,verbose=1,atol=1.e-4):
+    def expand_kpts(self,verbose=1,atol=1.e-4):
         """ 
         Wrapper for expand_kpoints in kpoints module
 

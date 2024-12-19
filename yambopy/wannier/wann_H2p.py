@@ -121,8 +121,9 @@ class H2P():
         except ValueError:
             print('Warning! Q=0 index not found')
         self.dimbse = self.bse_nv*self.bse_nc*self.nk
-        self.savedb = YamboSaveDB.from_db_file(f'{savedb_path}')
-        self.latdb = YamboLatticeDB.from_db_file(f'{savedb_path}/ns.db1')
+        # self.savedb = YamboSaveDB.from_db_file(f'{savedb_path}')
+        self.savedb = YamboElectronsDB.from_db_file(folder=f'{savedb_path}', Expand=False)
+        self.latdb = YamboLatticeDB.from_db_file(folder=f'{savedb_path}', Expand=True)
         self.offset_nv = self.savedb.nbandsv-self.nv  
         self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
@@ -138,7 +139,7 @@ class H2P():
         self.nproc = nproc
         # consider to build occupations here in H2P with different occupation functions
         if (f_kn == None):
-            self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float128)
+            self.f_kn = np.zeros((self.nk,self.nb),dtype=np.longdouble)
             self.f_kn[:,:self.nv] = 1.0
         else:
             self.f_kn = f_kn
@@ -179,7 +180,8 @@ class H2P():
             cpucount= mp.cpu_count()
             print(f"CPU count involved in H2P loading pool: {cpucount}")
             pool = mp.Pool(self.nproc)
-            full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
+            full_kpoints, kpoints_indexes, symmetry_indexes = self.latdb.iku_kpoints, self.latdb.kpoints_indexes, self.latdb.symmetry_indexes
+            # full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
 
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
@@ -220,7 +222,7 @@ class H2P():
 
         else:
             # Expanded k-points and symmetry are prepared for operations that might need them
-            full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
+            full_kpoints, kpoints_indexes, symmetry_indexes = self.latdb.iku_kpoints, self.latdb.kpoints_indexes, self.latdb.symmetry_indexes
 
             # Pre-fetch all necessary data based on condition
             if self.nq_double == 1:
@@ -280,7 +282,7 @@ class H2P():
     def _buildH2Peigv(self):
         if self.skip_diago:
             H2P = None
-            full_kpoints, kpoints_indexes, symmetry_indexes = self.savedb.expand_kpts()
+            full_kpoints, kpoints_indexes, symmetry_indexes = self.latdb.iku_kpoints, self.latdb.kpoints_indexes, self.latdb.symmetry_indexes
 
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)

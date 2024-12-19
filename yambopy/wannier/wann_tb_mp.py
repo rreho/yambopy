@@ -104,7 +104,7 @@ class NNKP_Grids(NNKP):
     def __init__(self, seedname, latdb, yambo_grid=False):
         super().__init__(seedname)
         if(yambo_grid):
-            self.k = np.array([self.fold_into_bz(k) for ik,k in enumerate(self.k)])
+            self.k = np.array([self.fold_into_bz(k) for ik,k in enumerate(self.k)])        
         self.latdb = latdb
         self.lat = latdb.lat
         self.rlat = latdb.rlat*2*np.pi
@@ -254,8 +254,8 @@ class NNKP_Grids(NNKP):
         return kplusq_table, kminusq_table
     
     def get_kq_tables_yambo(self,savedb):
-        kplusq_table = np.zeros((self.nkpoints,savedb.nkpoints),dtype=int)
-        kminusq_table = np.zeros((self.nkpoints,savedb.nkpoints), dtype=int)
+        kplusq_table = np.zeros((self.nkpoints,savedb.nkpoints_ibz),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,savedb.nkpoints_ibz), dtype=int)
         
         for ik, k in enumerate(self.k):
             for iq, q in enumerate(savedb.red_kpoints):
