@@ -679,9 +679,9 @@ class H2P():
         if self.method == 'skip-diago':
             indices = self.inverse_aux_t
         else:
-            indices = slice(None)
+            indices = np.arange(0,self.dimbse,1)
         chunk_size=int(self.dimbse/100.0)
-        if (chunk_size < 1): chun_size=self.dimbse
+        if (chunk_size < 1): chunk_size=self.dimbse
         # Chunk the indices to manage memory usage
         ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
         iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
@@ -693,10 +693,9 @@ class H2P():
             ik = np.array(ik)[:, np.newaxis]
             iv = np.array(iv)[:, np.newaxis]
             ic = np.array(ic)[:, np.newaxis]
-
-            ikp = ik.T
-            ivp = iv.T
-            icp = ic.T
+            for ivp, icp in zip(iv_chunks,ic_chunks):
+                ivp = iv
+                icp = icp
 
             iqpb = self.kmpgrid.qpb_grid_table[iq, ib, 1]
             ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
@@ -705,10 +704,9 @@ class H2P():
             term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
             term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
-            term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
-            term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
-
-            Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
+                term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
+                term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
+                Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
 
         return Mssp_ttp
 
@@ -740,38 +738,26 @@ class H2P():
     #     self.Mssp = Mssp   
     
 
-    def _get_amn_ttp(self, t, l , iq,ikq, B):
-        if(self.method=='skip-diago'):
-            Ammn_ttp=0
-            offset_nb = self.savedb.nbandsv-self.nv
-            for il in range(self.dimslepc):                
-                ik = self.BSE_table[self.inverse_aux_t[il]][0]
-                iv = self.BSE_table[self.inverse_aux_t[il]][1] 
-                ic = self.BSE_table[self.inverse_aux_t[il]][2] 
-                ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
-                Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(B[ikq,ic+offset_nb,l])*B[ikmq,iv+offset_nb,l]
-                #*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])            
-        else:
-            Ammn_ttp=0
-            offset_nb = self.savedb.nbandsv-self.nv
-            for il in range(self.dimbse):
-                ik = self.BSE_table[il][0]
-                iv = self.BSE_table[il][1] 
-                ic = self.BSE_table[il][2] 
-                ikmq = self.kmpgrid.kmq_grid_table[ikq,iq][1]
-                Ammn_ttp += np.conjugate(self.h2peigvec_vck[ikq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik])*np.conjugate(B[ikq,ic+offset_nb,l])*B[ikmq,iv+offset_nb,l]
-                #*np.vdot(B[ikmq,iv,:], B[ikq,ic,:])
+    def _get_amn_ttp(self, t, tp, ikq):
+        # A_squared = np.abs(self.h2peigv_vck)**2
+        # w_qk = np.sum(A_squared, axis = (2,3))
+        # ik = self.BSE_table[t][0]
+        # iv = self.BSE_table[t][1] 
+        # ic = self.BSE_table[t][2] 
+        #ikp = self.BSE_table[tp][0]
+        #ivp = self.BSE_table[tp][1] 
+        #icp = self.BSE_table[tp][2] 
+        #ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
+        #Ammn_ttp = w_qk[ikq, t] #self.h2peigvec_vck[iq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]#*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
+        Ammn_ttp = np.sum(self.h2peigvec_vck[ikq, t, :, :, :] * np.conjugate(self.h2peigvec_vck[ikq, tp, :, :, :]))
         return Ammn_ttp
 
-    def get_exc_amn(self, trange = [0]): #tprange here has a different meaning, is the trial exciton wavefunction, for now is basically always one
-        amn_wann = AMN(infile=self.projection_infile)
-        B = amn_wann.A_kmn
-        lrange = np.arange(0,B.shape[2])
-        Amn = np.zeros((len(trange), B.shape[2],self.qmpgrid.nkpoints), dtype=np.complex128)
+    def get_exc_amn(self, trange = [0], tprange = [0]):
+        Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
         for it,t in enumerate(trange):
-            for l,lp in enumerate(lrange):
-                for iq,ikq in enumerate(self.kindices_table):
-                    Amn[t,lp, iq] = self._get_amn_ttp(t,lp,iq,ikq, B)        
+            for itp, tp in enumerate(tprange):
+                for iq, ikq in enumerate(self.kindices_table):
+                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, ikq)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
@@ -850,8 +836,8 @@ class H2P():
             f_out.write(f'\t{dim[0]:.7f}\t{dim[1]:.7f}\t{dim[2]:.7f}\n')
         f_out.write('end recip_lattice\n\n')
 
-        f_out.write(f'begin kpoints\n\t {len(self.kmpgrid.red_kpoints)}\n')
-        for i, dat in enumerate(self.kmpgrid.red_kpoints):
+        f_out.write(f'begin kpoints\n\t {len(self.qmpgrid.red_kpoints)}\n')
+        for i, dat in enumerate(self.qmpgrid.red_kpoints):
             f_out.write(f'   {dat[0]:11.8f}\t{dat[1]:11.8f}\t{dat[2]:11.8f}\n')
         f_out.write(f'end kpoints\n\n')
 
@@ -866,23 +852,22 @@ class H2P():
                 f_out.write(f'\t{iq+1}\t{iqpb+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
         f_out.write('end nnkpts')
 
-    def write_exc_amn(self,infile, seedname='wannier90_exc', trange = [0]):
-        self.projection_infile = infile
+    def write_exc_amn(self, seedname='wannier90_exc', trange = [0], tprange = [0]):
         if (self.Amn is None):
-            self.get_exc_amn(trange)
+            self.get_exc_amn(trange, tprange)
 
         f_out = open(f'{seedname}.amn', 'w')
 
         from datetime import datetime
-        lrange = np.arange(0,self.Amn.shape[1])
+
         current_datetime = datetime.now()
         date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
         f_out.write(f'Created on {date_time_string}\n')
-        f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{len(lrange)}\n') 
+        f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{len(tprange)}\n') 
         for iq, q in enumerate(self.kindices_table):
-            for ilp,lp in enumerate(lrange):
+            for itp,tp in enumerate(tprange):
                 for it, t in enumerate(trange):                
-                    f_out.write(f'\t{it+1}\t{ilp+1}\t{iq+1}\t{np.real(self.Amn[it,ilp,iq])}\t\t{np.imag(self.Amn[it,ilp,iq])}\n')
+                    f_out.write(f'\t{it+1}\t{itp+1}\t{iq+1}\t{np.real(self.Amn[it,itp,iq])}\t\t{np.imag(self.Amn[it,itp,iq])}\n')
 
     def _get_BSE_table(self):
         ntransitions = self.nk*self.bse_nc*self.bse_nv

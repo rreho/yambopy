@@ -156,7 +156,8 @@ path_kpoints = Path([[[  0.5,  0.250,  0.750],'W'],
 ```
 2. run: 
 ``` $ mpirun -np 4 pw.x < nscf.in |tee log_nscf.out```
-3. Compute the orbital projected wavefunction. Create a new `bands.in` file
+3. Compute the orbital 
+ wavefunction. Create a new `bands.in` file
 ```bash
 &projwfc
     prefix = 'LiF',
