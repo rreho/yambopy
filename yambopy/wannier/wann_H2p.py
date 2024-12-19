@@ -704,9 +704,9 @@ class H2P():
             term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
             term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
-                term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
-                term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
-                Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
+            term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
+            term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
+            Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
 
         return Mssp_ttp
 

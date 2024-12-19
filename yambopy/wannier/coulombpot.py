@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.special import j0, y0, k0, j1, y1, k1  # Bessel functions from scipy.special
-from yambopy.lattice import replicate_red_kmesh, calculate_distances, get_path, car_red,modvec
+from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red,modvec
 from yambopy.units import alpha,ha2ev, ang2bohr
 
 class CoulombPotentials:
