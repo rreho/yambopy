@@ -378,11 +378,11 @@ class H2P():
                         K_direct = self._getKdq(ik,iv,ic,ikp,ivp,icp,iq) 
                         K_Ex = self._getKEx(ik,iv,ic,ikp,ivp,icp,iq)
                         if(t == tp):
-                            H2P[iq,t,tp] = self.eigv[ik,ic]-self.eigv[ikminusq,iv] + (self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_Ex - K_direct)
+                            H2P[iq,t,tp] = self.eigv[ik,ic]-self.eigv[ikminusq,iv] + (self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_direct - K_Ex)
                             # if (self.TD==True):
                             #     H2P[iq,t,tp] = 0.0
                         else:
-                            H2P[iq,t,tp] =(self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_Ex - K_direct)
+                            H2P[iq,t,tp] =(self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_direct - K_Ex)
             return H2P
 
 
