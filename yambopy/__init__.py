@@ -84,7 +84,6 @@ from yambopy.dbs.elphondb import *
 from yambopy.dbs.bsekerneldb import *
 from yambopy.dbs.excphondb import *
 from yambopy.dbs.kqgridsdb import *
-
 #input/output files
 from yambopy.io.inputfile import *
 from yambopy.io.outputfile import *

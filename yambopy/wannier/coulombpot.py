@@ -3,7 +3,6 @@ from scipy.special import j0, y0, k0, j1, y1, k1  # Bessel functions from scipy.
 from yambopy.lattice import replicate_red_kmesh, calculate_distances, get_path, car_red,modvec
 from yambopy.units import alpha,ha2ev, ang2bohr
 
-
 class CoulombPotentials:
     '''
     class to create Coulomb potential for TB-models. Return values in Hartree
@@ -15,7 +14,7 @@ class CoulombPotentials:
     alpha = -(0.0904756) * 10 ** 3
     pi = np.pi
 
-    def __init__(self, ngrid, lattice, v0 =0.0, lc = 15.0, w=1.0, r0=1.0, tolr=0.001, ediel=[1.0,1.0,1.0]):
+    def __init__(self, ngrid, lattice, v0=0.0, lc=15.0, w=1.0, r0=1.0, tolr=0.001, ediel=[1.0,1.0,1.0]):
         print('''Warning! CoulombPotentials works with atomic units and return energy in eV \n
                 Check consistency of units in the methods, they have not been properly tested
               ''')
@@ -24,8 +23,8 @@ class CoulombPotentials:
         self.lattice = lattice
         self.rlat = lattice.lat
         self.tolr = tolr
-        self.dir_vol = lattice.lat_vol
-        self.rec_vol = lattice.rlat_vol
+        self.dir_vol = lattice.lat_vol  #real lattice volume
+        self.rec_vol = lattice.rlat_vol # reciprocal lattice volume
         self.ediel = ediel # ediel(1) Top substrate, ediel(2) \eps_d, ediel(3) Bot substrate     
         self.lc = lc
         self.w = w
@@ -62,7 +61,7 @@ class CoulombPotentials:
 
     def vcoul(self, kpt1, kpt2):
         modk = modvec(kpt1, kpt2)
-        vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
+        vbz = self.rec_vol
         ed = self.ediel[1]  # The dielectric constant is set to 1.0
         if modk < self.tolr:
             vcoul = self.v0
@@ -119,14 +118,16 @@ class CoulombPotentials:
         return v2dt2*ha2ev
 
     def v2drk(self, kpt1, kpt2):
-        
+        '''
+         V(Q) = - e^2 / (2 A_uc \epsilon_0 |Q| F(Q) ) * e^(-w_0 |Q|)
+        '''
         w = self.w
         r0 = self.r0
         lc = self.lc
         # Compute the volume of the cell and modulus of the k-point difference
         modk = modvec(kpt1, kpt2)
 
-        vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
+        vbz = 1.0 / (self.rec_vol)
 
         epar = self.ediel[1]
         et = self.ediel[1]
@@ -145,7 +146,7 @@ class CoulombPotentials:
             aux2 = (1.0 - (pt * np.exp(-eta * modk * lc))) * (1.0 - (pb * np.exp(-eta * modk * lc)))
             aux3 = r0 * modk * np.exp(-modk * w)
 
-            ew = (aux1 / aux2) + aux3
+            ew = (aux1 / aux2) + aux3       #F(Q)
 
             v2drk = (vbz * 2.0 * self.pi) * np.exp(-modk * w) * (1.0 / ew) * (1.0 / modk)
 

@@ -87,6 +87,38 @@ class MMN(W90_data):
         t2 = time()
         print("Time for MMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))
 
+class AMN(W90_data):
+
+    def __init__(self, infile, npar = multiprocessing.cpu_count()):
+        t0 = time()
+        f_amn_in = open(infile + ".amn", "r")
+        f_amn_in.readline()
+        NB, NK, NW = np.array(f_amn_in.readline().split(),dtype=int) # number of bands, number of k-points, number of wannier
+        self.A_kmn = np.zeros((NB, NW, NK), dtype=complex)
+        block = NB
+        A_kmn = []
+        headstring = []
+        mult = 1
+        print(NB)
+        if npar > 0:
+            pool = multiprocessing.Pool(npar)
+            for j in range(0, NW*NK):
+                x = list(islice(f_amn_in, int(block*npar*mult)))
+                if (len(x))== 0 : break
+                y = [x[i * block :(i + 1) * block] for i in range(npar * mult) if (i + 1) * block <= len(x)]
+                if npar > 0:
+                    A_kmn += pool.map(convert, y)
+                else:
+                    A_kmn += [convert(z) for z in y]
+            if npar > 0:
+                pool.close()
+                pool.join()
+            f_amn_in.close()
+            A_kmn = [d[:,3]+1j*d[:,4] for d in A_kmn]
+            self.A_kmn=np.array(A_kmn).reshape(NK, NW, NB).transpose(0,2,1)
+            t1=time()
+            print("Time for AMN.__init__() : {}".format(t1 - t0))
+    
 class EIG(W90_data):
 
     def __init__(self, seedname):
