@@ -253,12 +253,12 @@ class NNKP_Grids(NNKP):
 
         return kplusq_table, kminusq_table
     
-    def get_kq_tables_yambo(self,savedb):
-        kplusq_table = np.zeros((self.nkpoints,savedb.nkpoints_ibz),dtype=int)
-        kminusq_table = np.zeros((self.nkpoints,savedb.nkpoints_ibz), dtype=int)
+    def get_kq_tables_yambo(self,electronsdb):
+        kplusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz), dtype=int)
         
         for ik, k in enumerate(self.k):
-            for iq, q in enumerate(savedb.red_kpoints):
+            for iq, q in enumerate(electronsdb.red_kpoints):
                 kplusq = k+q
                 kminusq = k-q
                 kplusq = self.fold_into_bz(kplusq)
