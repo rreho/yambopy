@@ -298,7 +298,7 @@ class YamboElectronsDB():
         Expand eigenvalues to the full brillouin zone
         """
         
-        self.expand_kpoints()
+        self.expand_kpts()
         self.eigenvalues = self.eigenvalues_ibz[:,self.kpoints_indexes]
         self.nkpoints = len(self.eigenvalues)
 
