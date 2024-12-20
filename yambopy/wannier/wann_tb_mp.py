@@ -54,16 +54,26 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack):
         kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
         kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
         
-        for ik, k in enumerate(self.k):
-            for iq, q in enumerate(qmpgrid.k):
-                kplusq = k+q
-                kminusq = k-q
-                kplusq = self.fold_into_bz(kplusq)
-                kminusq = self.fold_into_bz(kminusq)
-                idxkplusq = self.find_closest_kpoint(kplusq)
-                idxkminusq = self.find_closest_kpoint(kminusq)
-                kplusq_table[ik,iq] = idxkplusq
-                kminusq_table[ik,iq] = idxkminusq
+        kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
+        
+        kplusq = self.k[:, np.newaxis, :] + qmpgrid.k[np.newaxis, :, :]
+        kminusq = self.k[:, np.newaxis, :] - qmpgrid.k[np.newaxis, :, :]
+
+        # Fold all kplusq and kminusq into the Brillouin zone
+        kplusq = self.fold_into_bz(kplusq)
+        kminusq = self.fold_into_bz(kminusq)
+
+        # Find closest k-points for all combinations
+        idxkplusq = np.apply_along_axis(self.find_closest_kpoint, -1, kplusq)
+        idxkminusq = np.apply_along_axis(self.find_closest_kpoint, -1, kminusq)
+
+        # Assign to tables
+        kplusq_table = idxkplusq
+        kminusq_table = idxkminusq
+
+        return kplusq_table, kminusq_table
+        
 
         return kplusq_table, kminusq_table
     
@@ -89,7 +99,7 @@ class tb_Monkhorst_Pack(sisl.physics.MonkhorstPack):
         counter = 0
         #here I need to use the q grid and then apply -b/2
         qplaquette_grid = np.zeros((nps, 4), dtype=int)
-        for iq, q in enumerate(self.k):
+        for iq, q in enumerate(self.k):     # needs improvement using array casting
             if (q[dir]==0.0):
                 tmp_qp1 = self.fold_into_bz(q + dq1*dir1)
                 tmp_qp1p2 = self.fold_into_bz(q + dq1*dir1+ dq2*dir2)
@@ -166,10 +176,9 @@ class NNKP_Grids(NNKP):
         self.kpbover2_grid = kpbover2_grid
         self.kpbover2_grid_table = kpbover2_grid_table
 
-    def get_kmqmbover2_grid(self, qmpgrid: 'NNKP_Grids'):
-
+    def get_kmqmbover2_grid(self, qmpgrid: 'NNKP_Grids'):       # need to improve this one
         if not isinstance(qmpgrid, NNKP_Grids):
-            raise TypeError('Argument must be an instance of NNKP_Grids') 
+            raise TypeError('Argument must be an instance of NNKP_Grids')
         #here I need to use the k-q grid and then apply -b/2
         kmqmbover2_grid = np.zeros((self.nkpoints, qmpgrid.nkpoints, qmpgrid.nnkpts,3))
         kmqmbover2_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, qmpgrid.nnkpts,5),dtype=int)
@@ -183,73 +192,80 @@ class NNKP_Grids(NNKP):
 
         self.kmqmbover2_grid = kmqmbover2_grid
         self.kmqmbover2_grid_table = kmqmbover2_grid_table
+    
 
 
 
-    def fold_into_bz_Gs(self, k_point, bz_range=(-0.5, 0.5), reciprocal_vectors=None):
+
+    def fold_into_bz_Gs(self, k_points, bz_range=(-0.5, 0.5), reciprocal_vectors=None):
         """
-        Fold a k-point into the first Brillouin Zone and determine the reciprocal lattice vector G needed.
-        
+        Fold k-points into the first Brillouin Zone and determine the reciprocal lattice vectors G needed.
+
         Parameters:
-        - k_point: A point in k-space.
+        - k_points: Array of k-points in k-space (shape: (..., 3)).
         - bz_range: Tuple indicating the range of the BZ, default is (-0.5, 0.5) for each direction.
-        - reciprocal_vectors: A list of reciprocal lattice vectors defining the BZ.
-        
-        Returns:
-        - folded_k_point: The folded k-point within the BZ.
-        - G_vector: The reciprocal lattice vector that folds the k-point into the BZ.
-        """
-        
-        k_point = np.array(k_point)
-        
-        # Determine the G-vector multiplier for folding
-        G_multiplier = np.floor((k_point - bz_range[0]) / (bz_range[1] - bz_range[0]))
-        # Calculate the G_vector
-        if reciprocal_vectors is not None:
-            G_vector = np.dot(G_multiplier, reciprocal_vectors)
-        else:
-            # If no reciprocal lattice vectors are provided, assume a cubic lattice with unit cell length of 1
-            G_vector = G_multiplier * (bz_range[1] - bz_range[0])
+        - reciprocal_vectors: A list or matrix of reciprocal lattice vectors defining the BZ.
 
-        # Fold the k_point into the BZ
-        folded_k_point = k_point - G_vector
-        # Correct for the case when the point is exactly on the upper bound of the BZ
-        for i in range(len(folded_k_point)):
-            if folded_k_point[i] == bz_range[0] and G_vector[i] >= 1.0:
-                folded_k_point[i] += (bz_range[1] - bz_range[0])
-                G_vector[i] -= (bz_range[1] - bz_range[0])
-            G_vector[i] = -G_vector[i]
-            if folded_k_point[i] == bz_range[1]:
-                folded_k_point[i] -= (bz_range[1]-bz_range[0])
-                G_vector[i] = 0
-        return folded_k_point, G_vector
+        Returns:
+        - folded_k_points: The folded k-points within the BZ (shape: same as k_points).
+        - G_vectors: The reciprocal lattice vectors that fold the k-points into the BZ (shape: same as k_points).
+        """
+        k_points = np.array(k_points)  # Ensure input is an array
+
+        # Determine the G-vector multipliers for folding
+        G_multiplier = np.floor((k_points - bz_range[0]) / (bz_range[1] - bz_range[0]))
+        
+        # Calculate the G_vectors
+        if reciprocal_vectors is not None:
+            reciprocal_vectors = np.array(reciprocal_vectors)  # Ensure reciprocal_vectors is an array
+            G_vectors = np.tensordot(G_multiplier, reciprocal_vectors, axes=([1], [0]))
+        else:
+            # Assume a cubic lattice with unit cell length of 1
+            G_vectors = G_multiplier * (bz_range[1] - bz_range[0])
+
+        # Fold the k-points into the BZ
+        folded_k_points = k_points - G_vectors
+        # Correct for points exactly on the upper bound of the BZ
+        mask_upper_bound = (folded_k_points == bz_range[0]) & (G_vectors >= 1.0)
+        folded_k_points[mask_upper_bound] += (bz_range[1] - bz_range[0])
+        G_vectors[mask_upper_bound] -= (bz_range[1] - bz_range[0])
+        # Negate G_vectors
+        G_vectors = -G_vectors
+        # Handle points at the upper bound of the BZ
+        mask_at_upper_bound = (folded_k_points == bz_range[1])
+        folded_k_points[mask_at_upper_bound] -= (bz_range[1] - bz_range[0])
+        G_vectors[mask_at_upper_bound] = 0
+
+        return folded_k_points, G_vectors
+
 
     def find_closest_kpoint(self, point):
         # Convert point to a numpy array
         point = np.array(point)
-        
         # Calculate distances considering periodic boundary conditions
         distances = np.linalg.norm((self.k - point + 0.5) % 1 - 0.5, axis=1)
-        
-        # Find the index of the minimum distance
         closest_idx = np.argmin(distances)
         
         return int(closest_idx)
 
     def get_kq_tables(self,qmpgrid):
-        kplusq_table = np.zeros((self.nkpoints,self.nkpoints),dtype=int)
-        kminusq_table = np.zeros((self.nkpoints,self.nkpoints), dtype=int)
+        kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
         
-        for ik, k in enumerate(self.k):
-            for iq, q in enumerate(qmpgrid.k):
-                kplusq = k+q
-                kminusq = k-q
-                kplusq = self.fold_into_bz(kplusq)
-                kminusq = self.fold_into_bz(kminusq)
-                idxkplusq = self.find_closest_kpoint(kplusq)
-                idxkminusq = self.find_closest_kpoint(kminusq)
-                kplusq_table[ik,iq] = idxkplusq
-                kminusq_table[ik,iq] = idxkminusq
+        kplusq = self.k[:, np.newaxis, :] + qmpgrid.k[np.newaxis, :, :]
+        kminusq = self.k[:, np.newaxis, :] - qmpgrid.k[np.newaxis, :, :]
+
+        # Fold all kplusq and kminusq into the Brillouin zone
+        kplusq = self.fold_into_bz(kplusq)
+        kminusq = self.fold_into_bz(kminusq)
+
+        # Find closest k-points for all combinations
+        idxkplusq = np.apply_along_axis(self.find_closest_kpoint, -1, kplusq)
+        idxkminusq = np.apply_along_axis(self.find_closest_kpoint, -1, kminusq)
+
+        # Assign to tables
+        kplusq_table = idxkplusq
+        kminusq_table = idxkminusq
 
         return kplusq_table, kminusq_table
     
@@ -257,27 +273,33 @@ class NNKP_Grids(NNKP):
         kplusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz),dtype=int)
         kminusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz), dtype=int)
         
-        for ik, k in enumerate(self.k):
-            for iq, q in enumerate(electronsdb.red_kpoints):
-                kplusq = k+q
-                kminusq = k-q
-                kplusq = self.fold_into_bz(kplusq)
-                kminusq = self.fold_into_bz(kminusq)
-                idxkplusq = self.find_closest_kpoint(kplusq)
-                idxkminusq = self.find_closest_kpoint(kminusq)
-                kplusq_table[ik,iq] = idxkplusq
-                kminusq_table[ik,iq] = idxkminusq
+        kplusq = self.k[:, np.newaxis, :] + electronsdb.red_kpoints[np.newaxis, :, :]
+        kminusq = self.k[:, np.newaxis, :] - electronsdb.red_kpoints[np.newaxis, :, :]
+
+        # Fold all kplusq and kminusq into the Brillouin zone
+        kplusq = self.fold_into_bz(kplusq)
+        kminusq = self.fold_into_bz(kminusq)
+
+        # Find closest k-points for all combinations
+        idxkplusq = np.apply_along_axis(self.find_closest_kpoint, -1, kplusq)
+        idxkminusq = np.apply_along_axis(self.find_closest_kpoint, -1, kminusq)
+
+        # Assign to tables
+        kplusq_table = idxkplusq
+        kminusq_table = idxkminusq
+
 
         return kplusq_table, kminusq_table
 
     def get_kindices_fromq(self,qmpgrid):
-        kindices_fromq = np.zeros((qmpgrid.nkpoints),dtype=int) # get k index corresponding to q-point
-         
-        for iq, q in enumerate(qmpgrid.k):
-            idxk = self.find_closest_kpoint(q)
-            kindices_fromq[iq] = idxk
+        q_points = qmpgrid.k  # Extract q-points array
 
-        self.kindices_fromq=kindices_fromq
+        # Apply the function self.find_closest_kpoint to all q-points in a vectorized manner
+        kindices_fromq = np.apply_along_axis(self.find_closest_kpoint, -1, q_points)
+
+        # Assign the result directly
+        self.kindices_fromq = kindices_fromq
+
         return kindices_fromq
 
     def fold_into_bz(self,points):
@@ -310,7 +332,7 @@ class NNKP_Grids(NNKP):
         counter = 0
         #here I need to use the q grid and then apply -b/2
         qplaquette_grid = np.zeros((nps, 4), dtype=int)
-        for iq, q in enumerate(self.k):
+        for iq, q in enumerate(self.k):     # needs improving with array casting
             if (q[dir]==0.0):
                 tmp_qp1, tmp_qp1Gvec = self.fold_into_bz_Gs(q + dq1*dir1)
                 tmp_qp1p2, tmp_qp1p2Gvec = self.fold_into_bz_Gs(q + dq1*dir1+ dq2*dir2)
@@ -320,6 +342,7 @@ class NNKP_Grids(NNKP):
                 idxqp2 = self.find_closest_kpoint(tmp_qp2)
                 qplaquette_grid[counter] = [iq, idxqp1, idxqp1p2, idxqp2]
                 counter +=1            
+
         self.qplaquette_grid = qplaquette_grid
 class tb_symm_grid():
     def __init__(self, latdb, mesh, is_shift=[0.0,0.0,0.0]):
@@ -336,9 +359,10 @@ class tb_symm_grid():
 
     @classmethod
     def _get_kpoints(cls):
-        fullbzgrid = []
-        for i, (ir_gp_id, gp) in enumerate(zip(cls.mapping, cls.grid)):
-            fullbzgrid = np.append(fullbzgrid, gp.astype(float)/self.mesh)
-        ibzgrid = cls.grid[np.unique(cls.mapping)]/np.array(cls.mesh,dtype=float)
+        # Convert cls.grid to floats and normalize by self.mesh for all entries
+        fullbzgrid = np.array(cls.grid, dtype=float) / np.array(self.mesh, dtype=float)
+
+        # Select unique elements from cls.grid based on cls.mapping
+        ibzgrid = fullbzgrid[np.unique(cls.mapping)]
         
         return ibzgrid, fullbzgrid
