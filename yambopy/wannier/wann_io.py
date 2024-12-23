@@ -9,6 +9,7 @@
 import numpy as np
 import multiprocessing
 import gc
+from concurrent.futures import ProcessPoolExecutor
 import tbmodels
 from itertools import islice
 from time import time
@@ -88,44 +89,28 @@ class MMN(W90_data):
         print("Time for MMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))
 
 class AMN(W90_data):
+    """
+    The file seedname.amn contains the projection Amn(k).
+    First line: a user comment, e.g., the date and time
+    Second line: 3 integers: num_bands, num_kpts, num_wann
+    Subsequently num_bandsxnum_wannxnum_kpts lines: 3 integers and 2 real numbers on each line. 
+    The first two integers are the band index m and the projection index n, respectively. 
+    The third integer specifies the k by giving the ordinal corresponding to its position in the list of k-points in seedname.win. 
+    The real numbers are the real and imaginary parts, respectively, of the actual Amn(k).
+    """
     def __init__(self, seedname, npar = multiprocessing.cpu_count()):
         t0 = time()
         f_amn_in = open(seedname + '.amn', "r")
         f_amn_in.readline()
         NB, NK, NW = np.array(f_amn_in.readline().split(),dtype=int) # number of bands, number of k-points, number of wannier
-        self.A_kmn = np.zeros((NB, NW, NK), dtype=complex)
-        block = NB
-        A_kmn = []
-        headstring = []
-        mult = 1
+        f_amn_in.close()
+        A_kmn = np.zeros((NB, NW, NK), dtype=complex)
         print(NB)
 
-        if npar > 0:
-            pool = multiprocessing.Pool(npar)
-        else:
-            pool = None  # For serial execution, no need to initialize a pool
+        data = np.loadtxt(seedname + '.amn', dtype=float, skiprows=2)
+        A_kmn = data[:,3] + 1j*data[:,4]
+        self.A_kmn = A_kmn.reshape(NK, NW, NB).transpose(0, 2, 1)
 
-        A_kmn = []
-        for j in range(0, NW * NK):
-            x = list(islice(f_amn_in, int(block * npar * mult)))
-            if len(x) == 0:
-                break
-            y = [x[i * block:(i + 1) * block] for i in range(npar * mult) if (i + 1) * block <= len(x)]
-            
-            if npar > 0:
-                A_kmn += pool.map(convert, y)
-            else:
-                A_kmn += [convert(z) for z in y]
-
-        if pool is not None:  # Close and join the pool only in parallel mode
-            pool.close()
-            pool.join()
-
-        f_amn_in.close()
-
-        A_kmn = [d[:, 3] + 1j * d[:, 4] for d in A_kmn]
-        self.A_kmn = np.array(A_kmn).reshape(NK, NW, NB).transpose(0, 2, 1)
-        print(self.A_kmn)
         t1 = time()
         print("Time for AMN.__init__() : {}".format(t1 - t0))
     
@@ -211,43 +196,33 @@ class FortranFileR(fortio.FortranFile):
 class HR(W90_data):
     """
     HR.data[nrpts, num_wann,num_wann] = h_{Rmn}
+    he second line states the number of Wannier functions num_wann. 
+    The third line gives the number of Wigner-Seitz grid-points nrpts. 
+    The next block of nrpts integers gives the degeneracy of each Wigner-Seitz grid point, with 15 entries per line. 
+    Finally, the remaining num_wann2x nrpts lines each contain, respectively, 
+    the components of the vector R in terms of the lattice vectors {Ai}, 
+    the indices m and n, and the real and imaginary parts of the Hamiltonian matrix element Hmn(R) in the WF basis, e.g.,
     """
 
     def __init__(self, seedname, npar=multiprocessing.cpu_count()):
         t0 = time()
-        f_hr_in = open(seedname + "_hr.dat", "r")
-        f_hr_in.readline()
-        self.num_wann = int(f_hr_in.readline())
-        self.nrpts = int(f_hr_in.readline())
-        # degeneracy of Wigner-Seitz cell
+        file_path = seedname + "_hr.dat"
         ws_deg = []
-        for i in range(0,int(np.ceil(self.nrpts/15))):
-            ws_deg = np.append(ws_deg, f_hr_in.readline().split())
+        with open(file_path, "r") as f:
+            f.readline()
+            self.num_wann = int(f.readline())
+            self.nrpts = int(f.readline())
+            self.skiplines = int(np.ceil(self.nrpts/15))
+            for i in range(0,int(np.ceil(self.nrpts/15))):
+                ws_deg = np.append(ws_deg, f.readline().split())
+
         self.ws_deg = list(map(int,ws_deg))
-
         self.data = np.zeros((self.nrpts, self.num_wann,self.num_wann), dtype=complex)
-        block = self.num_wann**2
-        data = []
-        mult = 1
-        # FIXME: npar = 0 does not work
-        if npar > 0:
-            pool = multiprocessing.Pool(npar)
-        for j in range(0, self.nrpts, npar * mult):
-            x = list(islice(f_hr_in, int(block * npar * mult)))
-            if len(x) == 0: break
-            y = [x[i * block :(i + 1) * block] for i in range(npar * mult) if (i + 1) * block <= len(x)]
-            if npar > 0:
-                data += pool.map(convert, y)
-            else:
-                data += [convert(z) for z in y]
+        data = np.loadtxt(file_path, dtype=float, skiprows=self.skiplines+3)
 
-        if npar > 0:
-            pool.close()
-            pool.join()
-        f_hr_in.close()
         t1 = time()
-        HR_mn = [d[:, 5] + 1j * d[:, 6] for d in data]
-        iHR_mn = [d[:,0:5] for d in data]
+        HR_mn = data[:,5] + 1j*data[:,6]
+        iHR_mn = data[:,0:5]
         self.HR_mn = np.array(HR_mn).reshape(self.nrpts, self.num_wann, self.num_wann)
         self.iHR_mn = np.array(iHR_mn).reshape(self.nrpts,self.num_wann,self.num_wann,5)
         newhop = self.iHR_mn[:,:,:,0:3].reshape(self.nrpts*self.num_wann**2,3)
