@@ -89,44 +89,28 @@ class MMN(W90_data):
         print("Time for MMN.__init__() : {} , read : {} , headstring {}".format(t2 - t0, t1 - t0, t2 - t1))
 
 class AMN(W90_data):
+    """
+    The file seedname.amn contains the projection Amn(k).
+    First line: a user comment, e.g., the date and time
+    Second line: 3 integers: num_bands, num_kpts, num_wann
+    Subsequently num_bandsxnum_wannxnum_kpts lines: 3 integers and 2 real numbers on each line. 
+    The first two integers are the band index m and the projection index n, respectively. 
+    The third integer specifies the k by giving the ordinal corresponding to its position in the list of k-points in seedname.win. 
+    The real numbers are the real and imaginary parts, respectively, of the actual Amn(k).
+    """
     def __init__(self, seedname, npar = multiprocessing.cpu_count()):
         t0 = time()
         f_amn_in = open(seedname + '.amn', "r")
         f_amn_in.readline()
         NB, NK, NW = np.array(f_amn_in.readline().split(),dtype=int) # number of bands, number of k-points, number of wannier
-        self.A_kmn = np.zeros((NB, NW, NK), dtype=complex)
-        block = NB
-        A_kmn = []
-        headstring = []
-        mult = 1
+        f_amn_in.close()
+        A_kmn = np.zeros((NB, NW, NK), dtype=complex)
         print(NB)
 
-        if npar > 0:
-            pool = multiprocessing.Pool(npar)
-        else:
-            pool = None  # For serial execution, no need to initialize a pool
+        data = np.loadtxt(seedname + '.amn', dtype=float, skiprows=2)
+        A_kmn = data[:,3] + 1j*data[:,4]
+        self.A_kmn = A_kmn.reshape(NK, NW, NB).transpose(0, 2, 1)
 
-        A_kmn = []
-        for j in range(0, NW * NK):
-            x = list(islice(f_amn_in, int(block * npar * mult)))
-            if len(x) == 0:
-                break
-            y = [x[i * block:(i + 1) * block] for i in range(npar * mult) if (i + 1) * block <= len(x)]
-            
-            if npar > 0:
-                A_kmn += pool.map(convert, y)
-            else:
-                A_kmn += [convert(z) for z in y]
-
-        if pool is not None:  # Close and join the pool only in parallel mode
-            pool.close()
-            pool.join()
-
-        f_amn_in.close()
-
-        A_kmn = [d[:, 3] + 1j * d[:, 4] for d in A_kmn]
-        self.A_kmn = np.array(A_kmn).reshape(NK, NW, NB).transpose(0, 2, 1)
-        print(self.A_kmn)
         t1 = time()
         print("Time for AMN.__init__() : {}".format(t1 - t0))
     
