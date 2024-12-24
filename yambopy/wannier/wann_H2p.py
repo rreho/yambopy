@@ -127,7 +127,6 @@ class H2P():
         self.offset_nv = self.nv-self.bse_nv
         self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
-        self.ctype = ctype
         self.ktype = ktype
         self.TD = TD #Tahm-Dancoff
         self.TBos = TBos
@@ -144,6 +143,7 @@ class H2P():
         else:
             self.f_kn = f_kn
         if(self.method=='model' and cpot is not None):
+            self.ctype = ctype
             (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
             #(self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.electronsdb) # used in building BSE
             print('\n Building H2P from model Coulomb potentials. Default is v2dt2\n')
