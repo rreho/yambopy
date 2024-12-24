@@ -1,9 +1,8 @@
-import sisl
-import spglib
 from yambopy.lattice import red_car
 import numpy as np
 from yambopy.wannier.wann_kpoints import KPointGenerator
 from yambopy.wannier.wann_io import NNKP
+from yambopy.units import ang2bohr
 
 class NNKP_Grids(KPointGenerator):
     def __init__(self, seedname,latdb, yambo_grid=False):
@@ -19,7 +18,7 @@ class NNKP_Grids(KPointGenerator):
             self.k = self.nnkp_grid.k
         self.lat = self.latdb.lat
         self.rlat = self.latdb.rlat*2*np.pi
-        self.car_kpoins = red_car(self.k, self.rlat)
+        self.car_kpoints = red_car(self.k, self.rlat)*ang2bohr # result in Bohr
         self.red_kpoints = self.nnkp_grid.k
         self.nkpoints = len(self.k)
         self.weights = 1/self.nkpoints
@@ -38,7 +37,7 @@ class NNKP_Grids(KPointGenerator):
 
         self.kmq_grid = kmq_grid
         self.kmq_grid_table = kmq_grid_table
-        
+
     def get_qpb_grid(self, qmpgrid: 'NNKP_Grids'):
         '''
         For each q belonging to the Qgrid return Q+B and a table with indices

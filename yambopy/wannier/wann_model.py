@@ -10,7 +10,7 @@ import multiprocessing
 import tbmodels
 from time import time
 import typing as ty
-from yambopy.wannier.wann_mpgrid import tb_Monkhorst_Pack
+from yambopy.wannier.wann_asegrid import ase_Monkhorst_Pack
 from yambopy.wannier.wann_Gfuncs import GreensFunctions
 from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T, sort_eig
 from yambopy.wannier.wann_dipoles import TB_dipoles

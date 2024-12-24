@@ -1,5 +1,3 @@
-import sisl
-import spglib
 from yambopy.lattice import red_car
 import numpy as np
 
@@ -8,7 +6,8 @@ class KPointGenerator():
         self.k = None
         self.nkpoints = None
         self.weights = None
-    
+        self.red_kpoints = None
+        self.car_kpoins = None
     def generate(self):
         """Abstract method to generate k-points."""
         raise NotImplementedError("This method must be implemented in subclasses.")
@@ -17,7 +16,8 @@ class KPointGenerator():
         """Validate the generated k-points."""
         if self.k is None or self.weights is None:
             raise ValueError("k-points or weights have not been generated.")
-
+        if self.red_kpoints or self.car_kpoins is None:
+            raise ValueError("red and/or cartesian k-points not initialized.")
     def export(self, filename):
         """Export k-points to a file."""
         np.savetxt(filename, self.k, header="k-points")

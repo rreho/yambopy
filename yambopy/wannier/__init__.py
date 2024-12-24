@@ -12,8 +12,9 @@ from .wann_kpoints import *
 from .wann_Gfuncs import *
 from .wann_utils import *
 from .wann_io import *
-from .wann_mpgrid import *
+from .wann_asegrid import *
 from .wann_nnkpgrid import *
+from .wann_mpgrid import *
 from .coulombpot import *
 from .wann_model import *
 from .wann_dipoles import *
