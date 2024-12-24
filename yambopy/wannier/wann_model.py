@@ -15,6 +15,7 @@ from yambopy.wannier.wann_Gfuncs import GreensFunctions
 from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T, sort_eig
 from yambopy.wannier.wann_dipoles import TB_dipoles
 import matplotlib.pyplot as plt
+import scipy
 class TBMODEL(tbmodels.Model):
     """
     Class that inherits from tbmodels.Model for TB-model Hamiltonians.
@@ -57,8 +58,8 @@ class TBMODEL(tbmodels.Model):
         self.eigv= np.zeros((self.nk,self.nb),dtype=np.complex128)
         self.eigvec = np.zeros((self.nk,self.nb,self.nb),dtype=np.complex128)
         for ik in range(self.nk):
-            (self.eigv[ik], self.eigvec[ik]) = np.linalg.eigh(self.H_k[ik])
-            (self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
+            (self.eigv[ik], self.eigvec[ik]) = scipy.linalg.eig(self.H_k[ik])
+            #(self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
         # transpose to have eigvec[:,i] associated with eval[i]
         # one could transpose it to have the opposite, for now commented out bcs I don't like it
         #self.eig = self.eig.T
@@ -91,7 +92,7 @@ class TBMODEL(tbmodels.Model):
         self.eigv= np.zeros((self.nk,self.nb),dtype=np.complex128)
         self.eigvec = np.zeros((self.nk,self.nb,self.nb),dtype=np.complex128)
         for ik in range(self.nk):
-            (self.eigv[ik], self.eigvec[ik]) = np.linalg.eigh(self.H_k[ik])
+            (self.eigv[ik], self.eigvec[ik]) = scipy.linalg.eigh(self.H_k[ik])
             #(self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
         
         self._get_occupations(self.nk, self.nb, self.eigv, fermie)
@@ -265,7 +266,7 @@ class TBMODEL(tbmodels.Model):
         H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
         for i in range(0, k.shape[0]):
             H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
-        return [np.linalg.eigvalsh(ham) for ham in H_k]
+        return [scipy.linalg.eigvalsh(ham) for ham in H_k]
         
     def pos_operator_matrix(self, eigvec, cartesian = True):
         ''' Computes the position operator along a direction dir at a k-point

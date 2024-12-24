@@ -7,7 +7,7 @@ from yambopy.wannier.wann_utils import *
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self , nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, BSE_table, h2peigvec_vck = None, method = 'real', rmn = None):
+                 eta, hlm, T_table, BSE_table, h2peigv_vck = None, h2peigvec_vck = None, method = 'real', rmn = None):
         # hk, hlm are TBMODEL hamiltonians
         self.ntransitions = nc*nv*nkpoints
         self.nbsetransitions = bse_nc*bse_nv*nkpoints
@@ -41,6 +41,7 @@ class TB_dipoles():
         # self.d_knm = self._get_dipoles_nm(method)
         if (h2peigvec_vck is not None):
             self.h2peigvec_vck = h2peigvec_vck
+            self.h2peigv_vck = h2peigv_vck
             # self.dipoles_bse = self._get_dipoles_bse(method)
             self.BSE_table = BSE_table
             self._get_dipoles_bse(method=method)

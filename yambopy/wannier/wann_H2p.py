@@ -6,6 +6,7 @@ from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
 from yambopy.wannier.wann_io import AMN
 from time import time
+import scipy
 import gc
 
 
@@ -401,7 +402,7 @@ class H2P():
             self.h2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
             h2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
             h2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
-            (self.h2peigv, self.h2peigvec) = np.linalg.eigh(self.H2P)
+            (self.h2peigv, self.h2peigvec) = scipy.linalg.eig(self.H2P)
             self.deg_h2peigvec = self.find_degenerate_eigenvalues(self.h2peigv, self.h2peigvec)
             #(self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec)  # this needs fixing
             for t in range(self.dimbse):
@@ -428,7 +429,7 @@ class H2P():
                 tmph2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
                 tmph2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
                 tmph2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
-                (tmph2peigv, tmph2peigvec) = np.linalg.eigh(self.H2P[iq])
+                (tmph2peigv, tmph2peigvec) = scipy.linalg.eig(self.H2P[iq])
                 deg_h2peigvec = np.append(deg_h2peigvec, self.find_degenerate_eigenvalues(tmph2peigv, tmph2peigvec))
                 # (self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec) # this needs fixing
                 for t in range(self.dimbse):
@@ -592,7 +593,7 @@ class H2P():
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table, \
-                                h2peigvec_vck=h2peigvec_vck, method='real')
+                                h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real')
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
         #self.dipoles = tb_dipoles.dipoles # ??? gargabe now
@@ -650,7 +651,7 @@ class H2P():
                     + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
                 #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                 #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-        print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
+        print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
         #self.pl = pl
         # self.w = w
         # self.eps_0 = eps_0
