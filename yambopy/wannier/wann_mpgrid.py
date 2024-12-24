@@ -31,4 +31,5 @@ class tb_Monkhorst_Pack(KPointGenerator):
         # Flatten the grid into a list of k-points
         self.k = red_points.reshape(-1, 3)
         self.red_kpoints = self.k
-        self.car_kpoins = k_points.reshape(-1,3)
+        self.car_kpoints = k_points.reshape(-1,3)
+        self.nkpoints = len(self.k)
