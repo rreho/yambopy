@@ -8,11 +8,12 @@
 submodule to handle input and output files of wannier90.
 """
 
-
-from .wann_tb_mp import *
+from .wann_kpoints import *
 from .wann_Gfuncs import *
 from .wann_utils import *
 from .wann_io import *
+from .wann_mpgrid import *
+from .wann_nnkpgrid import *
 from .coulombpot import *
 from .wann_model import *
 from .wann_dipoles import *

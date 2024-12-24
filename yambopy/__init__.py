@@ -140,4 +140,17 @@ from yambopy.gkkp.refine_gkkp import *
 from yambopy.data import *
 
 #wannier files
-from .wannier import *
+from yambopy.wannier import *
+from yambopy.wannier.wann_kpoints import *
+from yambopy.wannier.wann_Gfuncs import *
+from yambopy.wannier.wann_utils import *
+from yambopy.wannier.wann_io import *
+from yambopy.wannier.wann_mpgrid import *
+from yambopy.wannier.wann_nnkpgrid import *
+from yambopy.wannier.coulombpot import *
+from yambopy.wannier.wann_model import *
+from yambopy.wannier.wann_dipoles import *
+from yambopy.wannier.wann_H2p import *
+from yambopy.wannier.wann_lifetimes import *
+from yambopy.wannier.wann_ode import *
+from yambopy.wannier.wann_realtime import *

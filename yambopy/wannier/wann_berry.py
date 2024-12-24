@@ -1,5 +1,5 @@
 import numpy as np
-from yambopy.wannier.wann_tb_mp import tb_Monkhorst_Pack
+from yambopy.wannier.wann_mpgrid import tb_Monkhorst_Pack
 from yambopy.wannier.wann_utils import *
 from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
