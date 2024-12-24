@@ -124,7 +124,7 @@ class H2P():
         self.dimbse = self.bse_nv*self.bse_nc*self.nk
         self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
         # self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
-        self.offset_nv = self.electronsdb.nbandsv-self.nv  
+        self.offset_nv = self.nv-self.bse_nv
         self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
         self.ctype = ctype
@@ -593,28 +593,52 @@ class H2P():
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table, \
-                                h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real')
+                                h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
         #self.dipoles = tb_dipoles.dipoles # ??? gargabe now
-
-        F_kcv = tb_dipoles.F_kcv
-        self.F_kcv = F_kcv
-        # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
-        self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
-        # compute eps and pl
-        #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
-        #pl = eps
-        for ies, es in enumerate(w):
-            for t in range(0,self.dimbse):
-                eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                    + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-                #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-        print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
-        #self.pl = pl
-        # self.w = w
-        # self.eps_0 = eps_0
+        if(self.ktype=='IP'):
+            F_kcv = tb_dipoles.F_kcv
+            self.F_kcv = F_kcv
+            # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
+            self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
+            # compute eps and pl
+            #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
+            #pl = eps
+            for ies, es in enumerate(w):
+                for t in range(0,self.dimbse):
+                    ik = self.BSE_table[t][0]
+                    iv = self.BSE_table[t][1]
+                    ic = self.BSE_table[t][2]
+                    eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)                     
+                    #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                    #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+            print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
+            #self.pl = pl
+            #self.w = w
+            #self.eps_0 = eps_0            
+        else:
+            F_kcv = tb_dipoles.F_kcv
+            self.F_kcv = F_kcv
+            # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
+            self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
+            # compute eps and pl
+            #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
+            #pl = eps
+            for ies, es in enumerate(w):
+                for t in range(0,self.dimbse):
+                    ik = self.BSE_table[t][0]
+                    iv = self.BSE_table[t][1]
+                    ic = self.BSE_table[t][2]
+                    eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+                    #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                    #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+            print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
+            #self.pl = pl
+            # self.w = w
+            # self.eps_0 = eps_0
         return w, eps
     
     def get_eps_yambo(self, hlm, emin, emax, estep, eta):
