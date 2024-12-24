@@ -163,7 +163,7 @@ class CoulombPotentials:
         rmin = np.min(np.linalg.norm(self.lattice.lat,axis=1))
         cr = 0.5 * rmin
 
-        factor = 1.0
+        factor = 0.0
 
         if modk < self.tolr:
             v0dt = 2*self.pi*vbz*cr**2

@@ -454,10 +454,10 @@ class H2P():
     def _getKd(self,ik,iv,ic,ikp,ivp,icp):
         if (self.ktype =='IP'):
             K_direct = 0.0
-
+            print('ciao')
             return K_direct
         
-        if (self.ctype=='v2dt2'):
+        elif (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
                         *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])
@@ -486,11 +486,17 @@ class H2P():
             #   ''')
             K_direct = self.cpot.v2drk(self.kmpgrid.car_kpoints[ikp,:],self.kmpgrid.car_kpoints[ik,:])\
                         *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
+        
+        elif(self.ctype == 'v0dt'):
+            K_direct = self.cpot.v0dt(self.kmpgrid.car_kpoints[ikp,:],self.kmpgrid.car_kpoints[ik,:])\
+                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
+
         return K_direct
 
     def _getKdq(self,ik,iv,ic,ikp,ivp,icp,iq):
         if (self.ktype =='IP'):
             K_direct = 0.0
+            print('ciao')
 
             return K_direct
         
@@ -528,11 +534,16 @@ class H2P():
             #   ''')
             K_direct = self.cpot.v2drk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
                         *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])            
+        elif(self.ctype == 'v0dt'):
+            K_direct = self.cpot.v0dt(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
+            *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv]) 
+
         return K_direct
     
     def _getKEx(self,ik,iv,ic,ikp,ivp,icp,iq):
         if (self.ktype =='IP'):
             K_ex = 0.0
+            print('ciao')
 
             return K_ex
 
@@ -569,6 +580,10 @@ class H2P():
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
             K_ex = self.cpot.v2drk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
+                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikpminusq,: ,icp])
+        
+        elif(self.ctype == 'v0dt'):
+            K_ex = self.cpot.v0dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
                         *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikpminusq,: ,icp])
         return K_ex
         
