@@ -422,8 +422,8 @@ class H2P():
             h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
             h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
             deg_h2peigvec = np.array([])        
+            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.dimbse} \n')
             for iq in range(0,self.nq_double):
-                print(f'\nDiagonalizing the H2P matrix with dimensions: {self.dimbse} for q-point: {iq}\n')
                 t0 = time()
                 tmph2peigv = np.zeros((self.dimbse), dtype=np.complex128)
                 tmph2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
