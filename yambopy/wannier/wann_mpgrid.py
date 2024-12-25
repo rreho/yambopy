@@ -5,6 +5,8 @@ from yambopy.wannier.wann_io import NNKP
 from yambopy.wannier.wann_kpoints import KPointGenerator
 from yambopy.units import ang2bohr
 import numpy as np
+from scipy.spatial import cKDTree
+
 class tb_Monkhorst_Pack(KPointGenerator):
     def __init__(self, grid_shape,latdb, shift=np.array([0.0,0.0,0.0])):
         super().__init__()
@@ -33,3 +35,4 @@ class tb_Monkhorst_Pack(KPointGenerator):
         self.red_kpoints = self.k
         self.car_kpoints = k_points.reshape(-1,3)
         self.nkpoints = len(self.k)
+        self.k_tree = cKDTree(self.k)        
