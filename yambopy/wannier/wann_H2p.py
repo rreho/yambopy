@@ -90,7 +90,7 @@ class H2P():
     '''
     def __init__(self, model, electronsdb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
                  ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8):
+                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, electronsdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -112,6 +112,7 @@ class H2P():
         self.eigvec = model.eigvec
         self.qmpgrid = qmpgrid
         self.gammaonly=gammaonly
+        self.eta = eta
         if(self.gammaonly):
             self.nq_double = 1
         else:
@@ -592,7 +593,7 @@ class H2P():
             h2peigv = self.h2peigv[self.q0index]
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table, \
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, \
                                 h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
