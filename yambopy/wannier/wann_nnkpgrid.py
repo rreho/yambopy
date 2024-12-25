@@ -10,6 +10,12 @@ class NNKP_Grids(KPointGenerator):
         self.latdb = latdb
         self.yambo_grid = yambo_grid
 
+    def __getattr__(self, name):
+        # Delegate attribute access to self.nnkp_grid if the attribute doesn't exist in NNKP_Grids
+        if hasattr(self.nnkp_grid, name):
+            return getattr(self.nnkp_grid, name)
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+    
     def generate(self):
         """Generate k-grid from NNKP file."""
         if(self.yambo_grid):
