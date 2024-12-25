@@ -13,10 +13,10 @@ import gc
 def process_file(args):
     idx, exc_db_file, data_dict = args
     # Unpacking data necessary for processing
-    electronsdb, kernel_path, kpoints_indexes, HA2EV, BSE_table, kplusq_table, kminusq_table_yambo, eigv, f_kn = data_dict.values()
+    latdb, kernel_path, kpoints_indexes, HA2EV, BSE_table, kplusq_table, kminusq_table_yambo, eigv, f_kn = data_dict.values()
 
-    yexc_atk = YamboExcitonDB.from_db_file(electronsdb, filename=exc_db_file)
-    kernel_db = YamboBSEKernelDB.from_db_file(electronsdb, folder=f'{kernel_path}', Qpt=kpoints_indexes[idx]+1)
+    yexc_atk = YamboExcitonDB.from_db_file(latdb, filename=exc_db_file)
+    kernel_db = YamboBSEKernelDB.from_db_file(latdb, folder=f'{kernel_path}', Qpt=kpoints_indexes[idx]+1)
     aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
     K_ttp = kernel_db.kernel[aux_t][:,aux_t]  
     H2P_local = np.zeros((len(BSE_table), len(BSE_table)), dtype=np.complex128)
@@ -123,7 +123,7 @@ class H2P():
             print('Warning! Q=0 index not found')
         self.dimbse = self.bse_nv*self.bse_nc*self.nk
         self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
-        # self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
+        self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
         self.offset_nv = self.nv-self.bse_nv
         self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
@@ -195,7 +195,7 @@ class H2P():
 
             # Prepare data to be passed
             data_dict = {
-                'electronsdb': self.electronsdb,
+                'latdb': self.latdb,
                 'kernel_path': self.kernel_path,
                 'kpoints_indexes': kpoints_indexes,
                 'HA2EV': HA2EV,
@@ -238,10 +238,10 @@ class H2P():
             t0 = time()
 
             for idx, exc_db_file in enumerate(exciton_db_files):
-                yexc_atk = YamboExcitonDB.from_db_file(self.electronsdb, filename=exc_db_file)
+                yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
                 v_band = np.min(yexc_atk.table[:, 1])
                 c_band = np.max(yexc_atk.table[:, 2])
-                kernel_db = YamboBSEKernelDB.from_db_file(self.electronsdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
+                kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
                 aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
                 K_ttp = kernel_db.kernel[aux_t][:,aux_t]
                 # Operations for matrix element calculations
@@ -299,7 +299,7 @@ class H2P():
             t0 = time()
 
             for idx, exc_db_file in enumerate(exciton_db_files):
-                yexc_atk = YamboExcitonDB.from_db_file(self.electronsdb, filename=exc_db_file)
+                yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
                 aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
                 # Create an array to store the inverse mapping
                 inverse_aux_t = np.empty_like(aux_t)
@@ -929,7 +929,7 @@ class H2P():
     #                 matrix[j, i] = np.conjugate(matrix[i, j])
     #     return matrix
     def _get_aux_maps(self):
-        yexc_atk = YamboExcitonDB.from_db_file(self.electronsdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q1')
+        yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q1')
         aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
         # Create an array to store the inverse mapping
         inverse_aux_t = np.empty_like(aux_t)
