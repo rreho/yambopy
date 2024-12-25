@@ -47,8 +47,8 @@ class TB_dipoles():
             self.h2peigv_vck = h2peigv_vck
             # self.dipoles_bse = self._get_dipoles_bse(method)
             self.BSE_table = BSE_table
-            if(self.ktype=='IP')
-                print('Running IP dipoles'):
+            if(self.ktype=='IP'):
+                print('Running IP dipoles')
                 self._get_dipoles_IP(method=method)
             else:
                 self._get_dipoles_bse(method=method)

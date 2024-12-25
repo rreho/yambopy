@@ -176,14 +176,14 @@ class TBMODEL(tbmodels.Model):
             if (np.array_equal(irpos[i],[0.0,0.0,0.0])):
                 hr_mn_p = np.copy(hr.HR_mn[i,:,:])
                 np.fill_diagonal(hr_mn_p,complex(0.0))
-                hlm_k[:,:,0] = kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] = kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] = kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,0] += kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] += kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] += kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
             else:
                 hr_mn_p = hr.HR_mn[i,:,:]
-                hlm_k[:,:,0] = kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] = kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] = kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,0] += kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] += kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] += kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
         
         return hlm_k
 
