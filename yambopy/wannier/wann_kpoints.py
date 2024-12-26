@@ -18,7 +18,7 @@ class KPointGenerator():
         """Validate the generated k-points."""
         if self.k is None or self.weights is None:
             raise ValueError("k-points or weights have not been generated.")
-        if self.red_kpoints or self.car_kpoins is None:
+        if self.red_kpoints or self.car_kpoints is None:
             raise ValueError("red and/or cartesian k-points not initialized.")
     def export(self, filename):
         """Export k-points to a file."""
