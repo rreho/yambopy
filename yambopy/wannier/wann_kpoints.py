@@ -24,21 +24,6 @@ class KPointGenerator():
         """Export k-points to a file."""
         np.savetxt(filename, self.k, header="k-points")
 
-    def get_kmq_grid(self, qmpgrid):
-
-        #qmpgrid is meant to be an nnkp object
-        kmq_grid = np.zeros((self.nkpoints, qmpgrid.nkpoints, 3))
-        kmq_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, 5),dtype= int)
-        for ik, k in enumerate(self.k):
-            for iq, q in enumerate(qmpgrid.k):
-                tmp_kmq, tmp_Gvec = self.fold_into_bz_Gs(k-q)
-                idxkmq = self.find_closest_kpoint(tmp_kmq)
-                kmq_grid[ik,iq] = tmp_kmq
-                kmq_grid_table[ik,iq] = [ik, idxkmq, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
-
-        self.kmq_grid = kmq_grid
-        self.kmq_grid_table = kmq_grid_table
-
     def fold_into_bz_Gs(self, k_points, bz_range=(-0.5, 0.5), reciprocal_vectors=None):
         """
         Fold k-points into the first Brillouin Zone and determine the reciprocal lattice vectors G needed.
@@ -101,21 +86,10 @@ class KPointGenerator():
     def get_kq_tables(self,qmpgrid):
         kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
         kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
-        
-        kplusq = self.k[:, np.newaxis, :] + qmpgrid.k[np.newaxis, :, :]
-        kminusq = self.k[:, np.newaxis, :] - qmpgrid.k[np.newaxis, :, :]
-
-        # Fold all kplusq and kminusq into the Brillouin zone
-        kplusq = self.fold_into_bz(kplusq)
-        kminusq = self.fold_into_bz(kminusq)
-
-        # Find closest k-points for all combinations
-        idxkplusq = np.apply_along_axis(self.find_closest_kpoint, -1, kplusq)
-        idxkminusq = np.apply_along_axis(self.find_closest_kpoint, -1, kminusq)
-
         # Assign to tables
-        kplusq_table = idxkplusq
-        kminusq_table = idxkminusq
+
+        _,kplusq_table = self.get_kpq_grid(qmpgrid)
+        _,kminusq_table = self.get_kmq_grid(qmpgrid)
 
         return kplusq_table, kminusq_table
     

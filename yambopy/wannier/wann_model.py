@@ -359,7 +359,7 @@ class TBMODEL(tbmodels.Model):
         for ik in range(self.nk):
             for ikp in range(self.nk):
                 # +1 is for Fortran counting, assume all Gs are 0 for WanTIBEXOS (to be discussed)
-                f_out.write(f'\t{self.kplusq_table[ik,ikp]+1}\t{self.kplusq_table[ik,ikp]+1}\t{0}\t{0}\t{0}\n')
+                f_out.write(f'\t{self.kplusq_table[ik,ikp,1]+1}\t{self.kplusq_table[ik,ikp,1]+1}\t{0}\t{0}\t{0}\n')
                 for n in range(self.nb):
                     for m in range(self.nb):
                         f_out.write(f'\t{np.real(self.Mmn[m,n,ik,ikp]):.14f}\t{np.imag(self.Mmn[m,n,ik,ikp]):.14f}\n')

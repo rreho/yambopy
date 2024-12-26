@@ -32,9 +32,9 @@ def process_file(args):
     ivp = BSE_table[:, 1]
     icp = BSE_table[:, 2]
 
-    ikplusq = kplusq_table[ik, kpoints_indexes[idx]]
-    ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx]]
-    ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+    ikplusq = kplusq_table[ik, kpoints_indexes[idx],1]
+    ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx],1]
+    ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
     # Ensure deltaE is diagonal
     deltaE = np.zeros((len(BSE_table), len(BSE_table)),dtype=np.complex128)
@@ -90,7 +90,7 @@ class H2P():
     '''
     def __init__(self, model, electronsdb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
                  ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8):
+                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8, eta = 0.01):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, electronsdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -112,6 +112,7 @@ class H2P():
         self.eigvec = model.eigvec
         self.qmpgrid = qmpgrid
         self.gammaonly=gammaonly
+        self.eta = eta
         if(self.gammaonly):
             self.nq_double = 1
         else:
@@ -254,9 +255,9 @@ class H2P():
                 ivp = BSE_table[:, 1]
                 icp = BSE_table[:, 2]
 
-                ikplusq = self.kplusq_table[ik, kpoints_indexes[idx]]
-                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx]]
-                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+                ikplusq = self.kplusq_table[ik, kpoints_indexes[idx],1]
+                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],1]
+                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
                 # Ensure deltaE is diagonal
                 deltaE = np.zeros((self.dimbse, self.dimbse),dtype=np.complex128)
@@ -375,8 +376,8 @@ class H2P():
                         ivp = self.BSE_table[tp][1]
                         icp = self.BSE_table[tp][2]
                         # True power of Object oriented programming displayed in the next line
-                        ikplusq = self.kplusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]+self.qmpgrid.k[iq]))
-                        ikminusq = self.kminusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]-self.qmpgrid.k[iq]))
+                        ikplusq = self.kplusq_table[ik,iq,1]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]+self.qmpgrid.k[iq]))
+                        ikminusq = self.kminusq_table[ik,iq,1]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]-self.qmpgrid.k[iq]))
                         K_direct = self._getKdq(ik,iv,ic,ikp,ivp,icp,iq) 
                         K_Ex = self._getKEx(ik,iv,ic,ikp,ivp,icp,iq)
                         if(t == tp):
@@ -495,10 +496,10 @@ class H2P():
 
             return K_direct
         
-        ikplusq = self.kplusq_table[ik,iq]
-        ikminusq = self.kminusq_table[ik,iq]      
-        ikpplusq = self.kplusq_table[ikp,iq]
-        ikpminusq = self.kminusq_table[ikp,iq]       
+        ikplusq = self.kplusq_table[ik,iq,1]
+        ikminusq = self.kminusq_table[ik,iq,1]      
+        ikpplusq = self.kplusq_table[ikp,iq,1]
+        ikpminusq = self.kminusq_table[ikp,iq,1]       
 
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
@@ -537,10 +538,10 @@ class H2P():
 
             return K_ex
 
-        ikplusq = self.kplusq_table[ik,iq]
-        ikminusq = self.kminusq_table[ik,iq]      
-        ikpplusq = self.kplusq_table[ikp,iq]
-        ikpminusq = self.kminusq_table[ikp,iq]         
+        ikplusq = self.kplusq_table[ik,iq,1]
+        ikminusq = self.kminusq_table[ik,iq,1]      
+        ikpplusq = self.kplusq_table[ikp,iq,1]
+        ikpminusq = self.kminusq_table[ikp,iq,1]         
 
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
@@ -592,7 +593,7 @@ class H2P():
             h2peigv = self.h2peigv[self.q0index]
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table, \
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, \
                                 h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse

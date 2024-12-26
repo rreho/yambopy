@@ -30,21 +30,79 @@ class NNKP_Grids(KPointGenerator):
         self.weights = 1/self.nkpoints
         self.k_tree = cKDTree(self.k)
 
-    def get_kmq_grid(self, qmpgrid):
+    def get_kmq_grid(self,qmpgrid):
+        # if not isinstance(qmpgrid, NNKP_Grids):
+        #     raise TypeError('Argument must be an instance of NNKP_Grids')
+        #here I need to use the k-q grid and then apply -b/2
+        # Prepare dimensions
 
-        #qmpgrid is meant to be an nnkp object
-        kmq_grid = np.zeros((self.nkpoints, qmpgrid.nkpoints, 3))
-        kmq_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, 5),dtype= int)
-        for ik, k in enumerate(self.k):
-            for iq, q in enumerate(qmpgrid.k):
-                tmp_kmq, tmp_Gvec = self.fold_into_bz_Gs(k-q)
-                idxkmq = self.find_closest_kpoint(tmp_kmq)
-                kmq_grid[ik,iq] = tmp_kmq
-                kmq_grid_table[ik,iq] = [ik, idxkmq, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
+        nkpoints = self.nkpoints
+        nqpoints = qmpgrid.nkpoints
+     
+        # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
+        k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
+        q_grid = np.expand_dims(qmpgrid.k, axis=0)  # Shape (1, nqpoints, 3)
+        kq_diff = k_grid - q_grid  # Shape (nkpoints, nqpoints, 3)
 
+        # Fold into the Brillouin Zone and get G-vectors
+        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3))  # Flatten for batch processing
+        kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)
+        Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
+
+        # Find closest k-points for all points
+        closest_indices = self.find_closest_kpoint(kmq_folded.reshape(-1, 3)).reshape(nkpoints, nqpoints)
+        # Populate the grids
+        kmq_grid = kmq_folded  # Shape (nkpoints, nqpoints, nnkpts, 3)
+        kmq_grid_table = np.stack(
+            [
+                np.arange(nkpoints)[:, None].repeat(nqpoints, axis=1),  # ik
+                closest_indices,  # idkmq
+                Gvec[..., 0].astype(int),  # Gx
+                Gvec[..., 1].astype(int),  # Gy
+                Gvec[..., 2].astype(int)   # Gz
+            ],
+            axis=-1
+        ).astype(int)  # Shape (nkpoints, nqpoints, 5)
         self.kmq_grid = kmq_grid
-        self.kmq_grid_table = kmq_grid_table
+        self.kmq_grid_table = kmq_grid_table        
+        
+        return kmq_grid, kmq_grid_table
 
+    def get_kpq_grid(self, qmpgrid):
+
+        nkpoints = self.nkpoints
+        nqpoints = qmpgrid.nkpoints
+        
+        # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
+        k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
+        q_grid = np.expand_dims(qmpgrid.k, axis=0)  # Shape (1, nqpoints, 3)
+        kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
+
+        # Fold into the Brillouin Zone and get G-vectors
+        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3))  # Flatten for batch processing
+        kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
+        Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
+
+        # Find closest k-points for all points
+        closest_indices = self.find_closest_kpoint(kpq_folded.reshape(-1, 3)).reshape(nkpoints, nqpoints)
+        # Populate the grids
+        kpq_grid = kpq_folded  # Shape (nkpoints, nqpoints, nnkpts, 3)
+        kpq_grid_table = np.stack(
+            [
+                np.arange(nkpoints)[:, None].repeat(nqpoints, axis=1),  # ik
+                closest_indices,  # idxkp
+                Gvec[..., 0].astype(int),  # Gx
+                Gvec[..., 1].astype(int),  # Gy
+                Gvec[..., 2].astype(int)   # Gz
+            ],
+            axis=-1
+        ).astype(int)  # Shape (nkpoints, nqpoints, 5)
+
+        self.kpq_grid = kpq_grid
+        self.kpq_grid_table = kpq_grid_table
+
+        return kpq_grid, kpq_grid_table
+      
     def get_qpb_grid(self, qmpgrid: 'NNKP_Grids'):
         '''
         For each q belonging to the Qgrid return Q+B and a table with indices
