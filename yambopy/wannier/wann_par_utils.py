@@ -42,7 +42,7 @@ def process_file(args):
         ik, iv, ic = BSE_table[t]
         for tp in range(len(BSE_table)):
             ikp, ivp, icp = BSE_table[tp]
-            ikplusq = kplusq_table[ik, kpoints_indexes[idx]]
+            ikplusq = kplusq_table[ik, kpoints_indexes[idx],1]
             ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx]]
             ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx]]
             K = -(K_ttp[t, tp]) * HA2EV

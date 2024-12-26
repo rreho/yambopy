@@ -1,13 +1,15 @@
 from yambopy.lattice import red_car
 import numpy as np
-
+from scipy.spatial import cKDTree
 class KPointGenerator():
     def __init__(self):
         self.k = None
         self.nkpoints = None
         self.weights = None
         self.red_kpoints = None
-        self.car_kpoins = None
+        self.car_kpoints = None
+        self.k_tree = None
+
     def generate(self):
         """Abstract method to generate k-points."""
         raise NotImplementedError("This method must be implemented in subclasses.")
@@ -21,21 +23,6 @@ class KPointGenerator():
     def export(self, filename):
         """Export k-points to a file."""
         np.savetxt(filename, self.k, header="k-points")
-
-    def get_kmq_grid(self, qmpgrid):
-
-        #qmpgrid is meant to be an nnkp object
-        kmq_grid = np.zeros((self.nkpoints, qmpgrid.nkpoints, 3))
-        kmq_grid_table = np.zeros((self.nkpoints, qmpgrid.nkpoints, 5),dtype= int)
-        for ik, k in enumerate(self.k):
-            for iq, q in enumerate(qmpgrid.k):
-                tmp_kmq, tmp_Gvec = self.fold_into_bz_Gs(k-q)
-                idxkmq = self.find_closest_kpoint(tmp_kmq)
-                kmq_grid[ik,iq] = tmp_kmq
-                kmq_grid_table[ik,iq] = [ik, idxkmq, int(tmp_Gvec[0]), int(tmp_Gvec[1]), int(tmp_Gvec[2])]
-
-        self.kmq_grid = kmq_grid
-        self.kmq_grid_table = kmq_grid_table
 
     def fold_into_bz_Gs(self, k_points, bz_range=(-0.5, 0.5), reciprocal_vectors=None):
         """
@@ -79,33 +66,30 @@ class KPointGenerator():
         return folded_k_points, G_vectors
 
 
-    def find_closest_kpoint(self, point):
-        # Convert point to a numpy array
-        point = np.array(point)
-        # Calculate distances considering periodic boundary conditions
-        distances = np.linalg.norm((self.k - point + 0.5) % 1 - 0.5, axis=1)
-        closest_idx = np.argmin(distances)
+    def find_closest_kpoint(self, points):
+
+        # Convert points to a numpy array
+        points = np.atleast_2d(points)  # Ensure points is a 2D array (N, 3)
         
-        return int(closest_idx)
+        # Calculate distances using broadcasting and periodic boundary conditions
+        #delta = (self.k[np.newaxis, :, :] - points[:, np.newaxis, :] + 0.5) % 1 - 0.5
+        distance, closest_indices = self.k_tree.query(points, k=1)
+        #distances = np.linalg.norm(delta, axis=2)  # Shape (N, nkpoints)
+        
+        # Find the index of the minimum distance for each point
+        #closest_indices = np.argmin(distances, axis=1)  # Shape (N,)
+        
+        # Return the appropriate type
+        return closest_indices if points.shape[0] > 1 else int(closest_indices[0])
+
 
     def get_kq_tables(self,qmpgrid):
         kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
         kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
-        
-        kplusq = self.k[:, np.newaxis, :] + qmpgrid.k[np.newaxis, :, :]
-        kminusq = self.k[:, np.newaxis, :] - qmpgrid.k[np.newaxis, :, :]
-
-        # Fold all kplusq and kminusq into the Brillouin zone
-        kplusq = self.fold_into_bz(kplusq)
-        kminusq = self.fold_into_bz(kminusq)
-
-        # Find closest k-points for all combinations
-        idxkplusq = np.apply_along_axis(self.find_closest_kpoint, -1, kplusq)
-        idxkminusq = np.apply_along_axis(self.find_closest_kpoint, -1, kminusq)
-
         # Assign to tables
-        kplusq_table = idxkplusq
-        kminusq_table = idxkminusq
+
+        _,kplusq_table = self.get_kpq_grid(qmpgrid)
+        _,kminusq_table = self.get_kmq_grid(qmpgrid)
 
         return kplusq_table, kminusq_table
     
