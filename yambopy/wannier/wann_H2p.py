@@ -362,7 +362,6 @@ class H2P():
                         #if (self.TD==True):
                         #    H2P[t,tp] = 0.0
                         #else:         
-                    print('hi',t,tp,H2P[t,tp])                                   
             return H2P
         else:
             H2P = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
