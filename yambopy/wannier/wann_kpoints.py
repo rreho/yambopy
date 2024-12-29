@@ -93,27 +93,6 @@ class KPointGenerator():
 
         return kplusq_table, kminusq_table
     
-    def get_kq_tables_yambo(self,electronsdb):
-        kplusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz),dtype=int)
-        kminusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz), dtype=int)
-        
-        kplusq = self.k[:, np.newaxis, :] + electronsdb.red_kpoints[np.newaxis, :, :]
-        kminusq = self.k[:, np.newaxis, :] - electronsdb.red_kpoints[np.newaxis, :, :]
-
-        # Fold all kplusq and kminusq into the Brillouin zone
-        kplusq = self.fold_into_bz(kplusq)
-        kminusq = self.fold_into_bz(kminusq)
-
-        # Find closest k-points for all combinations
-        idxkplusq = np.apply_along_axis(self.find_closest_kpoint, -1, kplusq)
-        idxkminusq = np.apply_along_axis(self.find_closest_kpoint, -1, kminusq)
-
-        # Assign to tables
-        kplusq_table = idxkplusq
-        kminusq_table = idxkminusq
-
-
-        return kplusq_table, kminusq_table
 
     def get_kindices_fromq(self,qmpgrid):
         q_points = qmpgrid.k  # Extract q-points array
