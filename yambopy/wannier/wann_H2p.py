@@ -376,16 +376,16 @@ class H2P():
             eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,2]][:,np.newaxis,:,:]  # Valence bands
             eigv2 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,2]][np.newaxis,:,:,:]  # Valence bands
             
-            dotc = np.einsum('ijk,ijk->ij',eigc1, eigc2)
-            dotv = np.einsum('ijkl,ijkl->kij',eigv1, eigv2)
+            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc1), eigc2)
+            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv1), eigv2)
             v2dt2_array = self._getKdq(0,0,0,0,0,0,0)       #sorry
             #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
             #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
             K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc*dotv
 
             ## Ex term
-            dotc2 = np.einsum('ijk,jilk->li',eigc1, eigv2)
-            dotv2 = np.einsum('ijkl,jil->ki',eigv1, eigc2)
+            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc1), eigv2)
+            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv1), eigc2)
             # K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
             # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
             K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
