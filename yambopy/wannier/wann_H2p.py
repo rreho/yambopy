@@ -364,28 +364,60 @@ class H2P():
                         #else:         
             return H2P
         else:
-            H2P = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
+            H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
+            print('initialize buildh2p from cpot')
             t0 = time()
+
+            # Precompute kplusq and kminusq tables
+            ikpminusq = self.kplusq_table[:, :, 1]
+            ikminusq = self.kminusq_table[:, :, 1]
+            eigc1 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
+            eigc2 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
+            eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,2]][:,np.newaxis,:,:]  # Valence bands
+            eigv2 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,2]][np.newaxis,:,:,:]  # Valence bands
+            
+            dotc = np.einsum('ijk,ijk->ij',eigc1, eigc2)
+            dotv = np.einsum('ijkl,ijkl->kij',eigv1, eigv2)
+            v2dt2_array = self._getKdq(0,0,0,0,0,0,0)       #sorry
+            #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
+            #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc*dotv
+
+            ## Ex term
+            dotc2 = np.einsum('ijk,jilk->li',eigc1, eigv2)
+            dotv2 = np.einsum('ijkl,jil->ki',eigv1, eigc2)
+            # K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
+            # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
+            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+            K_diff = K_direct - K_Ex[:,np.newaxis,:]
+            f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kn[self.BSE_table[:,0], self.BSE_table[:,2]]
+            H2P = f_diff * K_diff
+            result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
+            eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
+            diag = np.einsum('ij,ki->ijk', np.eye(self.dimbse), eigv_diff).T  # when t ==tp
+            H2P += diag
+            print(f'Completed in {time() - t0} seconds')
+            return H2P
             for iq in range(self.nq_double):
                 for t in range(self.dimbse):
+                    ik, iv, ic = self.BSE_table[t]
+                    ikplusq = kplusq_table[ik, iq]
+                    ikminusq = kminusq_table[ik, iq]
+                    eigv_diff = self.eigv[ik, ic] - self.eigv[ikminusq, iv]
+                    f_diff = self.f_kn[ikminusq, iv] - self.f_kn[ik, ic]
+
                     for tp in range(self.dimbse):
-                        ik = self.BSE_table[t][0]
-                        iv = self.BSE_table[t][1]
-                        ic = self.BSE_table[t][2]
-                        ikp = self.BSE_table[tp][0]
-                        ivp = self.BSE_table[tp][1]
-                        icp = self.BSE_table[tp][2]
-                        # True power of Object oriented programming displayed in the next line
-                        ikplusq = self.kplusq_table[ik,iq,1]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]+self.qmpgrid.k[iq]))
-                        ikminusq = self.kminusq_table[ik,iq,1]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]-self.qmpgrid.k[iq]))
-                        K_direct = self._getKdq(ik,iv,ic,ikp,ivp,icp,iq) 
-                        K_Ex = self._getKEx(ik,iv,ic,ikp,ivp,icp,iq)
-                        if(t == tp):
-                            H2P[iq,t,tp] = self.eigv[ik,ic]-self.eigv[ikminusq,iv] + (self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_direct - K_Ex)
-                            # if (self.TD==True):
-                            #     H2P[iq,t,tp] = 0.0
+                        ikp, ivp, icp = self.BSE_table[tp]
+                        K_direct = self._getKdq(ik, iv, ic, ikp, ivp, icp, iq)
+                        K_Ex = self._getKEx(ik, iv, ic, ikp, ivp, icp, iq)
+                        K_diff = K_direct - K_Ex
+
+                        if t == tp:
+                            H2P[iq, t, tp] = eigv_diff + f_diff * K_diff
                         else:
-                            H2P[iq,t,tp] =(self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_direct - K_Ex)
+                            H2P[iq, t, tp] = f_diff * K_diff
+
+            print(f'Completed in {time() - t0} seconds')
             return H2P
 
 
@@ -504,9 +536,43 @@ class H2P():
 
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
-            K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            # Ensure inputs are NumPy arrays
+            #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
+            #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
         
+
+            kpt1 = self.kmpgrid.car_kpoints
+            kpt2 = self.kmpgrid.car_kpoints
+
+            kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+            kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+                
+            # Compute modk for all kpt1 and kpt2 pairs
+            modk = np.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
+                
+                # Volume of the Brillouin zone
+            vbz = 1.0 / (np.prod(self.cpot.ngrid) * self.cpot.dir_vol)
+            lc = self.cpot.lc
+            Zc = 0.5 * self.cpot.rlat[2, 2]  # Half of the c lattice parameter
+
+                # Compute differences between k-points
+            vkpt = kpt1_broadcasted - kpt2_broadcasted
+                
+                # In-plane momentum transfer
+            Qxy = np.sqrt(vkpt[..., 0]**2 + vkpt[..., 1]**2)
+            Qz = np.sqrt(vkpt[..., 2]**2)   
+                # Factor for the potential
+            factor = 1.0  # This could also be 4.0 * pi, depending on the model
+                
+                # Compute the potential using vectorized operations
+            v2dt2_array = np.where(
+                modk < self.cpot.tolr,
+                1.0,
+                (vbz * self.cpot.alpha) * (factor / modk**2) *
+                (1.0 - np.exp(-0.5*Qxy * lc) * np.cos(0.5*Qz * Zc))
+            )
+
+            return v2dt2_array
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
@@ -546,9 +612,39 @@ class H2P():
 
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
-            K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
-        
+            # K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
+                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
+            kpt1 = self.kmpgrid.car_kpoints
+            kpt2 = self.kmpgrid.car_kpoints
+
+            kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+            kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+                
+            # Compute modk for all kpt1 and kpt2 pairs
+            modk = np.linalg.norm(kpt1_broadcasted - [0.0,0.0,0.0], axis=-1)
+                
+                # Volume of the Brillouin zone
+            vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
+            lc = self.lc
+            Zc = 0.5 * self.rlat[2, 2]  # Half of the c lattice parameter
+
+                # Compute differences between k-points
+            vkpt = kpt1_broadcasted - kpt2_broadcasted
+                
+                # In-plane momentum transfer
+            Qxy = np.sqrt(vkpt[..., 0]**2 + vkpt[..., 1]**2)
+            Qz = np.sqrt(vkpt[..., 2]**2)   
+                # Factor for the potential
+            factor = 1.0  # This could also be 4.0 * pi, depending on the model
+                
+                # Compute the potential using vectorized operations
+            v2dt2_array = np.where(
+                modk < self.tolr,
+                1.0,
+                (vbz * self.alpha) * (factor / modk**2) *
+                (1.0 - np.exp(-Qxy * Zc) * np.cos(Qz * Zc))
+            )
+            return v2dt2_array
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_ex = self.cpot.v2dk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\

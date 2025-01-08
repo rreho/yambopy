@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.special import j0, y0, k0, j1, y1, k1  # Bessel functions from scipy.special
-from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red,modvec
+from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red, modvec
 from yambopy.units import alpha,ha2ev, ang2bohr,bohr2ang
 
 class CoulombPotentials:
@@ -106,9 +106,11 @@ class CoulombPotentials:
         lc = self.lc        
         # Difference between k-points
         vkpt = np.array(kpt1) - np.array(kpt2)
-        
+        Zc = 0.5 * self.rlat[2, 2]  # Half of the c lattice parameter
         # In-plane momentum transfer
-        qxy = np.sqrt(vkpt[0]**2 + vkpt[1]**2)
+        Qxy = np.sqrt(vkpt[0]**2 + vkpt[1]**2)
+        Qz = np.sqrt(vkpt[2]**2)
+
         
         # Factor for the potential
         factor = 1.0  # This could also be 4.0 * pi, depending on the model
@@ -117,9 +119,10 @@ class CoulombPotentials:
         if modk < self.tolr:
             v2dt2 = 0.0
         else:
-            v2dt2 = (vbz * self.alpha) * (factor / modk**2) * (1.0 - np.exp(-0.5 * qxy * lc) * np.cos(0.5 * lc * vkpt[2]))
+            v2dt2 = (vbz * self.alpha) * (factor / modk**2) * (1.0 - np.exp(-Qxy * Zc) * np.cos(Qz * Zc))
         
         return v2dt2
+    
 
     def v2drk(self, kpt1, kpt2):
         '''
