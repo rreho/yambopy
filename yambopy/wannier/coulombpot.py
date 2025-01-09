@@ -115,7 +115,7 @@ class CoulombPotentials:
         
         # Evaluate the potential
         if modk < self.tolr:
-            v2dt2 = 0.0
+            v2dt2 = 0.0+0.0j
         else:
             v2dt2 = (vbz * self.alpha) * (factor / modk**2) * (1.0 - np.exp(-0.5 * qxy * lc) * np.cos(0.5 * lc * vkpt[2]))
         
