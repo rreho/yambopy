@@ -505,8 +505,8 @@ class H2P():
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:]) \
-                        *np.einsum('i,i->', self.eigvec[ik, :, ic].conj(), self.eigvec[ikp, :, icp])  \
-                        *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikminusq, :, iv])
+                        *np.einsum('i,i->', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikp, :, icp])  \
+                        *np.einsum('j,j->', np.conjugate(self.eigvec[ikpminusq, :, ivp]), self.eigvec[ikminusq, :, iv])
         
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
@@ -552,8 +552,8 @@ class H2P():
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.einsum('i,i->', self.eigvec[ik, :, ic].conj(), self.eigvec[ikminusq, :, iv])  \
-                        *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikp, :, icp])            
+                        *np.einsum('i,i->', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikminusq, :, iv])  \
+                        *np.einsum('j,j->', np.conjugate(self.eigvec[ikpminusq, :, ivp]), self.eigvec[ikp, :, icp])            
         
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
