@@ -565,12 +565,11 @@ class H2P():
             factor = 1.0  # This could also be 4.0 * pi, depending on the model
                 
                 # Compute the potential using vectorized operations
-            v2dt2_array = np.where(
-                modk < self.cpot.tolr,
-                0.0 + 0.j,
-                (vbz * self.cpot.alpha) * (factor / modk**2) *
-                (1.0 - np.exp(-0.5*Qxy * lc) * np.cos(0.5*lc * vkpt[...,2]))
-            )
+            safe_modk = np.where(modk < self.cpot.tolr, np.inf, modk)
+            v2dt2_array = (vbz * self.cpot.alpha) * (factor / safe_modk**2) * \
+                        (1.0 - np.exp(-0.5 * Qxy * lc) * np.cos(0.5 * lc * vkpt[..., 2]))
+            v2dt2_array = np.where(modk < self.cpot.tolr, 0.0 + 0.j, v2dt2_array)
+
 
             return v2dt2_array
         elif(self.ctype == 'v2dk'):
