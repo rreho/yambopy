@@ -58,7 +58,7 @@ class TBMODEL(tbmodels.Model):
         self.eigv= np.zeros((self.nk,self.nb),dtype=np.complex128)
         self.eigvec = np.zeros((self.nk,self.nb,self.nb),dtype=np.complex128)
         for ik in range(self.nk):
-            (self.eigv[ik], self.eigvec[ik]) = scipy.linalg.eig(self.H_k[ik])
+            (self.eigv[ik], self.eigvec[ik]) = scipy.linalg.eigh(self.H_k[ik])
             #(self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
         # transpose to have eigvec[:,i] associated with eval[i]
         # one could transpose it to have the opposite, for now commented out bcs I don't like it

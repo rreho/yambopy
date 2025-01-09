@@ -36,9 +36,9 @@ def fermi_dirac(e, fermie):
 def sort_eig(eigv,eigvec=None):
     "Sort eigenvaules and eigenvectors, if given, and convert to real numbers"
     # first take only real parts of the eigenvalues
-    eigv=np.array(eigv.real,dtype=float)
+    tmpeigv=np.array(eigv.real,dtype=np.complex128)
     # sort energies
-    args=eigv.argsort()
+    args=tmpeigv.argsort()
     eigv=eigv[args]
     if not (eigvec is None):
         eigvec=eigvec[args]
