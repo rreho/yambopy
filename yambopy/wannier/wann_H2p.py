@@ -567,9 +567,9 @@ class H2P():
                 # Compute the potential using vectorized operations
             v2dt2_array = np.where(
                 modk < self.cpot.tolr,
-                1.0,
+                0.0 + 0.j,
                 (vbz * self.cpot.alpha) * (factor / modk**2) *
-                (1.0 - np.exp(-0.5*Qxy * lc) * np.cos(0.5*Qz * Zc))
+                (1.0 - np.exp(-0.5*Qxy * lc) * np.cos(0.5*lc * vkpt[...,2]))
             )
 
             return v2dt2_array
@@ -660,7 +660,7 @@ class H2P():
         elif(self.ctype == 'v2dt'):
             #print('''\n Kernel built from v2dt Coulomb potential.\n
             #   ''')
-            K_ex = self.cpot.v2dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
+            K_ex = self.cpot.v2dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0])\
                         *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
         
         elif(self.ctype == 'v2drk'):
