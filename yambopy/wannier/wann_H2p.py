@@ -548,7 +548,7 @@ class H2P():
             kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
                 
             # Compute modk for all kpt1 and kpt2 pairs
-            modk = np.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
+            modk = scipy.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
                 
                 # Volume of the Brillouin zone
             vbz = 1.0 / (np.prod(self.cpot.ngrid) * self.cpot.dir_vol)
