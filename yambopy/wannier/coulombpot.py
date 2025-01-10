@@ -40,7 +40,7 @@ class CoulombPotentials:
         alpha3 = 0.0
         lc = self.lc
         ediel = self.ediel
-        vsize = np.zeros(3,dtype = np.longdouble)
+        vsize = np.zeros(3,dtype = np.float64)
         vsize[0] = np.linalg.norm(self.rlat[0])
         vsize[1] = np.linalg.norm(self.rlat[1])
         vsize[2] = np.linalg.norm(self.rlat[2])

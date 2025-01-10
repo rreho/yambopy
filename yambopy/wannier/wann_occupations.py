@@ -14,13 +14,13 @@ class TB_occupations():
     def _get_fkn(self, method):
         nk = self.eigv.shape[0]
         nb = self.eigv.shape[1]
-        f_kn = np.zeros((nk,nb), dtype=np.longdouble)
+        f_kn = np.zeros((nk,nb), dtype=np.float64)
         if (method =='FD'):
             if (self.Tel==0):
                 f_kn = fermi_dirac(self.eigv, self.fermi)
             else:
                 f_kn = fermi_dirac_T(self.eigv, self.T, self.fermie)
         if (method == 'Boltz'):
-            kb = 8.61733326*10**-5
+            kb = 8.617333262*10**-5
             f_kn = np.exp(-self.Eb/(kb*self.Tbos))   
             return  f_kn     

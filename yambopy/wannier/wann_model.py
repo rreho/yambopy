@@ -175,7 +175,7 @@ class TBMODEL(tbmodels.Model):
         for i in range(0,self.nrpos):
             if (np.array_equal(irpos[i],[0.0,0.0,0.0])):
                 hr_mn_p = np.copy(hr.HR_mn[i,:,:])
-                np.fill_diagonal(hr_mn_p,complex(0.0))
+                np.fill_diagonal(hr_mn_p,np.complex128(0.0))
                 hlm_k[:,:,0] += kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
                 hlm_k[:,:,1] += kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
                 hlm_k[:,:,2] += kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
@@ -335,7 +335,7 @@ class TBMODEL(tbmodels.Model):
         self.Uknm = Uknm
 
     def _get_overlap(self):
-        Mmn = np.zeros((self.nb, self.nb,self.nk, self.nk), dtype=complex)
+        Mmn = np.zeros((self.nb, self.nb,self.nk, self.nk), dtype=np.complex128)
         # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
         for n in range(self.nb):
             for m in range(self.nb):   

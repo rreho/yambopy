@@ -139,7 +139,7 @@ class H2P():
         self.nproc = nproc
         # consider to build occupations here in H2P with different occupation functions
         if (f_kn == None):
-            self.f_kn = np.zeros((self.nk,self.nb),dtype=np.longdouble)
+            self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float64)
             self.f_kn[:,:self.nv] = 1.0
         else:
             self.f_kn = f_kn
@@ -676,7 +676,7 @@ class H2P():
         dipole_left/right = l/r_residuals.
         \eps_{\alpha\beta} = 1 + \sum_{kcv} dipole_left*dipole_right*(GR + GA)
         '''        
-        w = np.arange(emin,emax,estep,dtype=np.float32)
+        w = np.arange(emin,emax,estep,dtype=np.float64)
         F_kcv = np.zeros((self.dimbse,3,3), dtype=np.complex128)
         eps = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
@@ -744,7 +744,7 @@ class H2P():
         dipole_left/right = l/r_residuals.
         \eps_{\alpha\beta} = 1 + \sum_{kcv} dipole_left*dipole_right*(GR + GA)
         '''        
-        w = np.arange(emin,emax,estep,dtype=np.float32)
+        w = np.arange(emin,emax,estep,dtype=np.float64)
         F_kcv = np.zeros((self.dimbse,3,3), dtype=np.complex128)
         eps = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
@@ -934,7 +934,7 @@ class H2P():
         # f_out.close()
 
     def write_exc_eig(self, seedname='wannier90_exc', trange = [0]):
-        exc_eig = np.zeros((len(trange), self.qmpgrid.nkpoints), dtype=complex)
+        exc_eig = np.zeros((len(trange), self.qmpgrid.nkpoints), dtype=np.complex128)
         f_out = open(f'{seedname}.eig', 'w')
         for iq, ikq in enumerate(self.kindices_table):
             for it,t in enumerate(trange):

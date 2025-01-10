@@ -56,7 +56,7 @@ class MMN(W90_data):
         f_mmn_in = open(seedname + ".mmn", "r")
         f_mmn_in.readline()
         NB, NK, NNB = np.array(f_mmn_in.readline().split(), dtype=int)
-        self.data = np.zeros((NK, NNB, NB, NB), dtype=complex)
+        self.data = np.zeros((NK, NNB, NB, NB), dtype=np.complex128)
         block = 1 + self.NB * self.NB
         data = []
         headstring = []
@@ -104,7 +104,7 @@ class AMN(W90_data):
         f_amn_in.readline()
         NB, NK, NW = np.array(f_amn_in.readline().split(),dtype=int) # number of bands, number of k-points, number of wannier
         f_amn_in.close()
-        A_kmn = np.zeros((NB, NW, NK), dtype=complex)
+        A_kmn = np.zeros((NB, NW, NK), dtype=np.complex128)
         print(NB)
 
         data = np.loadtxt(seedname + '.amn', dtype=float, skiprows=2)
@@ -151,7 +151,7 @@ class UXU(W90_data):
 
         print("reading {}.{} : <{}>".format(seedname, suffix, header))
 
-        self.data = np.zeros((NK, NNB, NNB, NB, NB), dtype=complex)
+        self.data = np.zeros((NK, NNB, NNB, NB, NB), dtype=np.complex128)
         if formatted:
             tmp = np.array([f_uXu_in.readline().split() for i in range(NK * NNB * NNB * NB * NB)], dtype=float)
             tmp_cplx = tmp[:, 0] + 1.j * tmp[:, 1]
@@ -217,7 +217,7 @@ class HR(W90_data):
                 ws_deg = np.append(ws_deg, f.readline().split())
 
         self.ws_deg = list(map(int,ws_deg))
-        self.data = np.zeros((self.nrpts, self.num_wann,self.num_wann), dtype=complex)
+        self.data = np.zeros((self.nrpts, self.num_wann,self.num_wann), dtype=np.complex128)
         data = np.loadtxt(file_path, dtype=float, skiprows=self.skiplines+3)
 
         t1 = time()
@@ -242,7 +242,7 @@ class RMN(W90_data):
         self.num_wann = int(f_hr_in.readline())
         self.nrpts = int(f_hr_in.readline())
 
-        self.data = np.zeros((self.nrpts, self.num_wann,self.num_wann), dtype=complex)
+        self.data = np.zeros((self.nrpts, self.num_wann,self.num_wann), dtype=np.complex128)
         block = self.num_wann**2
         data = []
         mult = 1

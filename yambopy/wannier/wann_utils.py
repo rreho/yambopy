@@ -1,4 +1,3 @@
-
 import numpy as np
 
 HA2EV  = 27.211396132
@@ -15,7 +14,7 @@ AU2FS =  0.02418884254 # atomic unit of time
 
 def fermi_dirac_T(e, T, fermie):
     # atomic units
-    kb = 3.1671e-06
+    kb = 3.1669147805081354e-06
     fermi = 1.0/(np.exp(e-fermie)/(kb*T))
     return fermi
 
@@ -36,7 +35,7 @@ def fermi_dirac(e, fermie):
 def sort_eig(eigv,eigvec=None):
     "Sort eigenvaules and eigenvectors, if given, and convert to real numbers"
     # first take only real parts of the eigenvalues
-    tmpeigv=np.array(eigv.real,dtype=np.float128)
+    tmpeigv=np.array(eigv.real,dtype=np.float64)
     # sort energies
     args=tmpeigv.argsort()
     eigv=eigv[args]

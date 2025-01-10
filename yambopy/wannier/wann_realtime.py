@@ -56,13 +56,13 @@ class RealTime():
 
 
     def _get_enmk(self):
-        e_nmk = np.zeros((self.nb, self.nb, self.h2p.nk), dtype=complex)
+        e_nmk = np.zeros((self.nb, self.nb, self.h2p.nk), dtype=np.complex128)
         e_nmk = self.h2p.eigv[:, :, np.newaxis] - self.h2p.eigv[:,np.newaxis,:]
         e_nmk = np.transpose(e_nmk, (1,2,0))
         return e_nmk/HA2EV # energies are given in eV, convert to Hartree
     
     def _get_rho_nmk(self):
-        rho_nmk = np.zeros((self.nb, self.nb, self.h2p.nk), dtype = complex)
+        rho_nmk = np.zeros((self.nb, self.nb, self.h2p.nk), dtype = np.complex128)
         for k in range(self.h2p.nk):
             np.fill_diagonal(rho_nmk[...,k], self.f_kn[k,:] )
         return rho_nmk/ (self.latdb.lat_vol) # here density is number of occupations/direct volume in meter
