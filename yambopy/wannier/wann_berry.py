@@ -27,7 +27,7 @@ class ExcBerry(H2P):
         self.surface_indices = surface_indices
     
     def _get_elec_overlap(self):
-        Mmn = np.zeros((self.nb, self.nb,self.nk, self.nk), dtype=complex)
+        Mmn = np.zeros((self.nb, self.nb,self.nk, self.nk), dtype=np.complex128)
         # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
         for n in range(self.nb):
             for m in range(self.nb):   
