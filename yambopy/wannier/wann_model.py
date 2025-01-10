@@ -235,8 +235,8 @@ class TBMODEL(tbmodels.Model):
     def decay_R(self, lat, hr ,fermie, from_hr = True):
         hr_mn_p = self._get_h_R(lat, hr, fermie, from_hr)
         #calculate distances
-        max_hr_p = np.zeros(hr.nrpts, dtype= float)
-        R_dist = np.zeros(hr.nrpts, dtype= float)
+        max_hr_p = np.zeros(hr.nrpts, dtype= np.float64)
+        R_dist = np.zeros(hr.nrpts, dtype= np.float64)
         for i in range(self.nrpos):
             R_dist[i] = np.linalg.norm(self.pos[i])
             max_hr_p[i] = np.max(np.abs(hr_mn_p[i]))

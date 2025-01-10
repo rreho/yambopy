@@ -6,7 +6,7 @@ BOHR2M = 5.29177210903e-11  # Bohr radius in meters
 ANG2BOHR = 1./BOHR2ANG
 HBAR = 1.054571817e-34# J*s => w = E/hbar
 EVTOJ = 1.60218e-19  # Conversion factor from eV to J
-C = 1/137.035999084  # Speed of light
+C = 1./137.035999084  # Speed of light
 HA2J = 4.3597482e-18 # Hartree to Joule
 AU2FS =  0.02418884254 # atomic unit of time
 

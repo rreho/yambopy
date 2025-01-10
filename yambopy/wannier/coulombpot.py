@@ -51,7 +51,7 @@ class CoulombPotentials:
 
         r0 = ((ediel[1] - 1.0) * lc) / (ediel[0] + ediel[2])
         vbz = 1.0 / (np.prod(self.ngrid) * vc)
-        gridaux1 = float(self.ngrid[0] * self.ngrid[1])
+        gridaux1 = np.float64(self.ngrid[0] * self.ngrid[1])
         auxi = (2.0 * self.pi * r0) / (a0 * np.sqrt(gridaux1))
         ed = (ediel[0] + ediel[2]) / 2.0
 

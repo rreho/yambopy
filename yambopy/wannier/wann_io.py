@@ -40,7 +40,7 @@ class W90_data():
             return 0
 
 def convert(A):
-    return np.array([l.split() for l in A], dtype=float)
+    return np.array([l.split() for l in A], dtype=np.float64)
 
 class MMN(W90_data):
     """
@@ -107,7 +107,7 @@ class AMN(W90_data):
         A_kmn = np.zeros((NB, NW, NK), dtype=np.complex128)
         print(NB)
 
-        data = np.loadtxt(seedname + '.amn', dtype=float, skiprows=2)
+        data = np.loadtxt(seedname + '.amn', dtype=np.float64, skiprows=2)
         A_kmn = data[:,3] + 1j*data[:,4]
         self.A_kmn = A_kmn.reshape(NK, NW, NB).transpose(0, 2, 1)
 
@@ -153,7 +153,7 @@ class UXU(W90_data):
 
         self.data = np.zeros((NK, NNB, NNB, NB, NB), dtype=np.complex128)
         if formatted:
-            tmp = np.array([f_uXu_in.readline().split() for i in range(NK * NNB * NNB * NB * NB)], dtype=float)
+            tmp = np.array([f_uXu_in.readline().split() for i in range(NK * NNB * NNB * NB * NB)], dtype=np.float64)
             tmp_cplx = tmp[:, 0] + 1.j * tmp[:, 1]
             self.data = tmp_cplx.reshape(NK, NNB, NNB, NB, NB).transpose(0, 2, 1, 3, 4)
         else:
@@ -218,7 +218,7 @@ class HR(W90_data):
 
         self.ws_deg = list(map(int,ws_deg))
         self.data = np.zeros((self.nrpts, self.num_wann,self.num_wann), dtype=np.complex128)
-        data = np.loadtxt(file_path, dtype=float, skiprows=self.skiplines+3)
+        data = np.loadtxt(file_path, dtype=np.float64, skiprows=self.skiplines+3)
 
         t1 = time()
         HR_mn = data[:,5] + 1j*data[:,6]
@@ -297,19 +297,19 @@ class NNKP():
                 current_block = None
             else:
                 if current_block == 'real_lattice':
-                    real_lattice.append([float(x) for x in line.split()])
+                    real_lattice.append([np.float64(x) for x in line.split()])
                 elif current_block == 'recip_lattice':
-                    reciprocal_lattice.append([float(x) for x in line.split()])
+                    reciprocal_lattice.append([np.float64(x) for x in line.split()])
                 elif current_block == 'kpoints':
                     if nkpoints == 0:
                         nkpoints = int(line.strip())
                     else:
-                        k.append([float(x) for x in line.split()])
+                        k.append([np.float64(x) for x in line.split()])
                 elif current_block == 'nnkpts':
                     if nnkpts == 0:
                         nnkpts = int(line.strip())
                     else:
-                        data.append([float(x) for x in line.split()])
+                        data.append([np.float64(x) for x in line.split()])
 
         self.real_lattice = np.array(real_lattice)
         self.reciprocal_lattice = np.array(reciprocal_lattice)
