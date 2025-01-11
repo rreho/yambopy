@@ -371,6 +371,7 @@ class H2P():
             # Precompute kplusq and kminusq tables
             ikpminusq = self.kplusq_table[:, :, 1]
             ikminusq = self.kminusq_table[:, :, 1]
+            ikminusgamma = self.kminusq_table[:, :, 0]
             eigc1 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
             eigc2 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
             eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands
@@ -384,17 +385,17 @@ class H2P():
             K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc*dotv
 
             ## Ex term
-            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc1), eigv2)
-            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv1), eigc2)
+            dotc2 = np.einsum('ijk,jmnk->nim',np.conjugate(eigc1), eigv2)
+            dotv2 = np.einsum('ijkl,jnl->kin',np.conjugate(eigv1), eigc2)
             # K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
             # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
             K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
-            K_diff = K_direct - K_Ex[:,np.newaxis,:]
-            f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kn[self.BSE_table[:,0], self.BSE_table[:,2]]
+            K_diff = K_direct - K_Ex
+            f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
             H2P = f_diff * K_diff
             result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
             eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
-            diag = np.einsum('ij,ki->ijk', np.eye(self.dimbse), eigv_diff).T  # when t ==tp
+            diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff)  # when t ==tp
             H2P += diag
             print(f'Completed in {time() - t0} seconds')
             return H2P
@@ -711,7 +712,7 @@ class H2P():
                         + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)                     
                     #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                     #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-            print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
+            print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
             #self.pl = pl
             #self.w = w
             #self.eps_0 = eps_0            
@@ -732,7 +733,7 @@ class H2P():
                         + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
                     #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                     #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-            print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
+            print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
             #self.pl = pl
             # self.w = w
             # self.eps_0 = eps_0

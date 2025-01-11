@@ -58,6 +58,7 @@ class TB_dipoles():
             print('Running IP oscillator strength')
             self._get_osc_strength_IP(method)
         else:
+            #self._get_osc_strength_IP(method)
             self._get_osc_strength(method)
 
     # full dipoles matrix, not only cv, needs adaptation
@@ -159,6 +160,7 @@ class TB_dipoles():
             print("Starting BSE dipole matrix formation.\n")
             t0 = time.time()
             dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
+            dipoles_bse_kcv_conj = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
             for t in range(0,self.nbsetransitions):
                 for tp in range(0,self.nbsetransitions): 
                     ik = self.BSE_table[tp][0]
@@ -174,7 +176,13 @@ class TB_dipoles():
                     dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.offset_nv,1] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
                         np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
                     dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.offset_nv,2] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
-                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))            
+                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))       
+                    dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv,0] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
+                        np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,ic]))
+                    dipoles_bse_kcv_conj[t,ik, ic-self.nv, iv-self.offset_nv,1] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
+                        np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,ic]))
+                    dipoles_bse_kcv_conj[t,ik, ic-self.nv, iv-self.offset_nv,2] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
+                        np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,ic]))                                
             # Determine the dimension of hlm
             #dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
 
@@ -211,6 +219,7 @@ class TB_dipoles():
             # final_dipoles[np.arange(self.nbsetransitions), c_indices-self.nv, self.bse_nv-self.nv+v_indices, self.nkpoints,:dim_hlm] = dipoles_cvk
 
             self.dipoles_bse_kcv = dipoles_bse_kcv
+            self.dipoles_bse_kcv_conj = dipoles_bse_kcv_conj
 
         print("BSE Dipoles matrix computed successfully.")
         print(f"Time for BSE Dipoles matrix formation: {time.time() - t0:.2f}")
@@ -270,6 +279,7 @@ class TB_dipoles():
         import time
         t0 = time.time()
         dipoles_bse_kcv = self.dipoles_bse_kcv
+        dipoles_bse_kcv_conj = self.dipoles_bse_kcv_conj
         F_kcv = np.zeros((self.nbsetransitions, 3, 3), dtype=np.complex128)   
 
 
@@ -278,16 +288,16 @@ class TB_dipoles():
             for t in range(0,self.nbsetransitions):
                 tmp_F_left = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
                 tmp_F_right = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
-                for idip, _ in enumerate(dipoles_bse_kcv):
+                for idip in range(0,self.nbsetransitions):
                     ik = self.BSE_table[idip][0]
                     iv = self.BSE_table[idip][1]
                     ic = self.BSE_table[idip][2]
                     factorLx = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 0]
-                    factorRx = factorLx.conj() 
+                    factorRx = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 0] 
                     factorLy = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 1]
-                    factorRy = factorLy.conj() 
+                    factorRy = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 1]
                     factorLz = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 2]
-                    factorRz = factorLz.conj() 
+                    factorRz = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 2]
                     tmp_F_left[t,0] += factorLx
                     tmp_F_left[t,1] += factorLy
                     tmp_F_left[t,2] += factorLz
