@@ -460,6 +460,8 @@ class H2P():
             h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
             h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
             deg_h2peigvec = np.array([])        
+            qt_sort = np.zeros((self.nq_double,self.dimbse),dtype=int)
+            self.BSE_table_sort = np.zeros((self.nq_double,self.dimbse,3),dtype = int)
             print(f'\nDiagonalizing the H2P matrix with dimensions: {self.dimbse} \n')
             for iq in range(0,self.nq_double):
                 t0 = time()
@@ -468,10 +470,15 @@ class H2P():
                 tmph2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
                 tmph2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
                 (tmph2peigv, tmph2peigvec) = scipy.linalg.eig(self.H2P[iq])
-                deg_h2peigvec = np.append(deg_h2peigvec, self.find_degenerate_eigenvalues(tmph2peigv, tmph2peigvec))
+                qt_sort[iq,:] = np.argsort(tmph2peigv)
+                tmph2peigv = tmph2peigv[qt_sort[iq]]
+                tmph2peigvec = tmph2peigvec[:,qt_sort[iq]]
+                tmph2peigvec = tmph2peigvec[qt_sort[iq],:]
+                self.BSE_table_sort[iq,:,:] = self.BSE_table[qt_sort[iq]]
+                #deg_h2peigvec = np.append(deg_h2peigvec, self.find_degenerate_eigenvalues(tmph2peigv, tmph2peigvec))
                 # (self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec) # this needs fixing
                 for t in range(self.dimbse):
-                    ik, iv, ic = self.BSE_table[t]
+                    ik, iv, ic = self.BSE_table_sort[iq][t]
                     tmph2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigvec[:, t]   
                     tmph2peigv_vck[self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigv[t]
                 
@@ -484,8 +491,8 @@ class H2P():
             self.h2peigv_vck = h2peigv_vck
             self.h2peigvec = h2peigvec
             self.h2peigvec_vck = h2peigvec_vck
-            self.deg_h2peigvec = deg_h2peigvec
-
+            #self.deg_h2peigvec = deg_h2peigvec
+            self.qt_sort = qt_sort
             t1 = time()
 
             print(f'\n Diagonalization of H2P in {t1-t0:.3f} s')
@@ -693,7 +700,7 @@ class H2P():
             h2peigv = self.h2peigv[self.q0index]
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table_sort[0], h2peigvec, \
                                 self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
@@ -708,9 +715,9 @@ class H2P():
             #pl = eps
             for ies, es in enumerate(w):
                 for t in range(0,self.dimbse):
-                    ik = self.BSE_table[t][0]
-                    iv = self.BSE_table[t][1]
-                    ic = self.BSE_table[t][2]
+                    ik = self.BSE_table_sort[0][t][0]
+                    iv = self.BSE_table_sort[0][t][1]
+                    ic = self.BSE_table_sort[0][t][2]
                     eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                         + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)                     
                     #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
@@ -730,9 +737,9 @@ class H2P():
             print('hello')
             for ies, es in enumerate(w):
                 for t in range(0,self.dimbse):
-                    ik = self.BSE_table[t][0]
-                    iv = self.BSE_table[t][1]
-                    ic = self.BSE_table[t][2]
+                    ik = self.BSE_table_sort[0][t][0]
+                    iv = self.BSE_table_sort[0][t][1]
+                    ic = self.BSE_table_sort[0][t][2]
                     eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                         + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
                     #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
