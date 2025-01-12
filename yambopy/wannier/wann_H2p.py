@@ -5,6 +5,7 @@ from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
 from yambopy.wannier.wann_io import AMN
+from scipy.linalg.lapack import zheev
 from time import time
 import scipy
 import gc
@@ -440,12 +441,12 @@ class H2P():
             h2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
             h2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
             deg_h2peigvec = np.array([])
-            (self.h2peigv, self.h2peigvec) = scipy.linalg.eig(self.H2P)
+            (self.h2peigv, self.h2peigvec,_) = zheev(self.H2P)
             self.deg_h2peigvec = self.find_degenerate_eigenvalues(self.h2peigv, self.h2peigvec)
             #(self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec)  # this needs fixing
             for t in range(self.dimbse):
                 ik, iv, ic = self.BSE_table[t]
-                h2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = self.h2peigvec[:,t]   
+                h2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = self.h2peigvec[t,:]   
                 h2peigv_vck[self.bse_nv-self.nv+iv, ic-self.nv, ik] = self.h2peigv[t]
             
             self.h2peigv_vck = h2peigv_vck        
@@ -469,17 +470,18 @@ class H2P():
                 tmph2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
                 tmph2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
                 tmph2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
-                (tmph2peigv, tmph2peigvec) = scipy.linalg.eig(self.H2P[iq])
-                qt_sort[iq,:] = np.argsort(tmph2peigv)
-                tmph2peigv = tmph2peigv[qt_sort[iq]]
-                tmph2peigvec = tmph2peigvec[:,qt_sort[iq]]
+                (auxh2peigv,_) = scipy.linalg.eig(self.H2P[iq])
+                (tmph2peigv, tmph2peigvec,_) = zheev(self.H2P[iq])
+                qt_sort[iq,:] = np.argsort(auxh2peigv)
+                #tmph2peigv = tmph2peigv[qt_sort[iq]]
+                #tmph2peigvec = tmph2peigvec[:,qt_sort[iq]]
                 tmph2peigvec = tmph2peigvec[qt_sort[iq],:]
                 self.BSE_table_sort[iq,:,:] = self.BSE_table[qt_sort[iq]]
                 #deg_h2peigvec = np.append(deg_h2peigvec, self.find_degenerate_eigenvalues(tmph2peigv, tmph2peigvec))
                 # (self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec) # this needs fixing
                 for t in range(self.dimbse):
                     ik, iv, ic = self.BSE_table_sort[iq][t]
-                    tmph2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigvec[:, t]   
+                    tmph2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigvec[t,:]   
                     tmph2peigv_vck[self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigv[t]
                 
                 h2peigv[iq] = tmph2peigv
@@ -691,7 +693,7 @@ class H2P():
         F_kcv = np.zeros((self.dimbse,3,3), dtype=np.complex128)
         eps = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
-            np.fill_diagonal(eps[i,:,:], 1)
+            np.fill_diagonal(eps[i,:,:], 1.0)
         # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
         if(self.nq_double != 1): 
             h2peigvec_vck=self.h2peigvec_vck[self.q0index]
@@ -718,8 +720,8 @@ class H2P():
                     ik = self.BSE_table_sort[0][t][0]
                     iv = self.BSE_table_sort[0][t][1]
                     ic = self.BSE_table_sort[0][t][2]
-                    eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                        + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)                     
+                    eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*bohr2ang**3*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(np.real(h2peigv[t]-es))/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        + 1j*8*np.pi/(self.electronsdb.lat_vol*bohr2ang**3*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)                     
                     #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                     #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
@@ -734,14 +736,13 @@ class H2P():
             # compute eps and pl
             #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
             #pl = eps
-            print('hello')
             for ies, es in enumerate(w):
                 for t in range(0,self.dimbse):
                     ik = self.BSE_table_sort[0][t][0]
                     iv = self.BSE_table_sort[0][t][1]
                     ic = self.BSE_table_sort[0][t][2]
-                    eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                        + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+                    eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        + 1j*8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
                     #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                     #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')

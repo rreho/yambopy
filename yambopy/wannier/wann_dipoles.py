@@ -54,14 +54,16 @@ class TB_dipoles():
             self.BSE_table = BSE_table
             if(self.ktype=='IP'):
                 print('Running IP dipoles')
-                self._get_dipoles_IP(method=method)
+                #self._get_dipoles_IP(method=method)
             else:
+                print('Running BSE dipoles')
                 self._get_dipoles_bse(method=method)
         else:
-            self._get_dipoles(method=method)
+            print('here')
+            #self._get_dipoles(method=method)
         if(self.ktype=='IP'):
             print('Running IP oscillator strength')
-            self._get_osc_strength_IP(method)
+            #self._get_osc_strength_IP(method)
         else:
             #self._get_osc_strength_IP(method)
             self._get_osc_strength(method)
@@ -162,10 +164,10 @@ class TB_dipoles():
     def _get_dipoles_bse(self, method):
         if method == 'real':
             import time
-            print("Starting BSE dipole matrix formation.\n")
+            print("Starting BSE dipole matrix formation\n")
             t0 = time.time()
-            dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nbsetransitions,3),dtype=np.complex128)
-            dipoles_bse_kcv_conj = np.zeros((self.nbsetransitions, self.nbsetransitions,3),dtype=np.complex128)
+            dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
+            dipoles_bse_kcv_conj = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)            
             for t in range(0,self.nbsetransitions):
                 for tp in range(0,self.nbsetransitions):
                     ik = self.BSE_table[tp][0]
