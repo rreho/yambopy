@@ -385,16 +385,19 @@ class H2P():
             K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc*dotv
 
             ## Ex term
-            dotc2 = np.einsum('ijk,jmnk->nim',np.conjugate(eigc1), eigv2)
-            dotv2 = np.einsum('ijkl,jnl->kin',np.conjugate(eigv1), eigc2)
+            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc1), eigv2)
+            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv1), eigc2)
             # K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
             # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
             K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
-            K_diff = K_direct - K_Ex
+            K_diff = K_direct - K_Ex[:,np.newaxis,:]
             f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
             H2P = f_diff * K_diff
             result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
             eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
+            self.eigv_diff_ttp = eigv_diff
+            self.eigvecc_t = eigc1[:,0,:]
+            self.eigvecv_t = eigv1[:,0,0,:]
             diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff)  # when t ==tp
             H2P += diag
             print(f'Completed in {time() - t0} seconds')
@@ -690,8 +693,8 @@ class H2P():
             h2peigv = self.h2peigv[self.q0index]
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, \
-                                h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
+                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
         #self.dipoles = tb_dipoles.dipoles # ??? gargabe now
@@ -724,6 +727,7 @@ class H2P():
             # compute eps and pl
             #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
             #pl = eps
+            print('hello')
             for ies, es in enumerate(w):
                 for t in range(0,self.dimbse):
                     ik = self.BSE_table[t][0]
