@@ -1048,6 +1048,56 @@ class H2P():
         
         return aux_t, inverse_aux_t
 
+    def chern_exc_exc(self, integrand):
+        """
+        Compute the flux of $\frac{A* \partial A}{\partial q} through the planes x=0, y=0, and z=0.
+        electron reference frame
+        Parameters:
+            integrand (callable): Function to evaluate the integrand. Takes q_grid as input.
+            
+        Returns:
+            dict: Fluxes through planes {'x=0': flux_x, 'y=0': flux_y, 'z=0': flux_z}.
+            it corresponds to the chern_exc_exc number if integrand are the bse eigenvectors
+        """
+        integrand = np.zeros((self.nq_double,self.dimbse, self.bse_nv, self.bse_nc, self.nk,3),dtype=np.complex128)
+
+        # Create masks for points lying on the planes      
+        NX, NY, NZ = self.qmpgrid.grid_shape
+        spacing_x = np.array([1/NX, 0.0, 0.0], dtype=np.float128)
+        i_x = self.qmpgrid.find_closest_kpoint(spacing_x)
+        spacing_y = np.array([0.0, 1/NY, 0.0], dtype=np.float128)
+        i_y = self.qmpgrid.find_closest_kpoint(spacing_y)
+        spacing_z = np.array([0.0, 0.0, 1/NZ], dtype=np.float128)
+        i_z = self.qmpgrid.find_closest_kpoint(spacing_z)        
+        qpdqx_grid = self.kplusq_table 
+
+        # Extract points on each plane
+        qpdx_plane = qpdqx_grid[:,i_x][1]#q_grid[qpdqx_grid[:,i_x][1]]
+        qx_plane   = qpdqx_grid[:,i_x][0]#q_grid[qpdqx_grid[:,i_x][1]]
+        qpdy_plane = qpdqx_grid[:,i_y][1]
+        qy_plane   = qpdqx_grid[:,i_y][0]
+        qpdz_plane = qpdqx_grid[:,i_z][1]
+        qz_plane   = qpdqx_grid[:,i_z][0]
+        # Evaluate the integrand at the points on each plane
+        integrand_x = integrand[qx_plane].conj()*(integrand[qpdx_plane] - integrand[qx_plane])
+        integrand_y = integrand[qy_plane].conj()*(integrand[qpdy_plane] - integrand[qy_plane])
+        integrand_z = integrand[qz_plane].conj()*(integrand[qpdz_plane] - integrand[qz_plane])
+
+        flux_x = np.sum(integrand_z+integrand_y,axis=(0,2,3,4)) 
+        flux_y = np.sum(integrand_z+integrand_y,axis=(0,2,3,4)) 
+        flux_z = np.sum(integrand_x+integrand_y,axis=(0,2,3,4)) 
+
+        return {'x=0': flux_x, 'y=0': flux_y, 'z=0': flux_z}
+
+    def chern_e_e(self):
+        pass
+    def cher_h_h(self):
+        pass
+    def cher_exc_e(self):
+        pass
+    def chern_exc_h(self):
+        pass
+
 def chunkify(lst, n):
     """Divide list `lst` into `n` chunks."""
     return [lst[i::n] for i in range(n)]    
