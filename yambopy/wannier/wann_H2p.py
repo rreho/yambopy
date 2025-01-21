@@ -90,7 +90,7 @@ class H2P():
         Easy to use only requires the model as input. 
     '''
     def __init__(self, model, electronsdb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
-                 ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
+                 ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, f_qn = None,\
                  TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, electronsdb, kmpgrid, qmpgrid,excitons=None, \
@@ -117,7 +117,7 @@ class H2P():
         if(self.gammaonly):
             self.nq_double = 1
         else:
-            self.nq_double = len(self.kmpgrid.k)
+            self.nq_double = len(self.qmpgrid.k)
         self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid)
         try:
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
@@ -144,15 +144,22 @@ class H2P():
             self.f_kn[:,:self.nv] = 1.0
         else:
             self.f_kn = f_kn
+        if (f_qn == None):
+            self.f_qn = np.zeros((self.nq_double,self.nb),dtype = np.float64)
+            self.f_qn[:,:self.nv] = 1.0
+        else:
+            self.f_qn = f_qn
         if(self.method=='model' and cpot is not None):
             self.ctype = ctype
-            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
+            (self.qplusk_table, self.qminusk_table) = self.qmpgrid.get_kq_tables(self.kmpgrid, sign='-')  # minus sign to have k-q  
             #(self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.electronsdb) # used in building BSE
             print('\n Building H2P from model Coulomb potentials. Default is v2dt2\n')
             self.cpot = cpot
             self.H2P = self._buildH2P_fromcpot()
         elif(self.method=='kernel' and cpot is None):
-            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid)
+            (self.qplusk_table, self.qminusk_table) = self.qmpgrid.get_kq_tables(self.kmpgrid, sign='-')  # minus sign to have k-q  
             (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.electronsdb) # used in building BSE
             print('\n Building H2P from model YamboKernelDB\n')
             #Remember that the BSEtable in Yambopy start counting from 1 and not to 0
@@ -370,9 +377,10 @@ class H2P():
             t0 = time()
 
             # Precompute kplusq and kminusq tables
-            ikpminusq = self.kplusq_table[:, :, 1]
             ikminusq = self.kminusq_table[:, :, 1]
             ikminusgamma = self.kminusq_table[:, :, 0]
+            iqminusgamma = self.qminusk_table[:,:,0]
+            iqminusk = self.qminusk_table[:,:,1]
             eigc1 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
             eigc2 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
             eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands
@@ -384,7 +392,6 @@ class H2P():
             #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
             #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
             K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc*dotv
-
             ## Ex term
             dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc1), eigv2)
             dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv1), eigc2)
@@ -392,7 +399,7 @@ class H2P():
             # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
             K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
             K_diff = K_direct - K_Ex[:,np.newaxis,:]
-            f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
+            f_diff = self.f_qn[iqminusk][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_qn[iqminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
             H2P = f_diff * K_diff
             result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
             eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
@@ -1059,8 +1066,7 @@ class H2P():
             dict: Fluxes through planes {'x=0': flux_x, 'y=0': flux_y, 'z=0': flux_z}.
             it corresponds to the chern_exc_exc number if integrand are the bse eigenvectors
         """
-        integrand = np.zeros((self.nq_double,self.dimbse, self.bse_nv, self.bse_nc, self.nk,3),dtype=np.complex128)
-
+        integrand = ensure_shape(integrand, (self.nq_double,self.dimbse, self.bse_nv, self.bse_nc, self.nk),dtype=np.complex128)
         # Create masks for points lying on the planes      
         NX, NY, NZ = self.qmpgrid.grid_shape
         spacing_x = np.array([1/NX, 0.0, 0.0], dtype=np.float128)
@@ -1089,10 +1095,74 @@ class H2P():
 
         return {'x=0': flux_x, 'y=0': flux_y, 'z=0': flux_z}
 
-    def chern_e_e(self):
-        pass
-    def cher_h_h(self):
-        pass
+    def chern_e_e(self, integrand1, integrand2):
+        """
+        Compute the flux of $\frac{A* A }{\partial q} through the planes x=0, y=0, and z=0.
+        electron reference frame
+        Parameters:
+            integrand (callable): Function to evaluate the integrand. Takes q_grid as input.
+            
+        Returns:
+            dict: Fluxes through planes {'x=0': flux_x, 'y=0': flux_y, 'z=0': flux_z}.
+            it corresponds to the chern_e_e number if integrand are the bse eigenvectors
+        """
+        integrand = ensure_shape(integrand, (self.nq_double,self.dimbse, self.bse_nv, self.bse_nc, self.nk),dtype=np.complex128)
+        (kmqdq_grid, kmqdq_grid_table) = self.kmpgrid.get_kmqpdq_grid(self.qmpgrid)
+        # get overlaps valence w_{vv'k-q}
+        ikminusq = self.kminusq_table[:, :, 1]
+        ikmqpdqx = kmqdq_grid_table[0][:,:,1] #dx
+        ikmqpdqy = kmqdq_grid_table[1][:,:,1] #dy
+        ikmqpdqz = kmqdq_grid_table[2][:,:,1] #dz
+        
+        eigvec_ckmq = self.eigvec[ikminusq, :, :][:,:,:,np.unique(self.BSE_table[:,2])]#[:,np.newaxis,:,:]  # Valence bands
+        eigvec_ckmqpdqx = self.eigvec[ikmqpdqx, :, :][:,:,:,np.unique(self.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        eigvec_ckmqpdqy = self.eigvec[ikmqpdqy, :, :][:,:,:,np.unique(self.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        eigvec_ckmqpdqz = self.eigvec[ikmqpdqz, :, :][:,:,:,np.unique(self.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        dotvx = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_ckmqpdqx-eigvec_ckmq), eigvec_ckmq) #l index is conjugated       
+        dotvy = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_ckmqpdqy-eigvec_ckmq), eigvec_ckmq) #l index is conjugated       
+        dotvz = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_ckmqpdqz-eigvec_ckmq), eigvec_ckmq) #l index is conjugated       
+        integrand_x = np.einsum('abcde,abcie, eadi -> b',integrand1.conj(), integrand2, dotvx)/(self.nq_double)
+        integrand_y = np.einsum('abcde,abcie, eadi -> b',integrand1.conj(), integrand2, dotvy)/(self.nq_double)
+        integrand_z = np.einsum('abcde,abcie, eadi -> b',integrand1.conj(), integrand2, dotvz)/(self.nq_double)
+        flux_x = (integrand_z+integrand_y)/2 # divide by 2 becuase I sum z and y
+        flux_y = (integrand_z+integrand_y)/2 
+        flux_z = (integrand_x+integrand_y)/2 
+
+        return {'x=0': flux_x, 'y=0': flux_y, 'z=0': flux_z} 
+    def cher_h_h(self, integrand):
+        """
+        Compute the flux of $\frac{A* A }{\partial q} through the planes x=0, y=0, and z=0.
+        electron reference frame
+        Parameters:
+            integrand (callable): Function to evaluate the integrand. Takes q_grid as input.
+            
+        Returns:
+            dict: Fluxes through planes {'x=0': flux_x, 'y=0': flux_y, 'z=0': flux_z}.
+            it corresponds to the chern_h_h number if integrand are the bse eigenvectors
+        """
+        integrand = ensure_shape(integrand, (self.nq_double,self.dimbse, self.bse_nv, self.bse_nc, self.nk),dtype=np.complex128)
+        (kmqdq_grid, kmqdq_grid_table) = self.kmpgrid.get_kmqpdq_grid(self.qmpgrid)
+        # get overlaps valence w_{vv'k-q}
+        ikminusq = self.kminusq_table[:, :, 1]
+        ikmqpdqx = kmqdq_grid_table[0][:,:,1] #dx
+        ikmqpdqy = kmqdq_grid_table[1][:,:,1] #dy
+        ikmqpdqz = kmqdq_grid_table[2][:,:,1] #dz
+        
+        eigvec_vkmq = self.eigvec[ikminusq, :, :][:,:,:,np.unique(self.BSE_table[:,1])]#[:,np.newaxis,:,:]  # Valence bands
+        eigvec_vkmqpdqx = self.eigvec[ikmqpdqx, :, :][:,:,:,np.unique(self.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        eigvec_vkmqpdqy = self.eigvec[ikmqpdqy, :, :][:,:,:,np.unique(self.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        eigvec_vkmqpdqz = self.eigvec[ikmqpdqz, :, :][:,:,:,np.unique(self.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        dotvx = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqpdqx-eigvec_vkmq), eigvec_vkmq) #l index is conjugated       
+        dotvy = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqpdqy-eigvec_vkmq), eigvec_vkmq) #l index is conjugated       
+        dotvz = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqpdqz-eigvec_vkmq), eigvec_vkmq) #l index is conjugated       
+        integrand_x = np.einsum('abcde,abhde, kahc -> b',integrand.conj(), integrand, dotvx)/self.nq_double
+        integrand_y = np.einsum('abcde,abhde, kahc -> b',integrand.conj(), integrand, dotvy)/self.nq_double
+        integrand_z = np.einsum('abcde,abhde, kahc -> b',integrand.conj(), integrand, dotvz)/self.nq_double
+        flux_x = (integrand_z+integrand_y)/2 
+        flux_y = (integrand_z+integrand_y)/2 
+        flux_z = (integrand_x+integrand_y)/2 
+
+        return {'x=0': flux_x, 'y=0': flux_y, 'z=0': flux_z}     
     def cher_exc_e(self):
         pass
     def chern_exc_h(self):

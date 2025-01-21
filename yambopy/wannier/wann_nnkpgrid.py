@@ -30,11 +30,13 @@ class NNKP_Grids(KPointGenerator):
         self.weights = 1/self.nkpoints
         self.k_tree = cKDTree(self.k)
 
-    def get_kmq_grid(self,qmpgrid):
+    def get_kmq_grid(self,qmpgrid, sign = "+"):
         # if not isinstance(qmpgrid, NNKP_Grids):
         #     raise TypeError('Argument must be an instance of NNKP_Grids')
         #here I need to use the k-q grid and then apply -b/2
         # Prepare dimensions
+        if sign not in ["+", "-"]:
+            raise ValueError("Invalid sign option. Choose either '+' for a-b or '-' for b-a")
 
         nkpoints = self.nkpoints
         nqpoints = qmpgrid.nkpoints
@@ -42,8 +44,10 @@ class NNKP_Grids(KPointGenerator):
         # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
         k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
         q_grid = np.expand_dims(qmpgrid.k, axis=0)  # Shape (1, nqpoints, 3)
-        kq_diff = k_grid - q_grid  # Shape (nkpoints, nqpoints, 3)
-
+        if sign == "+":
+            kq_diff = k_grid - q_grid  # Shape (nkpoints, nqpoints, 3)
+        elif sign == "-":
+            kq_diff = -k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
         # Fold into the Brillouin Zone and get G-vectors
         kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3))  # Flatten for batch processing
         kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)

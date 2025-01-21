@@ -69,6 +69,12 @@ def find_kpoint_index(klist, kpoint):
         print('k-point not found')
         return None
 
+def ensure_shape(array, shape, dtype=None):
+    if array.shape != shape:
+        raise ValueError(f"Expected shape {shape}, but got {array.shape}")
+    if dtype is not None and array.dtype != dtype:
+        raise TypeError(f"Expected dtype {dtype}, but got {array.dtype}")
+    return array
 class ElectricField():
     '''
         Creates a time dependent electric-field
