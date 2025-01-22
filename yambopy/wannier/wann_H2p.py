@@ -378,29 +378,18 @@ class H2P():
             t0 = time()
 
             # Precompute kplusq and kminusq tables
+            ikpminusq = self.kplusq_table[:, :, 1]
             ikminusq = self.kminusq_table[:, :, 1]
             ikminusgamma = self.kminusq_table[:, :, 0]
-            iqminusgamma = self.qminusk_table[:,:,0]
-            iqminusk = self.qminusk_table[:,:,1]
             eigc1 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
             eigc2 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
             eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands
             eigv2 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands
             
-            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc1), eigc2)
-            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv1), eigv2)
-            v2dt2_array = self._getKdq(0,0,0,0,0,0,0)       #sorry
-            #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-            #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
-            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc*dotv
-            ## Ex term
-            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc1), eigv2)
-            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv1), eigc2)
-            # K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-            # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
-            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+            K_direct, K_Ex = self._getKdq()       #sorry
+
             K_diff = K_direct - K_Ex[:,np.newaxis,:]
-            f_diff = self.f_qn[iqminusk][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_qn[iqminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
+            f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
             H2P = f_diff * K_diff
             result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
             eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
@@ -411,8 +400,6 @@ class H2P():
             H2P += diag
             print(f'Completed in {time() - t0} seconds')
             return H2P
-
-
 
     def _buildKernel(self, kernel):
         pass
