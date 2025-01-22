@@ -1,5 +1,5 @@
 import numpy as np
-
+from yambopy.wannier.wann_utils import ensure_shape
 class ChernNumber():
     def __init__(self, h2p = None, h = None):
         
@@ -14,11 +14,12 @@ class ChernNumber():
             self.spacing_z = np.array([0.0, 0.0, 1/self.NZ], dtype=np.float128)
             self.i_z = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_z)        
             self.qpdqx_grid = self.h2p.kplusq_table     
-            self.i_xy = self.h2p.kmpgrid.find_closest_kpoint(spacing_xy)   
-            self.spacing_zx = np.array([1/NX, 0.0, 1/NZ], dtype=np.float128)
-            self.i_zx = self.h2p.kmpgrid.find_closest_kpoint(spacing_zx)           
-            self.spacing_yz = np.array([0.0, 1/NY, 1/NZ], dtype=np.float128)
-            self.i_yz = self.h2p.kmpgrid.find_closest_kpoint(spacing_yz)               
+            self.spacing_xy = np.array([1/self.NX, 1/self.NY, 0.0], dtype=np.float128)
+            self.i_xy = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_xy)   
+            self.spacing_zx = np.array([1/self.NX, 0.0, 1/self.NZ], dtype=np.float128)
+            self.i_zx = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_zx)           
+            self.spacing_yz = np.array([0.0, 1/self.NY, 1/self.NZ], dtype=np.float128)
+            self.i_yz = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_yz)               
             # Extract points on each plane
             self.qpdx_plane = self.qpdqx_grid[:,self.i_x][:,1]#q_grid[qpdqx_grid[:,i_x][1]]
             self.qx_plane   = self.qpdqx_grid[:,self.i_x][:,0]#q_grid[qpdqx_grid[:,i_x][1]]
@@ -26,9 +27,9 @@ class ChernNumber():
             self.qy_plane   = self.qpdqx_grid[:,self.i_y][:,0]
             self.qpdz_plane = self.qpdqx_grid[:,self.i_z][:,1]
             self.qz_plane   = self.qpdqx_grid[:,self.i_z][:,0]
-            self.qpdxy_plane = self.qpdqx_grid[:,i_xy][:,1]
-            self.qpdyz_plane = self.qpdqx_grid[:,i_yz][:,1]
-            self.qpdzx_plane = self.qpdqx_grid[:,i_zx][:,1]                 
+            self.qpdxy_plane = self.qpdqx_grid[:,self.i_xy][:,1]
+            self.qpdyz_plane = self.qpdqx_grid[:,self.i_yz][:,1]
+            self.qpdzx_plane = self.qpdqx_grid[:,self.i_zx][:,1]                 
 
         if (h is not None): self.h = h
 

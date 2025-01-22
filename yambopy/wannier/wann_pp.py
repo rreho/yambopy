@@ -12,6 +12,7 @@ class ExcitonBands(H2P):
         self.path_qpoints = path_qpoints
         self.nq_list = len(path_qpoints.get_klist())
         self.red_kpoints = self.path_qpoints.get_klist()[:,0:3]
+        self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)*ang2bohr # result in Bohr
 
     def _buildH2P_qlist(self):        
             H2P = np.zeros((self.nq_list, self.dimbse, self.dimbse), dtype=np.complex128)
