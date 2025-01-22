@@ -101,6 +101,7 @@ class H2P():
             bsetype = 'resonant' build H2p resonant
             TD is the Tahm-Dancoff which neglects the coupling
         '''
+        self.model = model
         self.nk = model.nk
         self.nb = model.nb
         self.nc = model.nc
@@ -408,27 +409,6 @@ class H2P():
             self.eigvecv_t = eigv1[:,0,0,:]
             diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff)  # when t ==tp
             H2P += diag
-            print(f'Completed in {time() - t0} seconds')
-            return H2P
-            for iq in range(self.nq_double):
-                for t in range(self.dimbse):
-                    ik, iv, ic = self.BSE_table[t]
-                    ikplusq = kplusq_table[ik, iq]
-                    ikminusq = kminusq_table[ik, iq]
-                    eigv_diff = self.eigv[ik, ic] - self.eigv[ikminusq, iv]
-                    f_diff = self.f_kn[ikminusq, iv] - self.f_kn[ik, ic]
-
-                    for tp in range(self.dimbse):
-                        ikp, ivp, icp = self.BSE_table[tp]
-                        K_direct = self._getKdq(ik, iv, ic, ikp, ivp, icp, iq)
-                        K_Ex = self._getKEx(ik, iv, ic, ikp, ivp, icp, iq)
-                        K_diff = K_direct - K_Ex
-
-                        if t == tp:
-                            H2P[iq, t, tp] = eigv_diff + f_diff * K_diff
-                        else:
-                            H2P[iq, t, tp] = f_diff * K_diff
-
             print(f'Completed in {time() - t0} seconds')
             return H2P
 

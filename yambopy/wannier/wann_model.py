@@ -266,7 +266,52 @@ class TBMODEL(tbmodels.Model):
         H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
         for i in range(0, k.shape[0]):
             H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
-        return [scipy.linalg.eigvalsh(ham) for ham in H_k]
+        return np.array([scipy.linalg.eigvalsh(ham) for ham in H_k])
+
+    def get_eigenval_and_vec(self, k, from_hr=True):
+        """
+        Returns the eigenvalues at a given k point, or list of k-points.
+
+        Parameters
+        ----------
+        k : ndarray
+            The k-point(s) at which the Hamiltonian is evaluated. If a list
+            of k-points is given, a corresponding list of eigenvalue and 
+            eigenvector arrays is returned.
+
+        from_hr : bool, optional
+            Whether to evaluate the Hamiltonian from the `hr` (default: True).
+        Returns
+        -------
+        list of tuples
+            A list where each element is a tuple of (eigenvalues, eigenvectors)
+            for the corresponding k-point. The eigenvalues are sorted in ascending 
+            order, and the eigenvectors are in column form.
+        """
+        # Initialize the Hamiltonian for all k-points
+    # Ensure input is a NumPy array
+        if not isinstance(k, np.ndarray):
+            raise TypeError("Input `k` must be a NumPy array.")
+
+        # Check dimensionality of `k`
+        if k.ndim != 2 or k.shape[1] != 3:
+            raise ValueError("Input `k` must have shape (n_kpoints, 3).")
+
+        # Initialize the Hamiltonian for all k-points
+        H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
+        for i in range(k.shape[0]):
+            H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
+
+        # Compute eigenvalues and eigenvectors for each k-point
+        eigenvalues = np.zeros((k.shape[0], self.nb), dtype=np.float64)
+        eigenvectors = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
+
+        for i, ham in enumerate(H_k):
+            eigvals, eigvecs = scipy.linalg.eigh(ham)
+            eigenvalues[i] = eigvals
+            eigenvectors[i] = eigvecs
+
+        return eigenvalues, eigenvectors
         
     def pos_operator_matrix(self, eigvec, cartesian = True):
         ''' Computes the position operator along a direction dir at a k-point
