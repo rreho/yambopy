@@ -21,15 +21,16 @@ class ExcitonBands(H2P):
         self.nq_list = len(path_qpoints.get_klist())
         self.red_kpoints = self.path_qpoints.get_klist()[:,0:3]
         self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)*ang2bohr # result in Bohr
+        self.nq_double = self.nq_list
 
-    def _buildH2P_qlist(self):        
+    def buildH2P_qlist(self):        
             H2P = np.zeros((self.nq_list, self.dimbse, self.dimbse), dtype=np.complex128)
             print('initialize buildh2p from cpot')
             t0 = time()
             kminusqlist_table = self.kmpgrid.k[:,None,:] - self.red_kpoints[None,:,:]
             eigv_kmq, eigvec_kmq = self.model.get_eigenval_and_vec(kminusqlist_table.reshape(self.nk*self.nq_list,3))
             # compute the fermi occupations for k-q
-            f_kmqn = self._get_occupations(self.nq_list, self.nb, self.eigv_kmq, self.model.fermie)
+            f_kmqn = self._get_occupations(self.nq_list, self.nb, eigv_kmq, self.model.fermie)
             eigv_kmq = np.array(eigv_kmq).reshape(self.nk, self.nq_list, self.nb)
             self.f_kmqn = f_kmqn.reshape(self.nk, self.nq_list, self.nb)
             eigvec_kmq = np.array(eigvec_kmq).reshape(self.nk, self.nq_list, self.nb, self.nb)
@@ -55,10 +56,10 @@ class ExcitonBands(H2P):
             K_ex = np.einsum('ab, cde, cde -> cde', v2dt2_array_ex, dotc2, dotv2)
             H2P = K_d - K_ex
             eigv_diff = (eigv_k[:,None, self.BSE_table[:,2]]-eigv_kmq[:,:,self.BSE_table[:,1]])[self.BSE_table[:,0],:,:].swapaxes(1,0)
-            diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff)  # when t ==tp
+            diag = np.einsum('lm, klm -> klm', np.eye(self.dimbse), eigv_diff) # when t ==tp
             H2P += diag
+            self.H2P = H2P
             print(f'Completed in {time() - t0} seconds')
-            return H2P        
 
     def _get_occupations(self, nk, nb, eigv, fermie):
         occupations = np.zeros((nk, nb))
