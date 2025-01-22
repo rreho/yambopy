@@ -4,11 +4,19 @@ from qepy.lattice import Path
 import inspect
 class ExcitonBands(H2P):
     def __init__(self, h2p: 'H2P', path_qpoints: 'Path'):
-        super().__init__(**vars(h2p))
+        # Get the __init__ argument names of the parent class (excluding 'self')
         if not isinstance(path_qpoints, Path):
             raise TypeError('Argument must be an instance of Path')
         if not isinstance(h2p, H2P):
             raise TypeError('Argument must be an instance of H2P')
+        parent_init_params = inspect.signature(H2P.__init__).parameters.keys()
+        parent_init_params = [param for param in parent_init_params if param != "self"]
+
+        # Filter attributes in the instance that match the parent's __init__ arguments
+        parent_args = {key: getattr(h2p, key) for key in parent_init_params if hasattr(h2p, key)}
+
+        # Call the parent's __init__ with the filtered arguments
+        super().__init__(**parent_args)
         self.path_qpoints = path_qpoints
         self.nq_list = len(path_qpoints.get_klist())
         self.red_kpoints = self.path_qpoints.get_klist()[:,0:3]
