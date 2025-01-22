@@ -2,6 +2,8 @@ import numpy as np
 from scipy.special import j0, y0, k0, j1, y1, k1  # Bessel functions from scipy.special
 from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red, modvec
 from yambopy.units import alpha,ha2ev, ang2bohr,bohr2ang
+import scipy
+
 
 class CoulombPotentials:
     '''
@@ -99,28 +101,27 @@ class CoulombPotentials:
         return v2dt*ha2ev
 
     def v2dt2(self, kpt1, kpt2):
-        modk = modvec(kpt1, kpt2)
+        kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+        kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+            
+        # Compute modk for all kpt1 and kpt2 pairs
+        modk = scipy.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
         
-        # Volume of the Brillouin zone
         vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
-        lc = self.lc        
-        # Difference between k-points
-        vkpt = np.array(kpt1) - np.array(kpt2)
-        Zc = 0.5 * self.rlat[2, 2]  # Half of the c lattice parameter
+        lc = self.lc
+        vkpt = kpt1_broadcasted - kpt2_broadcasted
+            
         # In-plane momentum transfer
-        Qxy = np.sqrt(vkpt[0]**2 + vkpt[1]**2)
-        Qz = np.sqrt(vkpt[2]**2)
-
-        
+        Qxy = np.sqrt(vkpt[..., 0]**2 + vkpt[..., 1]**2)
         # Factor for the potential
         factor = 1.0  # This could also be 4.0 * pi, depending on the model
-        
-        # Evaluate the potential
-        if modk < self.tolr:
-            v2dt2 = 0.0
-        else:
-            v2dt2 = (vbz * self.alpha) * (factor / modk**2) * (1.0 - np.exp(-0.5*Qxy * lc) * np.cos(0.5*Qz * lc))
-        
+
+        # Compute the potential using vectorized operations
+        safe_modk = np.where(modk < self.tolr, np.inf, modk)
+        v2dt2 = (vbz * self.alpha) * (factor / safe_modk**2) * \
+                    (1.0 - np.exp(-0.5 * Qxy * lc) * np.cos(0.5 * lc * vkpt[..., 2]))
+        v2dt2 = np.where(modk < self.tolr, 0.0 + 0.j, v2dt2)
+
         return v2dt2
     
 
@@ -132,8 +133,12 @@ class CoulombPotentials:
         r0 = self.r0
         lc = self.lc
         # Compute the volume of the cell and modulus of the k-point difference
-        modk = modvec(kpt1, kpt2)
-
+        kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+        kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+            
+        # Compute modk for all kpt1 and kpt2 pairs
+        modk = scipy.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
+        
         vbz = 1.0 / (self.rec_vol)
 
         epar = self.ediel[1]
@@ -146,16 +151,18 @@ class CoulombPotentials:
         pb = (eb - kappa) / (eb + kappa)
         pt = (et - kappa) / (et + kappa)
 
-        if modk < self.tolr:
-            v2drk = 0.0
-        else:
-            aux1 = (1.0 - (pb * pt * np.exp(-2.0 * modk * eta * lc))) * kappa
-            aux2 = (1.0 - (pt * np.exp(-eta * modk * lc))) * (1.0 - (pb * np.exp(-eta * modk * lc)))
-            aux3 = r0 * modk * np.exp(-modk * w)
 
-            ew = (aux1 / aux2) + aux3       #F(Q)
+        aux1 = (1.0 - (pb * pt * np.exp(-2.0 * modk * eta * lc))) * kappa
+        aux2 = (1.0 - (pt * np.exp(-eta * modk * lc))) * (1.0 - (pb * np.exp(-eta * modk * lc)))
+        aux3 = r0 * modk * np.exp(-modk * w)
 
-            v2drk = (vbz * self.alpha) * np.exp(-modk * w) * (1.0 / ew) * (1.0 / modk)
+        ew = (aux1 / aux2) + aux3       #F(Q)
+
+
+        safe_modk = np.where(modk < self.tolr, np.inf, modk)
+        v2drk = (vbz * self.alpha) * np.exp(-modk * w) * (1.0 / ew) * (1.0 / safe_modk)
+        v2drk = np.where(modk < self.tolr, 0.0 + 0.j, v2drk)
+
 
         return v2drk*ha2ev
     
