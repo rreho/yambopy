@@ -1,10 +1,10 @@
 import numpy as np 
 from yambopy.wannier.wann_H2p import *
 from qepy.lattice import Path
-
+import inspect
 class ExcitonBands(H2P):
     def __init__(self, h2p: 'H2P', path_qpoints: 'Path'):
-        super().__init__(**h2p.args)
+        super().__init__(**vars(h2p))
         if not isinstance(path_qpoints, Path):
             raise TypeError('Argument must be an instance of Path')
         if not isinstance(h2p, H2P):
@@ -28,35 +28,25 @@ class ExcitonBands(H2P):
             eigv_k = self.eigv
             eigvec_k = self.eigvec
 
-            # Precompute kplusq and kminusq tables
-            ikminusq = self.kminusq_table[:, :, 1]
-            ikminusgamma = self.kminusq_table[:, :, 0]
-            iqminusgamma = self.qminusk_table[:,:,0]
-            iqminusk = self.qminusk_table[:,:,1]
-            eigc1 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
-            eigc2 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
-            eigv1 = eigvec_kmq[self.BSE_table[:,0], :, :, self.BSE_table[:,1]][:, :, :, :, np.newaxis]  # Valence bands
-            eigv2 = eigvec_kmq[self.BSE_table[:,0], :, :, self.BSE_table[:,1]][:, :, :, np.newaxis, :]  # Valence bands
-            
-            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc1), eigc2)
-            dotv = np.einsum('ijklm,ijkml->ij',np.conjugate(eigv1), eigv2)
-            v2dt2_array = self._getKdq(0,0,0,0,0,0,0)       #sorry
+            eigc1 = eigvec_k[:, :, self.BSE_table[:,2]][:,:,np.newaxis, :]   # conduction bands
+            eigc2 = eigvec_k[:, :, self.BSE_table[:,2]][:,:,:,np.newaxis]   # conduction bands
+            eigv1 = eigvec_kmq[:, :, :, self.BSE_table[:,1]][:, :, :,  : ]  # Valence bands
+            eigv2 = eigvec_kmq[:, :, :, self.BSE_table[:,1]][:, :, :, :]  # Valence bands
+
+            dotc = np.einsum('ijkl,ijkl->ikl',np.conjugate(eigc1), eigc2)
+            dotv = np.einsum('ijkl, ijkm -> jilm ',np.conjugate(eigv1), eigv2)
+            dotc2 = np.einsum('ijkl,imjo->mlo',np.conjugate(eigc1), eigv2)
+            dotv2 = np.einsum('ijkl,ikop->jlo',np.conjugate(eigv1), eigc2)
+
+            v2dt2_array_ex = self.cpot.v2dt2(self.car_kpoints,np.array([[0.0,0.0,0.0]]))
+            v2dt2_array_d  = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
             #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
             #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
-            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc*dotv
+            K_d = np.einsum('ij, ilm, njlm ->nlm' , v2dt2_array_d, dotc, dotv)
             ## Ex term
-            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc1), eigv2)
-            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv1), eigc2)
-            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
-            K_diff = K_direct - K_Ex[:,np.newaxis,:]
-            f_diff = self.f_kmqn[self.BSE_table[:,0],:, self.BSE_table[:,1]] \
-                -  self.f_kn[:,:][self.BSE_table[:,0], None, self.BSE_table[:,2]] 
-            H2P = f_diff * K_diff
-            result = eigv_kmq[self.BSE_table[:, 0], :, self.BSE_table[:, 1]]  # Shape: (ntrasitions_k, nq, ntransitions_v)
-            eigv_diff = eigv_k[self.BSE_table[:,0],None,self.BSE_table[:,2]] - result # Shape: (ntrasitions_k, nq, ntransitions_c) - (ntrasitions_k, nq, ntransitions_v)
-            self.eigv_diff_ttp = eigv_diff
-            self.eigvecc_t = eigc1[:,0,:]
-            self.eigvecv_t = eigv1[:,0,0,:]
+            K_ex = np.einsum('ab, cde, cde -> cde', v2dt2_array_ex, dotc2, dotv2)
+            H2P = K_d - K_ex
+            eigv_diff = (eigv_k[:,None, self.BSE_table[:,2]]-eigv_kmq[:,:,self.BSE_table[:,1]])[self.BSE_table[:,0],:,:].swapaxes(1,0)
             diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff)  # when t ==tp
             H2P += diag
             print(f'Completed in {time() - t0} seconds')

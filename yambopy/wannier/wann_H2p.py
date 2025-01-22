@@ -10,7 +10,6 @@ from time import time
 import scipy
 import gc
 
-
 def process_file(args):
     idx, exc_db_file, data_dict = args
     # Unpacking data necessary for processing
@@ -125,6 +124,7 @@ class H2P():
         except ValueError:
             print('Warning! Q=0 index not found')
         self.dimbse = self.bse_nv*self.bse_nc*self.nk
+        self.electronsdb_path = electronsdb_path
         self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
         self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
         self.offset_nv = self.nv-self.bse_nv
@@ -140,12 +140,12 @@ class H2P():
         self.skip_diago = False
         self.nproc = nproc
         # consider to build occupations here in H2P with different occupation functions
-        if (f_kn == None):
+        if not hasattr(self,'f_kn'):
             self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float64)
             self.f_kn[:,:self.nv] = 1.0
         else:
             self.f_kn = f_kn
-        if (f_qn == None):
+        if not hasattr(self,'f_qn'):
             self.f_qn = np.zeros((self.nq_double,self.nb),dtype = np.float64)
             self.f_qn[:,:self.nv] = 1.0
         else:
