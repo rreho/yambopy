@@ -44,21 +44,26 @@ class ExcitonBands(H2P):
 
             dotc = np.einsum('ijkl,ijkl->ikl',np.conjugate(eigc1), eigc2)
             dotv = np.einsum('ijkl, ijkm -> jilm ',np.conjugate(eigv1), eigv2)
-            dotc2 = np.einsum('ijkl,imjo->mlo',np.conjugate(eigc1), eigv2)
-            dotv2 = np.einsum('ijkl,ikop->jlo',np.conjugate(eigv1), eigc2)
+            dotc2 = np.einsum('ijkl,imjo->milo',np.conjugate(eigc1), eigv2)
+            dotv2 = np.einsum('ijkl,ikop->jilo',np.conjugate(eigv1), eigc2)
 
             v2dt2_array_ex = self.cpot.v2dt2(self.car_kpoints,np.array([[0.0,0.0,0.0]]))
             v2dt2_array_d  = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
             #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
             #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            
+            f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-self.f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
             K_d = np.einsum('ij, ilm, njlm ->nlm' , v2dt2_array_d, dotc, dotv)
             ## Ex term
-            K_ex = np.einsum('ab, cde, cde -> cde', v2dt2_array_ex, dotc2, dotv2)
-            H2P = K_d - K_ex
+            K_ex = np.einsum('ab, caef, cbef -> cef', v2dt2_array_ex, dotc2, dotv2)
+            K_d[:, range(K_d.shape[1]), range(K_d.shape[2])] = 0.0    #replaces the line where Kernel is 0 if t=tp
+            K_ex[:, range(K_ex.shape[1]), range(K_ex.shape[2])] = 0.0 #replaces the line where Kernel is 0 if t=tp
+
+            H2P = f_diff*(K_d - K_ex)
             eigv_diff = (eigv_k[:,None, self.BSE_table[:,2]]-eigv_kmq[:,:,self.BSE_table[:,1]])[self.BSE_table[:,0],:,:].swapaxes(1,0)
             diag = np.einsum('lm, klm -> klm', np.eye(self.dimbse), eigv_diff) # when t ==tp
             H2P += diag
-            self.H2P = H2P
+            self.H2P_qlist = H2P
             print(f'Completed in {time() - t0} seconds')
 
     def _get_occupations(self, nk, nb, eigv, fermie):
