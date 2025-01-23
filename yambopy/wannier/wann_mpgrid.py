@@ -37,19 +37,24 @@ class tb_Monkhorst_Pack(KPointGenerator):
         self.nkpoints = len(self.k)
         self.k_tree = cKDTree(self.k)        
 
-    def get_kmq_grid(self,qmpgrid):
+    def get_kmq_grid(self,qmpgrid, sign):
         # if not isinstance(qmpgrid, NNKP_Grids):
         #     raise TypeError('Argument must be an instance of NNKP_Grids')
         #here I need to use the k-q grid and then apply -b/2
         # Prepare dimensions
-
+        if sign not in ["+", "-"]:
+            raise ValueError("Invalid sign option. Choose either '+' for a-b or '-' for b-a")
+        
         nkpoints = self.nkpoints
         nqpoints = qmpgrid.nkpoints
      
         # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
         k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
         q_grid = np.expand_dims(qmpgrid.k, axis=0)  # Shape (1, nqpoints, 3)
-        kq_diff = k_grid - q_grid  # Shape (nkpoints, nqpoints, 3)
+        if sign == "+":
+            kq_diff = k_grid - q_grid  # Shape (nkpoints, nqpoints, 3)
+        elif sign == "-":
+            kq_diff = -k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
         kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing
@@ -74,6 +79,49 @@ class tb_Monkhorst_Pack(KPointGenerator):
         self.kmq_grid_table = kmq_grid_table        
         
         return kmq_grid, kmq_grid_table
+
+    def get_kmqpdq_grid(self,qmpgrid):
+
+        nkpoints = self.nkpoints
+        nqpoints = qmpgrid.nkpoints
+
+        # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
+        k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
+        q_grid = np.expand_dims(qmpgrid.k, axis=0)  # Shape (1, nqpoints, 3)
+        NX, NY, NZ = self.grid_shape
+        spacing = np.array([[1/NX, 0.0, 0.0],[0.0, 1/NY, 0.0],[0.0, 0.0, 1/NZ]], dtype=np.float128)
+        kmqdq_grid = []
+        kmqdq_grid_table = []
+        for idq, dq in enumerate(spacing):
+            kq_diff = k_grid - q_grid+dq  # Shape (nkpoints, nqpoints, 3)
+
+            # Fold into the Brillouin Zone and get G-vectors
+            kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing
+            kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)
+            Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
+
+            # Find closest k-points for all points
+            closest_indices = self.find_closest_kpoint(kmq_folded.reshape(-1, 3)).reshape(nkpoints, nqpoints)
+            # Populate the grids
+            kmq_grid = kmq_folded  # Shape (nkpoints, nqpoints, nnkpts, 3)
+            kmq_grid_table = np.stack(
+                [
+                    np.arange(nkpoints)[:, None].repeat(nqpoints, axis=1),  # ik
+                    closest_indices,  # idkmq
+                    Gvec[..., 0].astype(int),  # Gx
+                    Gvec[..., 1].astype(int),  # Gy
+                    Gvec[..., 2].astype(int)   # Gz
+                ],
+                axis=-1
+            ).astype(int)  # Shape (nkpoints, nqpoints, 5)
+            kmqdq_grid.append(kmq_grid)
+            kmqdq_grid_table.append(kmq_grid_table)        
+        
+        self.kmqdq_grid = kmqdq_grid
+        self.kmqdq_grid_table = kmqdq_grid_table
+
+        return kmqdq_grid, kmqdq_grid_table
+        
     def get_kpq_grid(self, qmpgrid):
 
         nkpoints = self.nkpoints

@@ -83,13 +83,13 @@ class KPointGenerator():
         return closest_indices if points.shape[0] > 1 else int(closest_indices[0])
 
 
-    def get_kq_tables(self,qmpgrid):
+    def get_kq_tables(self,qmpgrid, sign = '+'):
         kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
         kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
         # Assign to tables
 
         _,kplusq_table = self.get_kpq_grid(qmpgrid)
-        _,kminusq_table = self.get_kmq_grid(qmpgrid)
+        _,kminusq_table = self.get_kmq_grid(qmpgrid,sign)
 
         return kplusq_table, kminusq_table
     
