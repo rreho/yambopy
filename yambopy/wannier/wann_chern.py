@@ -1,35 +1,54 @@
 import numpy as np
 from yambopy.wannier.wann_utils import ensure_shape
 class ChernNumber():
-    def __init__(self, h2p = None, h = None):
-        
+    def __init__(self, h2p = None, h = None, a=0.0, b=0.0, c=1.0, d=0.0):
+        """
+        Parameters:
+            h2p : the H2P Hamiltonian with bse eigenvectors that will be used to compute the Chern number
+            a, b, c,d  : coefficients for plane equation in momentum space. Default is the x-y plane
+        """        
         if (h2p is not None): 
             self.h2p = h2p
+            self.a = a
+            self.b = b
+            self.c = c
+            self.d = d
+            self.qx_plane = self.h2p.qmpgrid.find_kpoints_inplane(1.0, 0.0, 0.0, 0.0)
+            self.qy_plane = self.h2p.qmpgrid.find_kpoints_inplane(0.0, 1.0, 0.0, 0.0)
+            self.qz_plane = self.h2p.qmpgrid.find_kpoints_inplane(0.0, 0.0 , 1.0, 0.0)
+            self.q0_plane = self.h2p.qmpgrid.find_kpoints_inplane(self.a, self.b ,self.c, self.d)
             self.NX, self.NY, self.NZ = self.h2p.qmpgrid.grid_shape
-            self.spacing_x = np.array([1/self.NX, 0.0, 0.0], dtype=np.float128)
+            self.spacing_x = np.array([1/self.NX, 0.0, 0.0], dtype=np.float64)
             # Create masks for points lying on the planes      
             self.i_x = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_x)
-            self.spacing_y = np.array([0.0, 1/self.NY, 0.0], dtype=np.float128)
+            self.spacing_y = np.array([0.0, 1/self.NY, 0.0], dtype=np.float64)
             self.i_y = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_y)
-            self.spacing_z = np.array([0.0, 0.0, 1/self.NZ], dtype=np.float128)
+            self.spacing_z = np.array([0.0, 0.0, 1/self.NZ], dtype=np.float64)
             self.i_z = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_z)        
             self.qpdqx_grid = self.h2p.kplusq_table     
-            self.spacing_xy = np.array([1/self.NX, 1/self.NY, 0.0], dtype=np.float128)
+            self.spacing_xy = np.array([1/self.NX, 1/self.NY, 0.0], dtype=np.float64)
             self.i_xy = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_xy)   
-            self.spacing_zx = np.array([1/self.NX, 0.0, 1/self.NZ], dtype=np.float128)
+            self.spacing_zx = np.array([1/self.NX, 0.0, 1/self.NZ], dtype=np.float64)
             self.i_zx = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_zx)           
-            self.spacing_yz = np.array([0.0, 1/self.NY, 1/self.NZ], dtype=np.float128)
+            self.spacing_yz = np.array([0.0, 1/self.NY, 1/self.NZ], dtype=np.float64)
             self.i_yz = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_yz)               
             # Extract points on each plane
-            self.qpdx_plane = self.qpdqx_grid[:,self.i_x][:,1]#q_grid[qpdqx_grid[:,i_x][1]]
-            self.qx_plane   = self.qpdqx_grid[:,self.i_x][:,0]#q_grid[qpdqx_grid[:,i_x][1]]
-            self.qpdy_plane = self.qpdqx_grid[:,self.i_y][:,1]
-            self.qy_plane   = self.qpdqx_grid[:,self.i_y][:,0]
-            self.qpdz_plane = self.qpdqx_grid[:,self.i_z][:,1]
-            self.qz_plane   = self.qpdqx_grid[:,self.i_z][:,0]
-            self.qpdxy_plane = self.qpdqx_grid[:,self.i_xy][:,1]
-            self.qpdyz_plane = self.qpdqx_grid[:,self.i_yz][:,1]
-            self.qpdzx_plane = self.qpdqx_grid[:,self.i_zx][:,1]                 
+            self.qpdx_plane = self.qpdqx_grid[self.qx_plane,self.i_x][:,1]#q_grid[qpdqx_grid[:,i_x][1]]
+            self.qx_plane   = self.qpdqx_grid[self.qx_plane,self.i_x][:,0]#q_grid[qpdqx_grid[:,i_x][1]]
+            self.nx_plane = len(self.qx_plane)
+            self.qpdy_plane = self.qpdqx_grid[self.qy_plane,self.i_y][:,1]
+            self.qy_plane   = self.qpdqx_grid[self.qy_plane,self.i_y][:,0]
+            self.ny_plane = len(self.qx_plane)
+            self.qpdz_plane = self.qpdqx_grid[self.qz_plane,self.i_z][:,1]
+            self.qz_plane   = self.qpdqx_grid[self.qz_plane,self.i_z][:,0]
+            self.nz_plane = len(self.qz_plane)
+            self.qpdxy_plane = self.qpdqx_grid[self.qz_plane,self.i_xy][:,1]
+            self.qxy_plane = self.qpdqx_grid[self.qz_plane,self.i_xy][:,0]
+            self.qpdyz_plane = self.qpdqx_grid[self.qx_plane,self.i_yz][:,1]
+            self.qyz_plane = self.qpdqx_grid[self.qx_plane,self.i_yz][:,0]
+            self.qpdzx_plane = self.qpdqx_grid[self.qy_plane,self.i_zx][:,1]
+            self.qzx_plane = self.qpdqx_grid[self.qy_plane,self.i_zx][:,0]                  
+                           
 
         if (h is not None): self.h = h
 
@@ -59,7 +78,7 @@ class ChernNumber():
 
     def chern_e_e(self, integrand):
         """
-        Compute the flux of $\frac{A* A }{\partial q} through the planes x=0, y=0, and z=0.
+        Compute the flux of $A^{\lambda q*}_{c^\prime v k}*A^{\lambda q}_{cv k} w_{cc^\primek}$ through the planes x=0, y=0, and z=0.
         electron reference frame
         Parameters:
             integrand (callable): Function to evaluate the integrand. Takes q_grid as input.
@@ -199,18 +218,27 @@ class ChernNumber():
         'x' : np.zeros((NY)*(NZ),dtype=np.complex128),
         'y' : np.zeros((NZ)*(NX),dtype=np.complex128),
         'z' : np.zeros((NX)*(NY),dtype=np.complex128),
-        }       
+        }
+        self.qxdy_plane = self.qpdqx_grid[self.qx_plane,self.i_y][:,1] # x = 0 + y       
+        self.qxdydz_plane = self.qpdqx_grid[self.qx_plane, self.i_yz][:,1] # x = 0 + y + z
+        self.qxdz_plane = self.qpdqx_grid[self.qx_plane, self.i_z][:,1] # x = 0 + z
+        self.qydz_plane = self.qpdqx_grid[self.qy_plane,self.i_z][:,1] # x = 0 + y       
+        self.qydxdz_plane = self.qpdqx_grid[self.qy_plane, self.i_zx][:,1] # x = 0 + y + z
+        self.qydx_plane = self.qpdqx_grid[self.qy_plane, self.i_x][:,1] # x = 0 + z
+        self.qzdx_plane = self.qpdqx_grid[self.qz_plane,self.i_x][:,1] # x = 0 + y       
+        self.qzdxdy_plane = self.qpdqx_grid[self.qz_plane, self.i_xy][:,1] # x = 0 + y + z
+        self.qzdy_plane = self.qpdqx_grid[self.qz_plane, self.i_y][:,1] # x = 0 + z        
 
-        plaquettes['x'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qpdy_plane].conj(),self.h2p.h2peigvec[self.qx_plane])  \
-                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qpdyz_plane].conj(),self.h2p.h2peigvec[self.qpdy_plane]) \
-                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qpdz_plane].conj(),self.h2p.h2peigvec[self.qpdyz_plane]) \
-                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qx_plane].conj(),self.h2p.h2peigvec[self.qpdz_plane])  
-        plaquettes['y'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qpdz_plane].conj(),self.h2p.h2peigvec[self.qx_plane])  \
-                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qpdzx_plane].conj(),self.h2p.h2peigvec[self.qpdz_plane]) \
-                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qpdx_plane].conj(),self.h2p.h2peigvec[self.qpdzx_plane]) \
-                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qx_plane].conj(),self.h2p.h2peigvec[self.qpdx_plane])   
-        plaquettes['z'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qpdx_plane].conj(),self.h2p.h2peigvec[self.qx_plane]) \
-                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qpdxy_plane].conj(),self.h2p.h2peigvec[self.qpdx_plane]) \
-                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qpdy_plane].conj(),self.h2p.h2peigvec[self.qpdxy_plane]) \
-                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qx_plane].conj(),self.h2p.h2peigvec[self.qpdy_plane])                                      
+        plaquettes['x'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qxdy_plane].conj(),self.h2p.h2peigvec[self.qx_plane])  \
+                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qxdydz_plane].conj(),self.h2p.h2peigvec[self.qxdy_plane]) \
+                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qxdz_plane].conj(),self.h2p.h2peigvec[self.qxdydz_plane]) \
+                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qx_plane].conj(),self.h2p.h2peigvec[self.qxdz_plane])  
+        plaquettes['y'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qydz_plane].conj(),self.h2p.h2peigvec[self.qy_plane])  \
+                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qydxdz_plane].conj(),self.h2p.h2peigvec[self.qydz_plane]) \
+                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qydx_plane].conj(),self.h2p.h2peigvec[self.qydxdz_plane]) \
+                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qy_plane].conj(),self.h2p.h2peigvec[self.qydx_plane])   
+        plaquettes['z'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qzdx_plane].conj(),self.h2p.h2peigvec[self.qz_plane]) \
+                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qzdxdy_plane].conj(),self.h2p.h2peigvec[self.qzdx_plane]) \
+                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qzdy_plane].conj(),self.h2p.h2peigvec[self.qzdxdy_plane]) \
+                        * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qz_plane].conj(),self.h2p.h2peigvec[self.qzdy_plane])                                      
         return plaquettes

@@ -65,7 +65,7 @@ class ExcitonBands(H2P):
         eigv_diff = (eigv_k[:,None, self.BSE_table[:,2]]-eigv_kmq[:,:,self.BSE_table[:,1]])[self.BSE_table[:,0],:,:].swapaxes(1,0)
         diag = np.einsum('lm, klm -> klm', np.eye(self.dimbse), eigv_diff) # when t ==tp
         H2P += diag
-        self.H2P_qlist = H2P
+        self.H2P = H2P
         print(f'Completed in {time() - t0} seconds')
 
     def _get_occupations(self, nk, nb, eigv, fermie):

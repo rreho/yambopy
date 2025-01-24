@@ -112,7 +112,19 @@ class KPointGenerator():
         # Correcting points where original points were exactly 0.5 to remain 0.5
         folded_points[(points == 0.5)] = 0.5
         return folded_points
+
+    def find_kpoints_inplane(self, a,b,c,d, tolerance = 1e-6):
+        """
+        eq of plane : ax+by+cz-d = 0.0
+        I used -d so that I can specify directly kx=0.5 instead of -0.5 for the point with kx = 0.5
+        """
     
+        distances = np.dot(self.k, np.array([a,b,c]))-d
+        indices = np.where(np.abs(distances)< tolerance)[0]
+    
+        return indices
+
+
     def get_plaquette(self, nx, ny, nz, dir = 2):
         if (dir == 2):
             dir1 = np.array([1,0,0])
