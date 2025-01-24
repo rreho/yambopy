@@ -438,7 +438,7 @@ class H2P():
             deg_h2peigvec = np.array([])        
             qt_sort = np.zeros((self.nq_double,self.dimbse),dtype=int)
             self.BSE_table_sort = np.zeros((self.nq_double,self.dimbse,3),dtype = int)
-            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.dimbse} \n')
+            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape} \n')
             for iq in range(0,self.nq_double):
                 t0 = time()
                 tmph2peigv = np.zeros((self.dimbse), dtype=np.complex128)
