@@ -123,6 +123,43 @@ class KPointGenerator():
         indices = np.where(np.abs(distances)< tolerance)[0]
     
         return indices
+    
+    def find_border_kpoints_inplane(self, a, b, c, d, tolerance=1e-6):
+        """
+        Find the points on the border of a plane (ax + by + cz = d) within the grid.
+        
+        Args:
+            a, b, c, d: Coefficients of the plane equation.
+            tolerance: Distance tolerance for determining points on the plane.
+
+        Returns:
+            border_indices: Indices of points that lie on the border of the plane.
+        """
+        # Step 1: Find all points on the plane
+        plane_indices = self.find_kpoints_inplane(a, b, c, d, tolerance)
+        plane_points = self.k[plane_indices]
+        
+        # Step 2: Determine which axes are free (not constrained by the plane)
+        # For example, if a=1, b=0, c=0 -> the plane is x = d
+        # The free axes would then be y and z.
+        plane_normal = np.array([a, b, c])
+        free_axes = np.where(plane_normal == 0)[0]  # Indices of the free axes
+        if len(free_axes) != 2:
+            raise ValueError("The plane must be defined such that two axes are free.")
+        
+        # Step 3: Find the extrema along the free axes
+        min_values = plane_points[:, free_axes].min(axis=0)
+        max_values = plane_points[:, free_axes].max(axis=0)
+        
+        # Step 4: Identify points on the border
+        border_mask = np.any(
+            (np.abs(plane_points[:, free_axes] - min_values) < tolerance) |
+            (np.abs(plane_points[:, free_axes] - max_values) < tolerance),
+            axis=1
+        )
+        
+        border_indices = plane_indices[border_mask]
+        return border_indices
 
 
     def get_plaquette(self, nx, ny, nz, dir = 2):
