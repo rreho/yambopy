@@ -44,13 +44,10 @@ class ChernNumber():
             self.i_yz = self.h2p.kmpgrid.find_closest_kpoint(self.spacing_yz)               
             # Extract points on each plane
             self.qpdx_plane = self.qpdqx_grid[self.qx_plane,self.i_x][:,1]#q_grid[qpdqx_grid[:,i_x][1]]
-            #self.qx_plane   = self.qpdqx_grid[self.qx_plane,self.i_x][:,0]#q_grid[qpdqx_grid[:,i_x][1]]
             self.nx_plane = len(self.qx_plane)
             self.qpdy_plane = self.qpdqx_grid[self.qy_plane,self.i_y][:,1]
-            #self.qy_plane   = self.qpdqx_grid[self.qy_plane,self.i_y][:,0]
             self.ny_plane = len(self.qx_plane)
             self.qpdz_plane = self.qpdqx_grid[self.qz_plane,self.i_z][:,1]
-            #self.qz_plane   = self.qpdqx_grid[self.qz_plane,self.i_z][:,0]
             self.nz_plane = len(self.qz_plane)
             self.qpdxy_plane = self.qpdqx_grid[self.qz_plane,self.i_xy][:,1]
             self.qxy_plane = self.qpdqx_grid[self.qz_plane,self.i_xy][:,0]
@@ -281,7 +278,6 @@ class ChernNumber():
         dotcz_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckzdqz-eigvec_ckz), eigvec_ckz) #l index is conjugated      
         # wccz 
         wccz = np.array([dotcz_x, dotcz_y, dotcz_z])
-        print(wccz.shape)
         
         # Evaluate the integrand at the points on each plane
         integrand_x = np.array([np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qx_plane], integrand[self.qpdx_plane] - integrand[self.qx_plane]),\
@@ -371,14 +367,12 @@ class ChernNumber():
         dotcxy_z = np.einsum('ijkl,ijkp->jlpi',np.conjugate(eigvec_vkmqxy_z-eigvec_vkmqxy), eigvec_vkmqxy) #l index is conjugated       
         # wccxy 
         wccxy = np.array([dotcxy_x, dotcxy_y, dotcxy_z])
-        print(wccxy.shape)
         
         # Evaluate the integrand at the points on each plane
         integrand_x = np.array([np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qx_plane], integrand[self.qpdx_plane] - integrand[self.qx_plane]),\
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qx_plane], integrand[self.qxdy_plane] - integrand[self.qx_plane]),\
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qx_plane], integrand[self.qxdz_plane] - integrand[self.qx_plane]),    
         ])
-        print(integrand_x.shape)
         integrand_y = np.array([np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qy_plane], integrand[self.qydx_plane] - integrand[self.qy_plane]),\
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qy_plane], integrand[self.qpdy_plane] - integrand[self.qy_plane]),\
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qy_plane], integrand[self.qydz_plane] - integrand[self.qy_plane]),    
@@ -387,13 +381,11 @@ class ChernNumber():
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qz_plane], integrand[self.qzdy_plane] - integrand[self.qz_plane]),\
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qz_plane], integrand[self.qpdz_plane] - integrand[self.qz_plane]),    
         ])
-        print(self.h2p.bse_nv, self.h2p.bse_nc)
         #cross products in plane
         cross_product_yz = integrand_x[1]*wccyz[2][:, None,:, :, None,:]-integrand_x[2]*wccyz[1][:, None,:, :, None,:]
         cross_product_zx = integrand_y[1]*wcczx[2][:, None,:, :, None,:]-integrand_y[2]*wcczx[1][:, None,:, :, None,:]
         cross_product_xy = integrand_z[1]*wccxy[2][:, None,:, :, None,:]-integrand_z[2]*wccxy[1][:, None,:, :, None,:]
 
-        print(cross_product_yz.shape)
         # sum over dimensions
         flux_yz = np.sum(cross_product_yz, axis=tuple((0,2,3,4,5))) # divide by 2 becuase I sum z and y
         flux_zx = np.sum(cross_product_zx, axis=tuple((0,2,3,4,5)))
@@ -411,15 +403,15 @@ class ChernNumber():
         'xy' : np.zeros((NX)*(NY),dtype=np.complex128),
         }    
 
-        plaquettes['x'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qxdy_plane].conj(),self.h2p.h2peigvec[self.qx_plane])  \
+        plaquettes['yz'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qxdy_plane].conj(),self.h2p.h2peigvec[self.qx_plane])  \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qxdydz_plane].conj(),self.h2p.h2peigvec[self.qxdy_plane]) \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qxdz_plane].conj(),self.h2p.h2peigvec[self.qxdydz_plane]) \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qx_plane].conj(),self.h2p.h2peigvec[self.qxdz_plane])  
-        plaquettes['y'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qydz_plane].conj(),self.h2p.h2peigvec[self.qy_plane])  \
+        plaquettes['zx'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qydz_plane].conj(),self.h2p.h2peigvec[self.qy_plane])  \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qydxdz_plane].conj(),self.h2p.h2peigvec[self.qydz_plane]) \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qydx_plane].conj(),self.h2p.h2peigvec[self.qydxdz_plane]) \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qy_plane].conj(),self.h2p.h2peigvec[self.qydx_plane])   
-        plaquettes['z'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qzdx_plane].conj(),self.h2p.h2peigvec[self.qz_plane]) \
+        plaquettes['xy'] = np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qzdx_plane].conj(),self.h2p.h2peigvec[self.qz_plane]) \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qzdxdy_plane].conj(),self.h2p.h2peigvec[self.qzdx_plane]) \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qzdy_plane].conj(),self.h2p.h2peigvec[self.qzdxdy_plane]) \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qz_plane].conj(),self.h2p.h2peigvec[self.qzdy_plane])                                      
