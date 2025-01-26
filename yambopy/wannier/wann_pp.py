@@ -99,15 +99,15 @@ class ExcitonBands(H2P):
         kwargs.setdefault('ls','solid')
         
         for ie in range(n):
-            for j in range(len(self.h2peigv) -1):
-                alpha_value = weight_norm[j,ie]
-                ax.plot(
-                    xpath[j: j+2],
-                    self.h2peigv[j:j+2, ie].real,
-                    **kwargs,
-                    # c=colormap(weight_norm[j,ie]),
-                    # alpha=alpha_value
-                )
+        #for j in range(len(self.h2peigv) -1):
+            alpha_value = weight_norm[:,ie]
+            ax.plot(
+                xpath[:],
+                self.h2peigv[:, ie].real,
+                **kwargs,
+                # c=colormap(weight_norm[j,ie]),
+                # alpha=alpha_value
+            )
         self.path_qpoints.set_xticks(ax)
         ax.set_xlim(np.min(xpath), np.max(xpath))
         ax.set_xlim(min(xpath), max(xpath))
