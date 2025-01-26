@@ -20,7 +20,7 @@ def calculate_distances(kpoints):   # Needs optimization
     for nk in range(1,len(kpoints)):
         distance += np.linalg.norm(kpoints[nk-1]-kpoints[nk])
         distances.append(distance)   
-    return distances
+    return np.array(distances)
  
 def expand_kpts(kpts,syms):
     """ 
