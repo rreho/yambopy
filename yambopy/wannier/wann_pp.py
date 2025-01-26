@@ -26,6 +26,7 @@ class ExcitonBands(H2P):
         self.red_kpoints = self.path_qpoints.get_klist()[:,0:3]
         self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)*ang2bohr # result in Bohr
         self.nq_double = self.nq_list
+        self.H2P = self.buildH2P_qlist()
 
     def buildH2P_qlist(self):        
         H2P = np.zeros((self.nq_list, self.dimbse, self.dimbse), dtype=np.complex128)
@@ -68,8 +69,9 @@ class ExcitonBands(H2P):
         eigv_diff = (eigv_k[:,None, self.BSE_table[:,2]]-eigv_kmq[:,:,self.BSE_table[:,1]])[self.BSE_table[:,0],:,:].swapaxes(1,0)
         diag = np.einsum('lm, klm -> klm', np.eye(self.dimbse), eigv_diff) # when t ==tp
         H2P += diag
-        self.H2P = H2P
         print(f'Completed in {time() - t0} seconds')
+
+        return H2P
 
     def _get_occupations(self, nk, nb, eigv, fermie):
         occupations = np.zeros((nk, nb))
@@ -82,20 +84,27 @@ class ExcitonBands(H2P):
         weight_norm = weight/np.max(weight)
         return weight_norm
     
-    def plot_exciton_dispersion(self, n, ax=None, **kwargs):
+    def plot_exciton_dispersion(self, n = self.dimbse, ax=None, **kwargs):
         """Take the weights from the eigenvectors, and plot first n exciton bands"""
+        
+        if  not hasattr(self, 'h2peigvec_vck'): self.solve_H2P()
         if not ax:
             fig, ax = plt.subplots()
         weight_norm = self.get_exciton_weights()
         xpath = calculate_distances(self.path_qpoints.get_klist())
         colormap = plt.cm.viridis
         
+        kwargs.setdefault('color','black')
+        kwargs.setdefault('lw',2)
+        kwargs.setdefault('ls','solid')
+        
         for ie in range(n):
             for j in range(len(self.h2peigv) -1):
                 alpha_value = weight_norm[j,ie]
                 ax.plot(
                     xpath[j: j+2],
-                    self.h2peigv[j:j+2, ie],
+                    self.h2peigv[j:j+2, ie].real,
+                    **kwargs,
                     # c=colormap(weight_norm[j,ie]),
                     # alpha=alpha_value
                 )
