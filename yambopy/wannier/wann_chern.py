@@ -412,4 +412,4 @@ class ChernNumber():
 
     def _finite_diff(self,f_q, dq = 1.0):
         """Compute finite difference approximation df/dq."""
-        return (np.roll(f_q, -1) - np.roll(f_q, 1)) / (2 * dq)
+        return (np.roll(f_q, -1) - np.roll(f_q, 0)) / (1 * dq)
