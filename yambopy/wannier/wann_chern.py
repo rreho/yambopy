@@ -94,16 +94,9 @@ class ChernNumber():
         integrand = ensure_shape(integrand, (self.h2p.nq_double,self.h2p.dimbse, self.h2p.bse_nv, self.h2p.bse_nc, self.h2p.nk),dtype=np.complex128)
 
         # Evaluate the integrand at the points on each plane
-        integrand_yz = integrand[self.borders['yz']].conj()*(self._finite_diff(integrand[self.borders['yz']]))/self.nyz_border# + \
-                       #(integrand[self.borders['yz']].conj()*(integrand[self.borderyz_y] - integrand[self.borders['yz']]))/self.nyz_border + \
-                       #(integrand[self.borders['yz']].conj()*(integrand[self.borderyz_z] - integrand[self.borders['yz']]))/self.nyz_border 
-        integrand_zx = integrand[self.borders['zx']].conj()*(self._finite_diff(integrand[self.borders['zx']]))/self.nzx_border #+ \
-                       #(integrand[self.borders['zx']].conj()*(integrand[self.borderzx_y] - integrand[self.borders['zx']]))/self.nzx_border + \
-                       #(integrand[self.borders['zx']].conj()*(integrand[self.borderzx_z] - integrand[self.borders['zx']]))/self.nzx_border 
-        integrand_xy = integrand[self.borders['xy']].conj()*(self._finite_diff(integrand[self.borders['xy']]))/self.nxy_border # + \
-                       #(integrand[self.borders['xy']].conj()*(integrand[self.borderxy_y] - integrand[self.borders['xy']]))/self.nxy_border + \
-                       #(integrand[self.borders['xy']].conj()*(integrand[self.borderxy_z] - integrand[self.borders['xy']]))/self.nxy_border 
-
+        integrand_yz = integrand[self.borders['yz']].conj()*(self._finite_diff(integrand[self.borders['yz']]))/self.nyz_border
+        integrand_zx = integrand[self.borders['zx']].conj()*(self._finite_diff(integrand[self.borders['zx']]))/self.nzx_border
+        integrand_xy = integrand[self.borders['xy']].conj()*(self._finite_diff(integrand[self.borders['xy']]))/self.nxy_border
         flux_yz = np.sum(integrand_yz, axis=(0,2,3,4))
         flux_zx = np.sum(integrand_zx, axis=(0,2,3,4)) 
         flux_xy = np.sum(integrand_xy, axis=(0,2,3,4))  
@@ -124,42 +117,42 @@ class ChernNumber():
         integrand = ensure_shape(integrand, (self.h2p.nq_double,self.h2p.dimbse, self.h2p.bse_nv, self.h2p.bse_nc, self.h2p.nk),dtype=np.complex128)
         #conduction bands tensors
         eigvec_ckyz = self.h2p.eigvec[self.borders['yz'], :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[:,np.newaxis,:,:]  # Valence bands
-        eigvec_ckyzdqx = self.h2p.eigvec[self.borderyz_x, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_ckyzdqy = self.h2p.eigvec[self.borderyz_y, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_ckyzdqz = self.h2p.eigvec[self.borderyz_z, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_ckyzdqx = self.h2p.eigvec[self.borderyz_x, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_ckyzdqy = self.h2p.eigvec[self.borderyz_y, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_ckyzdqz = self.h2p.eigvec[self.borderyz_z, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
         eigvec_ckzx = self.h2p.eigvec[self.borders['zx'], :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[:,np.newaxis,:,:]  # Valence bands
-        eigvec_ckzxdqx = self.h2p.eigvec[self.borderzx_x, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_ckzxdqy = self.h2p.eigvec[self.borderzx_y, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_ckzxdqz = self.h2p.eigvec[self.borderzx_z, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_ckzxdqx = self.h2p.eigvec[self.borderzx_x, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_ckzxdqy = self.h2p.eigvec[self.borderzx_y, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_ckzxdqz = self.h2p.eigvec[self.borderzx_z, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
         eigvec_ckxy = self.h2p.eigvec[self.borders['xy'], :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[:,np.newaxis,:,:]  # Valence bands
-        eigvec_ckxydqx = self.h2p.eigvec[self.borderxy_x, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_ckxydqy = self.h2p.eigvec[self.borderxy_y, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_ckxydqz = self.h2p.eigvec[self.borderxy_z, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_ckxydqx = self.h2p.eigvec[self.borderxy_x, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_ckxydqy = self.h2p.eigvec[self.borderxy_y, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_ckxydqz = self.h2p.eigvec[self.borderxy_z, :, :][:,:,np.unique(self.h2p.BSE_table[:,2])]#[np.newaxis,:,:,:]  # Valence bands 
         # dot product q point belong on the yz-plane (x=0 or .qx_plane)
-        dotcyz_x = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckyzdqx-eigvec_ckyz), eigvec_ckyz)
-        dotcyz_y = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckyzdqy-eigvec_ckyz), eigvec_ckyz) 
-        dotcyz_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckyzdqz-eigvec_ckyz), eigvec_ckyz) 
+        dotcyz = np.einsum('jkl,jkp->jlp',np.conjugate(self._finite_diff(eigvec_ckyz)), eigvec_ckyz)
+        #dotcyz_y = np.einsum('jkl,jkp->jlp',np.conjugate(self._finite_diff(eigvec_ckyz)), eigvec_ckyz) 
+        #dotcyz_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckyzdqz-eigvec_ckyz), eigvec_ckyz) 
         # dot product q point belong on the zx-plane (y=0 or .qy_plane)
-        dotczx_x = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckzxdqx-eigvec_ckzx), eigvec_ckzx)
-        dotczx_y = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckzxdqy-eigvec_ckzx), eigvec_ckzx) 
-        dotczx_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckzxdqz-eigvec_ckzx), eigvec_ckzx) 
+        dotczx = np.einsum('jkl,jkp->jlp',np.conjugate(self._finite_diff(eigvec_ckzx)), eigvec_ckzx)
+        #dotczx_y = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckzxdqy-eigvec_ckzx), eigvec_ckzx) 
+        #dotczx_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckzxdqz-eigvec_ckzx), eigvec_ckzx) 
         # dot product q point belong on the xy-plane (z=0 or .qy_plane)
-        dotcxy_x = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckxydqx-eigvec_ckxy), eigvec_ckxy)
-        dotcxy_y = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckxydqy-eigvec_ckxy), eigvec_ckxy) 
-        dotcxy_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckxydqz-eigvec_ckxy), eigvec_ckxy) 
+        dotcxy = np.einsum('jkl,jkp->jlp',np.conjugate(self._finite_diff(eigvec_ckxy)), eigvec_ckxy)
+        #dotcxy_y = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckxydqy-eigvec_ckxy), eigvec_ckxy) 
+        #dotcxy_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckxydqz-eigvec_ckxy), eigvec_ckxy) 
         # Evaluate the integrand at the points on each plane
-        integrandyz_x = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotcyz_x)/self.nyz_border
-        integrandyz_y = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotcyz_y)/self.nyz_border
-        integrandyz_z = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotcyz_z)/self.nyz_border
-        integrandzx_x = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotczx_x)/self.nzx_border
-        integrandzx_y = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotczx_y)/self.nzx_border
-        integrandzx_z = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotczx_z)/self.nzx_border
-        integrandxy_x = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotcxy_x)/self.nxy_border
-        integrandxy_y = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotcxy_y)/self.nxy_border
-        integrandxy_z = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotcxy_z)/self.nxy_border                
-        flux_yz = (integrandyz_x+integrandyz_y+integrandyz_z) # divide by 2 becuase I sum z and y (?)
-        flux_zx = (integrandzx_x+integrandzx_y+integrandzx_z)
-        flux_xy = (integrandxy_x+integrandxy_y+integrandxy_z)
+        integrandyz = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotcyz)/self.nyz_border
+        #integrandyz_y = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotcyz_y)/self.nyz_border
+        #integrandyz_z = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotcyz_z)/self.nyz_border
+        integrandzx = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotczx)/self.nzx_border
+        #integrandzx_y = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotczx_y)/self.nzx_border
+        #integrandzx_z = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotczx_z)/self.nzx_border
+        integrandxy = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotcxy)/self.nxy_border
+        #integrandxy_y = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotcxy_y)/self.nxy_border
+        #integrandxy_z = np.einsum('abcde,abcie, adi -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotcxy_z)/self.nxy_border                
+        flux_yz = integrandyz#_x+integrandyz_y+integrandyz_z) # divide by 2 becuase I sum z and y (?)
+        flux_zx = integrandzx#(integrandzx_x+integrandzx_y+integrandzx_z)
+        flux_xy = integrandxy#(integrandxy_x+integrandxy_y+integrandxy_z)
         
         return {'yz': flux_yz, 'zx': flux_zx, 'xy': flux_xy}
     
@@ -196,41 +189,41 @@ class ChernNumber():
         eigvec_vkmqyz = self.h2p.eigvec[ikminusqyz, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[:,np.newaxis,:,:]  # Valence bands
         eigvec_vkmqzx = self.h2p.eigvec[ikminusqzx, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[:,np.newaxis,:,:]  # Valence bands
         eigvec_vkmqxy = self.h2p.eigvec[ikminusqxy, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[:,np.newaxis,:,:]  # Valence bands
-        eigvec_vkmqyzpdqx = self.h2p.eigvec[ikmqyzpdqx, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_vkmqyzpdqy = self.h2p.eigvec[ikmqyzpdqy, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_vkmqyzpdqz = self.h2p.eigvec[ikmqyzpdqz, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_vkmqzxpdqx = self.h2p.eigvec[ikmqzxpdqx, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_vkmqzxpdqy = self.h2p.eigvec[ikmqzxpdqy, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_vkmqzxpdqz = self.h2p.eigvec[ikmqzxpdqz, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_vkmqxypdqx = self.h2p.eigvec[ikmqxypdqx, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_vkmqxypdqy = self.h2p.eigvec[ikmqxypdqy, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
-        eigvec_vkmqxypdqz = self.h2p.eigvec[ikmqxypdqz, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_vkmqyzpdqx = self.h2p.eigvec[ikmqyzpdqx, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_vkmqyzpdqy = self.h2p.eigvec[ikmqyzpdqy, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_vkmqyzpdqz = self.h2p.eigvec[ikmqyzpdqz, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_vkmqzxpdqx = self.h2p.eigvec[ikmqzxpdqx, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_vkmqzxpdqy = self.h2p.eigvec[ikmqzxpdqy, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_vkmqzxpdqz = self.h2p.eigvec[ikmqzxpdqz, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_vkmqxypdqx = self.h2p.eigvec[ikmqxypdqx, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_vkmqxypdqy = self.h2p.eigvec[ikmqxypdqy, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
+        #eigvec_vkmqxypdqz = self.h2p.eigvec[ikmqxypdqz, :, :][:,:,:,np.unique(self.h2p.BSE_table[:,1])]#[np.newaxis,:,:,:]  # Valence bands 
        
-        dotvyz_x = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqyzpdqx-eigvec_vkmqyz), eigvec_vkmqyz)
-        dotvyz_y = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqyzpdqy-eigvec_vkmqyz), eigvec_vkmqyz)
-        dotvyz_z = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqyzpdqz-eigvec_vkmqyz), eigvec_vkmqyz)             
+        dotvyz = np.einsum('ijkl,ijkp->ijlp',np.conjugate(self._finite_diff(eigvec_vkmqyz)), eigvec_vkmqyz)
+        #dotvyz_y = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqyzpdqy-eigvec_vkmqyz), eigvec_vkmqyz)
+        #dotvyz_z = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqyzpdqz-eigvec_vkmqyz), eigvec_vkmqyz)             
         
-        dotvzx_x = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqzxpdqx-eigvec_vkmqzx), eigvec_vkmqzx) #l index is conjugated       
-        dotvzx_y = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqzxpdqy-eigvec_vkmqzx), eigvec_vkmqzx) #l index is conjugated       
-        dotvzx_z = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqzxpdqz-eigvec_vkmqzx), eigvec_vkmqzx) #l index is conjugated               
+        dotvzx = np.einsum('ijkl,ijkp->ijlp',np.conjugate(self._finite_diff(eigvec_vkmqzx)), eigvec_vkmqzx) #l index is conjugated       
+        #dotvzx_y = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqzxpdqy-eigvec_vkmqzx), eigvec_vkmqzx) #l index is conjugated       
+        #dotvzx_z = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqzxpdqz-eigvec_vkmqzx), eigvec_vkmqzx) #l index is conjugated               
         
-        dotvxy_x = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqxypdqx-eigvec_vkmqxy), eigvec_vkmqxy) #l index is conjugated       
-        dotvxy_y = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqxypdqy-eigvec_vkmqxy), eigvec_vkmqxy) #l index is conjugated       
-        dotvxy_z = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqxypdqz-eigvec_vkmqxy), eigvec_vkmqxy) #l index is conjugated       
+        dotvxy = np.einsum('ijkl,ijkp->ijlp',np.conjugate(self._finite_diff(eigvec_vkmqxy)), eigvec_vkmqxy) #l index is conjugated       
+        #dotvxy_y = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqxypdqy-eigvec_vkmqxy), eigvec_vkmqxy) #l index is conjugated       
+        #dotvxy_z = np.einsum('ijkl,ijkp->ijlp',np.conjugate(eigvec_vkmqxypdqz-eigvec_vkmqxy), eigvec_vkmqxy) #l index is conjugated       
 
-        integrandyz_x = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotvyz_x)/self.nyz_border
-        integrandyz_y = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotvyz_y)/self.nyz_border
-        integrandyz_z = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotvyz_z)/self.nyz_border       
-        integrandzx_x = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotvzx_x)/self.nzx_border
-        integrandzx_y = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotvzx_y)/self.nzx_border
-        integrandzx_z = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotvzx_z)/self.nzx_border
-        integrandxy_x = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotvxy_x)/self.nxy_border
-        integrandxy_y = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotvxy_y)/self.nxy_border
-        integrandxy_z = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotvxy_z)/self.nxy_border
+        integrandyz = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotvyz)/self.nyz_border
+        #integrandyz_y = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotvyz_y)/self.nyz_border
+        #integrandyz_z = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['yz']], integrand[self.borders['yz']], dotvyz_z)/self.nyz_border       
+        integrandzx = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotvzx)/self.nzx_border
+        #integrandzx_y = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotvzx_y)/self.nzx_border
+        #integrandzx_z = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['zx']], integrand[self.borders['zx']], dotvzx_z)/self.nzx_border
+        integrandxy = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotvxy)/self.nxy_border
+        #integrandxy_y = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotvxy_y)/self.nxy_border
+        #integrandxy_z = np.einsum('abcde,abhde, eahc -> b',integrand.conj()[self.borders['xy']], integrand[self.borders['xy']], dotvxy_z)/self.nxy_border
 
-        flux_yz = integrandyz_x+integrandyz_y+integrandyz_z 
-        flux_zx = integrandzx_x+integrandzx_y+integrandzx_z
-        flux_xy = integrandxy_x+integrandxy_y+integrandxy_z 
+        flux_yz = integrandyz#_x+integrandyz_y+integrandyz_z 
+        flux_zx = integrandzx#integrandzx_x+integrandzx_y+integrandzx_z
+        flux_xy = integrandxy#_x+integrandxy_y+integrandxy_z 
 
         return {'yz': flux_yz, 'zx': flux_zx, 'xy': flux_xy}         
 
