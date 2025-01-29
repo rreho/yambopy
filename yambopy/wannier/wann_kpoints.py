@@ -124,7 +124,7 @@ class KPointGenerator():
     
         return indices
     
-    def find_border_kpoints_inplane(self, a, b, c, d, tolerance=1e-6):
+    def find_border_kpoints_inplane(self, a, b, c, d, tolerance=1e-6, sort = False):
         """
         Find the points on the border of a plane (ax + by + cz = d) within the grid.
         
@@ -159,6 +159,7 @@ class KPointGenerator():
         )
         
         border_indices = plane_indices[border_mask]
+        if sort: border_indices, border_kpoints = self._sort_border_kpoints(border_indices, free_axes)
         return border_indices
 
 
@@ -196,3 +197,39 @@ class KPointGenerator():
                 counter +=1            
 
         self.qplaquette_grid = qplaquette_grid
+
+    def _sort_border_kpoints(self, border_list, free_axes):
+        """Identify and sort k-points on the border of the plane in an anti-clockwise order."""
+        border = self.k[border_list]
+        NGX, NGY = [self.grid_shape[i] for i in free_axes] 
+        # Separate border points into four edges
+        bottom_indices = (border[:, free_axes[1]] == 0)
+        bottom = border[bottom_indices]
+        right_indices = (border[:, free_axes[0]] == (NGX-1)/NGX)
+        right = border[right_indices]
+        top_indices  = (border[:, free_axes[1]] == (NGY-1)/NGY)
+        top = border[top_indices]
+        left_indices  = (border[:, free_axes[0]] == 0)
+        left = border[left_indices]
+        
+        # Sort each segment to maintain anti-clockwise order
+        bottom_sort = np.argsort(bottom[:, 0])
+        bottom = bottom[bottom_sort]  # Left to right
+        right_sort = np.argsort(right[:,1])
+        right = right[right_sort]    # Bottom to top
+        top_sort = np.argsort(top[:,0][::-1])
+        top = top[top_sort]    # Right to left
+        left_sort = np.argsort(left[:, 1])[::-1]
+        left = left[left_sort]  # Top to bottom
+        # Ensure periodic continuity without repeating corners
+        sorted_border = np.vstack([bottom, right[1:], top[1:], left[1:]])
+        # Collect the corresponding indices
+        sorted_indices = []
+        A = self.k
+        B = np.array(sorted_border)
+        for row in B:
+            # Find where the row in B is located in A
+            idx = np.where(np.all(A == row, axis=1))[0]
+            sorted_indices.append(idx)   
+
+        return np.array(sorted_indices).flatten(), sorted_border
