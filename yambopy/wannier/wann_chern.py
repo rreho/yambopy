@@ -94,15 +94,15 @@ class ChernNumber():
         integrand = ensure_shape(integrand, (self.h2p.nq_double,self.h2p.dimbse, self.h2p.bse_nv, self.h2p.bse_nc, self.h2p.nk),dtype=np.complex128)
 
         # Evaluate the integrand at the points on each plane
-        integrand_yz = (integrand[self.borders['yz']].conj()*(self._finite_diff(integrand[self.borders['yz']]))/self.nyz_border)# + \
+        integrand_yz = integrand[self.borders['yz']].conj()*(self._finite_diff(integrand[self.borders['yz']]))/self.nyz_border# + \
                        #(integrand[self.borders['yz']].conj()*(integrand[self.borderyz_y] - integrand[self.borders['yz']]))/self.nyz_border + \
                        #(integrand[self.borders['yz']].conj()*(integrand[self.borderyz_z] - integrand[self.borders['yz']]))/self.nyz_border 
-        integrand_zx = (integrand[self.borders['zx']].conj()*(integrand[self.borderzx_x] - integrand[self.borders['zx']]))/self.nzx_border + \
-                       (integrand[self.borders['zx']].conj()*(integrand[self.borderzx_y] - integrand[self.borders['zx']]))/self.nzx_border + \
-                       (integrand[self.borders['zx']].conj()*(integrand[self.borderzx_z] - integrand[self.borders['zx']]))/self.nzx_border 
-        integrand_xy = (integrand[self.borders['xy']].conj()*(integrand[self.borderxy_x] - integrand[self.borders['xy']]))/self.nxy_border + \
-                       (integrand[self.borders['xy']].conj()*(integrand[self.borderxy_y] - integrand[self.borders['xy']]))/self.nxy_border + \
-                       (integrand[self.borders['xy']].conj()*(integrand[self.borderxy_z] - integrand[self.borders['xy']]))/self.nxy_border 
+        integrand_zx = integrand[self.borders['zx']].conj()*(self._finite_diff(integrand[self.borders['zx']]))/self.nzx_border #+ \
+                       #(integrand[self.borders['zx']].conj()*(integrand[self.borderzx_y] - integrand[self.borders['zx']]))/self.nzx_border + \
+                       #(integrand[self.borders['zx']].conj()*(integrand[self.borderzx_z] - integrand[self.borders['zx']]))/self.nzx_border 
+        integrand_xy = integrand[self.borders['xy']].conj()*(self._finite_diff(integrand[self.borders['xy']]))/self.nxy_border # + \
+                       #(integrand[self.borders['xy']].conj()*(integrand[self.borderxy_y] - integrand[self.borders['xy']]))/self.nxy_border + \
+                       #(integrand[self.borders['xy']].conj()*(integrand[self.borderxy_z] - integrand[self.borders['xy']]))/self.nxy_border 
 
         flux_yz = np.sum(integrand_yz, axis=(0,2,3,4))
         flux_zx = np.sum(integrand_zx, axis=(0,2,3,4)) 
@@ -417,6 +417,6 @@ class ChernNumber():
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qz_plane].conj(),self.h2p.h2peigvec[self.qzdy_plane])                                      
         return plaquettes
 
-    def _finite_diff(f_q, dq = 1.0):
+    def _finite_diff(self,f_q, dq = 1.0):
         """Compute finite difference approximation df/dq."""
         return (np.roll(f_q, -1) - np.roll(f_q, 1)) / (2 * dq)
