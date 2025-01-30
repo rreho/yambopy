@@ -147,15 +147,13 @@ class H2P():
             self.f_kn[:,:self.nv] = 1.0
         else:
             self.f_kn = f_kn
-        if (len(self.kmpgrid.k) != len (self.qmpgrid.k)):
-            kminusqlist_table = self.kmpgrid.k[:,None,:] - self.qmpgrid.k[None,:,:]
-            eigv_kmq, eigvec_kmq = self.model.get_eigenval_and_vec(kminusqlist_table.reshape(self.nk*self.nq_double,3))
+        kminusqlist_table = self.kmpgrid.k[:,None,:] - self.qmpgrid.k[None,:,:]
+        eigv_kmq, eigvec_kmq = self.model.get_eigenval_and_vec(kminusqlist_table.reshape(self.nk*self.nq_double,3))
         # compute the fermi occupations for k-q
-            f_kmqn = self._get_occupations(self.nq_double, self.nb, eigv_kmq, self.model.fermie)
-            eigv_kmq = np.array(eigv_kmq).reshape(self.nk, self.nq_double, self.nb)
-            self.f_kmqn = f_kmqn.reshape(self.nk, self.nq_double, self.nb)
-        else:
-            self.f_kmq = self.f_kn
+        f_kmqn = self._get_occupations(self.nq_double, self.nb, eigv_kmq, self.model.fermie)
+        eigv_kmq = np.array(eigv_kmq).reshape(self.nk, self.nq_double, self.nb)
+        self.f_kmqn = f_kmqn.reshape(self.nk, self.nq_double, self.nb)
+        
         if not hasattr(self,'f_qn'):
             self.f_qn = np.zeros((self.nq_double,self.nb),dtype = np.float64)
             self.f_qn[:,:self.nv] = 1.0
