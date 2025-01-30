@@ -387,13 +387,9 @@ class H2P():
             t0 = time()
 
             # Precompute kplusq and kminusq tables
-            ikpminusq = self.kplusq_table[:, :, 1]
             ikminusq = self.kminusq_table[:, :, 1]
-            ikminusgamma = self.kminusq_table[:, :, 0]
             eigc1 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
-            eigc2 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
             eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands
-            eigv2 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands
             
             K_direct, K_Ex = self._getKdq()       #sorry
 
