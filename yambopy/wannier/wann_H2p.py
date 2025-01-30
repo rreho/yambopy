@@ -90,7 +90,8 @@ class H2P():
     '''
     def __init__(self, model, electronsdb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
                  ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, f_qn = None,\
-                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01):
+                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01,\
+                 ):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, electronsdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -107,6 +108,7 @@ class H2P():
         self.nv = model.nv
         self.bse_nv = bse_nv
         self.bse_nc = bse_nc
+        self.bse_nb = bse_nv + bse_nc
         self.kmpgrid = model.mpgrid
         self.nq = len(qmpgrid.k)
         self.eigv = model.eigv
@@ -145,6 +147,15 @@ class H2P():
             self.f_kn[:,:self.nv] = 1.0
         else:
             self.f_kn = f_kn
+        if (len(self.kmpgrid.k) != len (self.qmpgrid.k)):
+            kminusqlist_table = self.kmpgrid.k[:,None,:] - self.qmpgrid.k[None,:,:]
+            eigv_kmq, eigvec_kmq = self.model.get_eigenval_and_vec(kminusqlist_table.reshape(self.nk*self.nq_double,3))
+        # compute the fermi occupations for k-q
+            f_kmqn = self._get_occupations(self.nq_double, self.nb, eigv_kmq, self.model.fermie)
+            eigv_kmq = np.array(eigv_kmq).reshape(self.nk, self.nq_double, self.nb)
+            self.f_kmqn = f_kmqn.reshape(self.nk, self.nq_double, self.nb)
+        else:
+            self.f_kmq = self.f_kn
         if not hasattr(self,'f_qn'):
             self.f_qn = np.zeros((self.nq_double,self.nb),dtype = np.float64)
             self.f_qn[:,:self.nv] = 1.0
@@ -389,7 +400,8 @@ class H2P():
             K_direct, K_Ex = self._getKdq()       #sorry
 
             K_diff = K_direct - K_Ex[:,np.newaxis,:]
-            f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
+            f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-self.f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
+            #f_diff = self.f_kmqn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kmqn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
             H2P = f_diff * K_diff
             result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
             eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
@@ -1049,7 +1061,34 @@ class H2P():
         inverse_aux_t[aux_t] = np.arange(aux_t.size)        
         
         return aux_t, inverse_aux_t
+    
+    def ref_frame(self, ref_frame='electron'):
+        if (ref_frame =='electron'):
+            print(f"{ref_frame} is the default reference frame used to build H2P. Second option is 'COM'")
+        elif (ref_frame=='COM'):
+            new_h2peigvec_vck = np.zeros_like(self.h2peigvec_vck)
+            (self.kplusqover2_table, self.kminusqover2_table) = self.kmpgrid.get_kqover2_tables(self.qmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
+            
+            print(f"rotating BSE eigenvectors to {ref_frame} reference frame")
+            S_ccpk = np.zeros((self.bse_nc, self.nk, self.bse_nc, self.nk), dtype=np.complex128)
+            S_vvpk = np.zeros((self.bse_nv, self.nk, self.bse_nv, self.nk), dtype=np.complex128)
+            ikpqover2 = self.kplusqover2_table[:,:,1]
+            ikmqover2 = self.kminusqover2_table[:,:,1]
+            for iq in range(0, self.h2peigv_vck.shape[0]):
+                eigvec_c = self.eigvec[ikpqover2[:,iq],:, :][:,:,np.unique(self.BSE_table[:,2])]
+                eigvec_v = self.eigvec[ikmqover2[:,iq],:, :][:,:,np.unique(self.BSE_table[:,1])]
+                tmph2peigvec_vck = self.h2peigvec_vck[iq][:,:,:,ikpqover2[:,iq]]
+                S_kckpcp = np.einsum('isj, ksl -> ijkl ' , eigvec_c.conj(), eigvec_c)
+                S_kvkpvp = np.einsum('isj, ksl -> ijkl ' , eigvec_v.conj(), eigvec_v)
+                new_h2peigvec_vck[iq] = np.einsum('abcd, dadh, dbdl -> alhd' , tmph2peigvec_vck, S_kckpcp, S_kvkpvp)
+            return new_h2peigvec_vck
+        else:
+            print('We only have COM and electron as implemented reference frames.')
 
+    def _get_occupations(self, nk, nb, eigv, fermie):
+        occupations = np.zeros((nk, nb))
+        occupations = fermi_dirac(eigv,fermie)
+        return np.real(occupations)
 def chunkify(lst, n):
     """Divide list `lst` into `n` chunks."""
     return [lst[i::n] for i in range(n)]    

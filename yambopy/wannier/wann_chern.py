@@ -260,35 +260,33 @@ class ChernNumber():
         dotcx_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckxdqz-eigvec_ckx), eigvec_ckx) #l index is conjugated       
         #prepare for cross products
         # wccx 
-        wccx = np.array([dotcx_x, dotcx_y, dotcx_z])
+        wccx = np.array([dotcx_y, dotcx_z])
         dotcy_x = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckydqx-eigvec_cky), eigvec_cky) #l index is conjugated  
         dotcy_y = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckydqy-eigvec_cky), eigvec_cky) #l index is conjugated  
         dotcy_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckydqz-eigvec_cky), eigvec_cky) #l index is conjugated      
         # wccy
-        wccy = np.array([dotcy_x, dotcy_y, dotcy_z])
+        wccy = np.array([dotcy_x, dotcy_z])
         dotcz_x = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckzdqx-eigvec_ckz), eigvec_ckz) #l index is conjugated  
         dotcz_y = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckzdqy-eigvec_ckz), eigvec_ckz) #l index is conjugated  
         dotcz_z = np.einsum('jkl,jkp->jlp',np.conjugate(eigvec_ckzdqz-eigvec_ckz), eigvec_ckz) #l index is conjugated      
         # wccz 
-        wccz = np.array([dotcz_x, dotcz_y, dotcz_z])
+        wccz = np.array([dotcz_x, dotcz_y])
         
         # Evaluate the integrand at the points on each plane
-        integrand_x = np.array([np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qx_plane], integrand[self.qpdx_plane] - integrand[self.qx_plane]),\
-                                np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qx_plane], integrand[self.qxdy_plane] - integrand[self.qx_plane]),\
-                                np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qx_plane], integrand[self.qxdz_plane] - integrand[self.qx_plane]),    
+        integrand_x = np.array([np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qx_plane], integrand[self.qxdy_plane] - integrand[self.qx_plane]),\
+                                np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qx_plane], integrand[self.qxdz_plane] - integrand[self.qx_plane])\
         ])
         integrand_y = np.array([np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qy_plane], integrand[self.qydx_plane] - integrand[self.qy_plane]),\
-                                np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qy_plane], integrand[self.qpdy_plane] - integrand[self.qy_plane]),\
-                                np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qy_plane], integrand[self.qydz_plane] - integrand[self.qy_plane]),    
+                                np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qy_plane], integrand[self.qydz_plane] - integrand[self.qy_plane])
         ])
         integrand_z = np.array([np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qz_plane], integrand[self.qzdx_plane] - integrand[self.qz_plane]),\
                                 np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qz_plane], integrand[self.qzdy_plane] - integrand[self.qz_plane]),\
-                                np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qz_plane], integrand[self.qpdz_plane] - integrand[self.qz_plane]),    
+                                #0.0#np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qz_plane], integrand[self.qpdz_plane] - integrand[self.qz_plane])
         ])
         #cross products in plane
-        cross_product_yz = integrand_x[1]*wccx[2][:, None, None,:,:, None]-integrand_x[2]*wccx[1][:, None, None,:,:, None]
-        cross_product_zx = integrand_y[1]*wccy[2][:, None, None,:,:, None]-integrand_y[2]*wccy[1][:, None, None,:,:, None]
-        cross_product_xy = integrand_z[1]*wccz[2][:, None, None,:,:, None]-integrand_z[2]*wccz[1][:, None, None,:,:, None]
+        cross_product_yz = integrand_x[0]*wccx[1][:, None, None,:,:, None]-integrand_x[1]*wccx[0][:, None, None,:,:, None]
+        cross_product_zx = integrand_y[0]*wccy[1][:, None, None,:,:, None]-integrand_y[1]*wccy[0][:, None, None,:,:, None]
+        cross_product_xy = integrand_z[0]*wccz[1][:, None, None,:,:, None]-integrand_z[1]*wccz[0][:, None, None,:,:, None]
 
         # sum over dimensions
         flux_yz = np.sum(cross_product_yz, axis=tuple((0,2,3,4,5))) # divide by 2 becuase I sum z and y
@@ -349,35 +347,35 @@ class ChernNumber():
         dotcyz_z = np.einsum('ijkl,ijkp->jlpi',np.conjugate(eigvec_vkmqyz_z-eigvec_vkmqyz), eigvec_vkmqyz) #l index is conjugated       
         #prepare for cross products
         # wccyz 
-        wccyz = np.array([dotcyz_x, dotcyz_y, dotcyz_z])
+        wccyz = np.array([dotcyz_y, dotcyz_z])
         dotczx_x = np.einsum('ijkl,ijkp->jlpi',np.conjugate(eigvec_vkmqzx_x-eigvec_vkmqzx), eigvec_vkmqzx) #l index is conjugated  
         dotczx_y = np.einsum('ijkl,ijkp->jlpi',np.conjugate(eigvec_vkmqzx_y-eigvec_vkmqzx), eigvec_vkmqzx) #l index is conjugated  
         dotczx_z = np.einsum('ijkl,ijkp->jlpi',np.conjugate(eigvec_vkmqzx_z-eigvec_vkmqzx), eigvec_vkmqzx) #l index is conjugated       
         # wcczx
-        wcczx = np.array([dotczx_x, dotczx_y, dotczx_z])
+        wcczx = np.array([dotczx_x, dotczx_z])
         dotcxy_x = np.einsum('ijkl,ijkp->jlpi',np.conjugate(eigvec_vkmqxy_x-eigvec_vkmqxy), eigvec_vkmqxy) #l index is conjugated  
         dotcxy_y = np.einsum('ijkl,ijkp->jlpi',np.conjugate(eigvec_vkmqxy_y-eigvec_vkmqxy), eigvec_vkmqxy) #l index is conjugated  
         dotcxy_z = np.einsum('ijkl,ijkp->jlpi',np.conjugate(eigvec_vkmqxy_z-eigvec_vkmqxy), eigvec_vkmqxy) #l index is conjugated       
         # wccxy 
-        wccxy = np.array([dotcxy_x, dotcxy_y, dotcxy_z])
+        wccxy = np.array([dotcxy_x, dotcxy_y])
         
         # Evaluate the integrand at the points on each plane
-        integrand_x = np.array([np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qx_plane], integrand[self.qpdx_plane] - integrand[self.qx_plane]),\
+        integrand_x = np.array([#0.0,#np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qx_plane], integrand[self.qpdx_plane] - integrand[self.qx_plane]),\
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qx_plane], integrand[self.qxdy_plane] - integrand[self.qx_plane]),\
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qx_plane], integrand[self.qxdz_plane] - integrand[self.qx_plane]),    
         ])
         integrand_y = np.array([np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qy_plane], integrand[self.qydx_plane] - integrand[self.qy_plane]),\
-                                np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qy_plane], integrand[self.qpdy_plane] - integrand[self.qy_plane]),\
+                                #0.0,#np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qy_plane], integrand[self.qpdy_plane] - integrand[self.qy_plane]),\
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qy_plane], integrand[self.qydz_plane] - integrand[self.qy_plane]),    
         ])
         integrand_z = np.array([np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qz_plane], integrand[self.qzdx_plane] - integrand[self.qz_plane]),\
                                 np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qz_plane], integrand[self.qzdy_plane] - integrand[self.qz_plane]),\
-                                np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qz_plane], integrand[self.qpdz_plane] - integrand[self.qz_plane]),    
+                                #0.0,#np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qz_plane], integrand[self.qpdz_plane] - integrand[self.qz_plane]),    
         ])
         #cross products in plane
-        cross_product_yz = integrand_x[1]*wccyz[2][:, None,:, :, None,:]-integrand_x[2]*wccyz[1][:, None,:, :, None,:]
-        cross_product_zx = integrand_y[1]*wcczx[2][:, None,:, :, None,:]-integrand_y[2]*wcczx[1][:, None,:, :, None,:]
-        cross_product_xy = integrand_z[1]*wccxy[2][:, None,:, :, None,:]-integrand_z[2]*wccxy[1][:, None,:, :, None,:]
+        cross_product_yz = integrand_x[0]*wccyz[1][:, None,:, :, None,:]-integrand_x[1]*wccyz[0][:, None,:, :, None,:]
+        cross_product_zx = integrand_y[0]*wcczx[1][:, None,:, :, None,:]-integrand_y[1]*wcczx[0][:, None,:, :, None,:]
+        cross_product_xy = integrand_z[0]*wccxy[1][:, None,:, :, None,:]-integrand_z[1]*wccxy[0][:, None,:, :, None,:]
 
         # sum over dimensions
         flux_yz = np.sum(cross_product_yz, axis=tuple((0,2,3,4,5))) # divide by 2 becuase I sum z and y

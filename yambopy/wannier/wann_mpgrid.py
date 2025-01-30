@@ -37,7 +37,7 @@ class tb_Monkhorst_Pack(KPointGenerator):
         self.nkpoints = len(self.k)
         self.k_tree = cKDTree(self.k)        
 
-    def get_kmq_grid(self,qmpgrid, sign):
+    def get_kmq_grid(self,qmpgrid, sign, factor = 1.0):
         # if not isinstance(qmpgrid, NNKP_Grids):
         #     raise TypeError('Argument must be an instance of NNKP_Grids')
         #here I need to use the k-q grid and then apply -b/2
@@ -52,9 +52,9 @@ class tb_Monkhorst_Pack(KPointGenerator):
         k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
         q_grid = np.expand_dims(qmpgrid.k, axis=0)  # Shape (1, nqpoints, 3)
         if sign == "+":
-            kq_diff = k_grid - q_grid  # Shape (nkpoints, nqpoints, 3)
+            kq_diff = k_grid - q_grid/factor  # Shape (nkpoints, nqpoints, 3)
         elif sign == "-":
-            kq_diff = -k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
+            kq_diff = -k_grid + q_grid/factor  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
         kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing
@@ -122,7 +122,7 @@ class tb_Monkhorst_Pack(KPointGenerator):
 
         return kmqdq_grid, kmqdq_grid_table
         
-    def get_kpq_grid(self, qmpgrid):
+    def get_kpq_grid(self, qmpgrid, factor = 1.0):
 
         nkpoints = self.nkpoints
         nqpoints = qmpgrid.nkpoints
@@ -130,7 +130,7 @@ class tb_Monkhorst_Pack(KPointGenerator):
         # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
         k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
         q_grid = np.expand_dims(qmpgrid.k, axis=0)  # Shape (1, nqpoints, 3)
-        kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
+        kq_add = k_grid + q_grid/factor  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
         kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing

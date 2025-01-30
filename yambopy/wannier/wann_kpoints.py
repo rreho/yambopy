@@ -92,7 +92,16 @@ class KPointGenerator():
         _,kminusq_table = self.get_kmq_grid(qmpgrid,sign)
 
         return kplusq_table, kminusq_table
-    
+
+    def get_kqover2_tables(self,qmpgrid, sign = '+'):
+        kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
+        # Assign to tables
+
+        _,kplusqover2_table = self.get_kpq_grid(qmpgrid, factor=2.0)
+        _,kminusqove2_table = self.get_kmq_grid(qmpgrid,sign, factor = 2.0)
+
+        return kplusqover2_table, kminusqove2_table    
 
     def get_kindices_fromq(self,qmpgrid):
         q_points = qmpgrid.k  # Extract q-points array
