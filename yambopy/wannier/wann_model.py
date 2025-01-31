@@ -16,6 +16,8 @@ from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T, sort_e
 from yambopy.wannier.wann_dipoles import TB_dipoles
 import matplotlib.pyplot as plt
 import scipy
+import warnings
+
 class TBMODEL(tbmodels.Model):
     """
     Class that inherits from tbmodels.Model for TB-model Hamiltonians.
@@ -45,13 +47,14 @@ class TBMODEL(tbmodels.Model):
         """        
         # k in reduced coordinates
         self.H_k = self.hamilton(k, convention=convention)
+        #if (len(k[0])==1): self.H_k = self.H_k.reshape(1,self.H_k[0], self.H_k[1])
         self.nk = int(self.H_k.shape[0]) # number of k-points
         self.nb = int(self.H_k.shape[1]) # number of bands
         # check hermiticity
         t0 = time()
         for k_index in range(self.H_k.shape[0]):
             if not np.allclose(self.H_k[k_index], self.H_k[k_index].T.conj(), atol=1e-9):
-                raise ValueError(f"Warning! Hamiltonian matrix at k-point index {k_index} is not hermitian.")       
+                warnings.warn(f"Warning! Hamiltonian matrix at k-point index {k_index} is not hermitian.")       
         # solve matrix
         # the eigenvalues only is already available within tbmodels, here I need the eigenvectors
         # find eigenvalues and eigenvectors
@@ -68,13 +71,13 @@ class TBMODEL(tbmodels.Model):
         t1 = time()
         print(f'Diagonalization took {t1-t0:.3f} sec')
 
-    def solve_ham_from_hr(self, latdb, hr, fermie):
+    def solve_ham_from_hr(self, latdb, hr, fermie, convention = 'II'):
         # k in reduced coordinates
         self.latdb = latdb
         nkpt = self.mpgrid.nkpoints
         H_k = np.zeros((nkpt, hr.num_wann, hr.num_wann), dtype=np.complex128)
         for i in range(0,nkpt):
-            H_k[i] = self._get_h_k(self.mpgrid.k[i], latdb.lat, hr, fermie, from_hr=True)
+            H_k[i] = self._get_h_k(self.mpgrid.k[i], latdb.lat, hr, fermie, from_hr=True, convention = convention)
         
         self.hr = hr
         self.H_k = H_k
@@ -85,7 +88,7 @@ class TBMODEL(tbmodels.Model):
         t0 = time()
         for k_index in range(self.H_k.shape[0]):
             if not np.allclose(self.H_k[k_index], self.H_k[k_index].T.conj(), atol=1e-9):
-                raise ValueError(f"Warning! Hamiltonian matrix at k-point index {k_index} is not hermitian.")       
+                warnings.warn(f"Warning! Hamiltonian matrix at k-point index {k_index} is not hermitian.")       
         # solve matrix
         # the eigenvalues only is already available within tbmodels, here I need the eigenvectors
         # find eigenvalues and eigenvectors
@@ -111,7 +114,7 @@ class TBMODEL(tbmodels.Model):
         t1 = time()
         print(f'Diagonalization took {t1-t0:.3f} s')
 
-    def get_pos_from_ham(self, lat, hr, from_hr = True):
+    def get_Rpos_from_ham(self, lat, hr, from_hr = True):
         'get positions from Hamiltonian, first the indices and then reduced coordinates of hoppings'
         # get tuple of irpos
         if (not from_hr):
@@ -119,16 +122,16 @@ class TBMODEL(tbmodels.Model):
             self.nrpos = len(self.irpos)
             self.lat = lat
             # pos[i,3] position of i unit cells. Store only the upper triangular matrix
-            self.pos = self.irpos
-            return self.pos
+            self.Rpos = self.irpos
+            return self.Rpos
         else:
             self.lat = lat
-            pos = hr.hop
+            Rpos = hr.hop
             self.nrpos = hr.nrpts
-            self.pos = pos
-            return pos
+            self.Rpos = Rpos
+            return Rpos
 
-    def get_hlm(self ,lat, hr, from_hr=True):
+    def get_hlm(self ,lat, hr, from_hr=True, convention = 'II'):
         ''' computes light mater interaction hamiltonian for grid of points
         k is one k-point in reduced coordinates
         hrx = P_\alpha = dH(k)\dk_\alpha = \sum_{R=1}^N e^{ikR}iR_\alpha H_{R}
@@ -138,11 +141,11 @@ class TBMODEL(tbmodels.Model):
         hlm = np.zeros((self.mpgrid.nkpoints,hr.num_wann, hr.num_wann,3), dtype=np.complex128)       
   
         for i,k in enumerate(self.mpgrid.red_kpoints):
-            hlm[i] = self._get_hlm_k(k,lat,hr,from_hr=True)          
+            hlm[i] = self._get_hlm_k(k,lat,hr,from_hr, convention)          
 
         self.hlm = hlm
 
-    def _get_hlm_k(self, k, lat, hr, from_hr=True):
+    def _get_hlm_k(self, k, lat, hr, from_hr=True, convention = 'II'):
         ''' computes light mater interaction hamiltonian at k
         k is one k-point in reduced coordinates
         hrx = P_\alpha = dH(k)\dk_\alpha = \sum_{R=1}^N e^{ikR}iR_\alpha H_{R}
@@ -152,12 +155,18 @@ class TBMODEL(tbmodels.Model):
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
         if (not from_hr):
-            pos = self.get_pos_from_ham(lat, hr, from_hr)
+            Rpos = self.get_Rpos_from_ham(lat, hr, from_hr)
         else:
-            pos = self.get_pos_from_ham(lat, hr, from_hr=True)
+            Rpos = self.get_Rpos_from_ham(lat, hr, from_hr=True)
             irpos = hr.hop
-            self.pos = pos
+            self.Rpos = Rpos
             self.irpos = irpos
+
+        kvecs_ji = np.zeros((hr.num_wann, hr.num_wann), dtype=np.complex128)
+        #pos has shape (nrpts,3)
+        if (convention == 'I'):
+            self.pos_ji = self.pos[:, None,:]-self.pos[None,:,:]
+            kvecs_ji = 1j*np.einsum('ijk, k -> ij' , self.pos_ji, k)
 
         hlm_k = np.zeros((self.nb, self.nb, 3), dtype=np.complex128)
         kvecs = np.zeros(self.nrpos, dtype=np.complex128)
@@ -165,10 +174,10 @@ class TBMODEL(tbmodels.Model):
         kvecsy = np.zeros(self.nrpos, dtype=np.complex128)
         kvecsz = np.zeros(self.nrpos, dtype=np.complex128)
         #pos has shape (nrpts,3)
-        kvecs[:] = 1j*np.dot(pos, k)
-        kvecsx = 1j*pos[:,0]
-        kvecsy = 1j*pos[:,1]
-        kvecsz = 1j*pos[:,2]
+        kvecs[:] = 1j*np.dot(Rpos, k)
+        kvecsx = 1j*Rpos[:,0]
+        kvecsy = 1j*Rpos[:,1]
+        kvecsz = 1j*Rpos[:,2]
 
 
         # len(pos) = nrpts
@@ -176,41 +185,46 @@ class TBMODEL(tbmodels.Model):
             if (np.array_equal(irpos[i],[0.0,0.0,0.0])):
                 hr_mn_p = np.copy(hr.HR_mn[i,:,:])
                 np.fill_diagonal(hr_mn_p,np.complex128(0.0))
-                hlm_k[:,:,0] += kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] += kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] += kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,0] += kvecsx[i]*np.exp(2*np.pi*kvecs[i])*np.exp(2*np.pi*kvecs_ji[:,:])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] += kvecsy[i]*np.exp(2*np.pi*kvecs[i])*np.exp(2*np.pi*kvecs_ji[:,:])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] += kvecsz[i]*np.exp(2*np.pi*kvecs[i])*np.exp(2*np.pi*kvecs_ji[:,:])*(hr_mn_p)*(1.0/hr.ws_deg[i])
             else:
                 hr_mn_p = hr.HR_mn[i,:,:]
-                hlm_k[:,:,0] += kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] += kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] += kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,0] += kvecsx[i]*np.exp(2*np.pi*kvecs[i])*np.exp(2*np.pi*kvecs_ji[:,:])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] += kvecsy[i]*np.exp(2*np.pi*kvecs[i])*np.exp(2*np.pi*kvecs_ji[:,:])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] += kvecsz[i]*np.exp(2*np.pi*kvecs[i])*np.exp(2*np.pi*kvecs_ji[:,:])*(hr_mn_p)*(1.0/hr.ws_deg[i])
         
         return hlm_k
 
 
-    def _get_h_k(self, k, lat, hr, fermie, from_hr=True):
+    def _get_h_k(self, k, lat, hr, fermie, from_hr=True, convention = 'II'):
         ''' computes hamiltonian at k from real space hamiltonian
         k is one k-point in reduced coordinates
+        convention follows samen convention as pytthb
         '''
         #ws_deg is needed for fourier factor
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
         if (not from_hr):
-            pos = self.get_pos_from_ham(lat, hr, from_hr)
+            Rpos = self.get_Rpos_from_ham(lat, hr, from_hr)
         else:
-            pos = self.get_pos_from_ham(lat=lat,hr=hr, from_hr=True)
+            Rpos = self.get_Rpos_from_ham(lat=lat,hr=hr, from_hr=True)
             irpos = hr.hop
             self.irpos = irpos
         
         hk = np.zeros((hr.num_wann, hr.num_wann), dtype=np.complex128)
         kvecs = np.zeros(self.nrpos, dtype=np.complex128)
+        kvecs_ji = np.zeros((hr.num_wann, hr.num_wann), dtype=np.complex128)
         #pos has shape (nrpts,3)
-        kvecs[:] = 1j*np.dot(pos, k)
+        if (convention == 'I'):
+            self.pos_ji = self.pos[:, None,:]-self.pos[None,:,:]
+            kvecs_ji = 1j*np.einsum('ijk, k -> ij' , self.pos_ji, k)
+        kvecs[:] =  1j*np.dot(Rpos, k)
 
         # len(pos) = nrpts
         for i in range(0,self.nrpos):
             hr_mn_p = hr.HR_mn[i,:,:]
-            hk[:,:] = hk[:,:] + np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+            hk[:,:] = hk[:,:] + np.exp(2*np.pi*kvecs[i])*np.exp(2*np.pi*kvecs_ji[:,:])*(hr_mn_p)*(1.0/hr.ws_deg[i])
         
         hk = hk #+ fermie
         return hk
@@ -223,9 +237,9 @@ class TBMODEL(tbmodels.Model):
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
         if (not from_hr):
-            pos = self.get_pos_from_ham(lat, hr, from_hr)
+            Rpos = self.get_Rpos_from_ham(lat, hr, from_hr)
         else:
-            pos = self.get_pos_from_ham(lat=lat,hr=hr, from_hr=True)
+            Rpos = self.get_Rpos_from_ham(lat=lat,hr=hr, from_hr=True)
             irpos = hr.hop
             self.irpos = irpos        
         # len(pos) = nrpts
@@ -238,7 +252,7 @@ class TBMODEL(tbmodels.Model):
         max_hr_p = np.zeros(hr.nrpts, dtype= np.float64)
         R_dist = np.zeros(hr.nrpts, dtype= np.float64)
         for i in range(self.nrpos):
-            R_dist[i] = np.linalg.norm(self.pos[i])
+            R_dist[i] = np.linalg.norm(self.Rpos[i])
             max_hr_p[i] = np.max(np.abs(hr_mn_p[i]))
         fig, ax = plt.subplots()
         ax.set_xlabel('R [Bohr]')
@@ -252,7 +266,7 @@ class TBMODEL(tbmodels.Model):
 
         return R_dist, max_hr_p
 
-    def get_eigenval(self, k, from_hr=True):
+    def get_eigenval(self, k, from_hr=True, convention = 'II'):
         """
         Returns the eigenvalues at a given k point, or list of k-points.
 
@@ -265,10 +279,10 @@ class TBMODEL(tbmodels.Model):
         """
         H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
         for i in range(0, k.shape[0]):
-            H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
+            H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr, convention=convention)
         return np.array([scipy.linalg.eigvalsh(ham) for ham in H_k])
 
-    def get_eigenval_and_vec(self, k, from_hr=True):
+    def get_eigenval_and_vec(self, k, from_hr=True, convention = 'II'):
         """
         Returns the eigenvalues at a given k point, or list of k-points.
 
@@ -300,7 +314,7 @@ class TBMODEL(tbmodels.Model):
         # Initialize the Hamiltonian for all k-points
         H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
         for i in range(k.shape[0]):
-            H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
+            H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr, convention = convention)
 
         # Compute eigenvalues and eigenvectors for each k-point
         eigenvalues = np.zeros((k.shape[0], self.nb), dtype=np.float64)
