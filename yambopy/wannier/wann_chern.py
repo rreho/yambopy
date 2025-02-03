@@ -1,5 +1,5 @@
 import numpy as np
-from yambopy.wannier.wann_utils import ensure_shape
+from yambopy.wannier.wann_utils import ensure_shape, sin_between_vectors
 class ChernNumber():
     def __init__(self, h2p = None, h = None, a=0.0, b=0.0, c=1.0, d=0.0):
         """
@@ -77,6 +77,10 @@ class ChernNumber():
             self.borderxy_x = self.qpdqx_grid[self.borders['xy'], self.i_x][:,1]
             self.borderxy_y = self.qpdqx_grid[self.borders['xy'], self.i_y][:,1]
             self.borderxy_z = self.qpdqx_grid[self.borders['xy'], self.i_z][:,1]                                                     
+            #plane sin(angle)
+            self.sin_yz = sin_between_vectors(self.h2p.qmpgrid.rlat[1],self.h2p.kmpgrid.rlat[2])
+            self.sin_zx = sin_between_vectors(self.h2p.qmpgrid.rlat[2],self.h2p.kmpgrid.rlat[0])
+            self.sin_xy = sin_between_vectors(self.h2p.qmpgrid.rlat[0],self.h2p.kmpgrid.rlat[1])
 
         if (h is not None): self.h = h
 
@@ -284,9 +288,9 @@ class ChernNumber():
                                 #0.0#np.einsum('abcde,abche -> abcdhe', integrand.conj()[self.qz_plane], integrand[self.qpdz_plane] - integrand[self.qz_plane])
         ])
         #cross products in plane
-        cross_product_yz = integrand_x[0]*wccx[1][:, None, None,:,:, None]-integrand_x[1]*wccx[0][:, None, None,:,:, None]
-        cross_product_zx = integrand_y[0]*wccy[1][:, None, None,:,:, None]-integrand_y[1]*wccy[0][:, None, None,:,:, None]
-        cross_product_xy = integrand_z[0]*wccz[1][:, None, None,:,:, None]-integrand_z[1]*wccz[0][:, None, None,:,:, None]
+        cross_product_yz = (integrand_x[0]*wccx[1][:, None, None,:,:, None]-integrand_x[1]*wccx[0][:, None, None,:,:, None])*self.sin_yz
+        cross_product_zx = (integrand_y[0]*wccy[1][:, None, None,:,:, None]-integrand_y[1]*wccy[0][:, None, None,:,:, None])*self.sin_zx
+        cross_product_xy = (integrand_z[0]*wccz[1][:, None, None,:,:, None]-integrand_z[1]*wccz[0][:, None, None,:,:, None])*self.sin_xy
 
         # sum over dimensions
         flux_yz = np.sum(cross_product_yz, axis=tuple((0,2,3,4,5))) # divide by 2 becuase I sum z and y
@@ -373,9 +377,9 @@ class ChernNumber():
                                 #0.0,#np.einsum('abcde,abhde -> abchde', integrand.conj()[self.qz_plane], integrand[self.qpdz_plane] - integrand[self.qz_plane]),    
         ])
         #cross products in plane
-        cross_product_yz = integrand_x[0]*wccyz[1][:, None,:, :, None,:]-integrand_x[1]*wccyz[0][:, None,:, :, None,:]
-        cross_product_zx = integrand_y[0]*wcczx[1][:, None,:, :, None,:]-integrand_y[1]*wcczx[0][:, None,:, :, None,:]
-        cross_product_xy = integrand_z[0]*wccxy[1][:, None,:, :, None,:]-integrand_z[1]*wccxy[0][:, None,:, :, None,:]
+        cross_product_yz = (integrand_x[0]*wccyz[1][:, None,:, :, None,:]-integrand_x[1]*wccyz[0][:, None,:, :, None,:])*self.sin_yz
+        cross_product_zx = (integrand_y[0]*wcczx[1][:, None,:, :, None,:]-integrand_y[1]*wcczx[0][:, None,:, :, None,:])*self.sin_zx
+        cross_product_xy = (integrand_z[0]*wccxy[1][:, None,:, :, None,:]-integrand_z[1]*wccxy[0][:, None,:, :, None,:])*self.sin_xy
 
         # sum over dimensions
         flux_yz = np.sum(cross_product_yz, axis=tuple((0,2,3,4,5))) # divide by 2 becuase I sum z and y
@@ -384,8 +388,11 @@ class ChernNumber():
         
         return {'yz': flux_yz, 'zx': flux_zx, 'xy': flux_xy}  
 
-    def curvature_plaquette(self):
-
+    def curvature_plaquette(self, chern = False):
+        # fix this formula, evaluate <\psi|\psi> (1-i\delta ((rm+rm')/2))
+        # where rm and rm' are the position of electrons and holes in the wannier basis
+        # rm = \sum_m U_mc |eigvec_c>
+        # rm' = \sum_m U^\dagger_mv |eigvec_v>
         # get overlaps valence w_{vv'k-q}
         NX, NY, NZ = self.h2p.qmpgrid.grid_shape
         plaquettes = {
@@ -406,8 +413,20 @@ class ChernNumber():
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qzdxdy_plane].conj(),self.h2p.h2peigvec[self.qzdx_plane]) \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qzdy_plane].conj(),self.h2p.h2peigvec[self.qzdxdy_plane]) \
                         * np.einsum('kts, kts -> ks' , self.h2p.h2peigvec[self.qz_plane].conj(),self.h2p.h2peigvec[self.qzdy_plane])                                      
+        
+        if (chern):
+            area_yz = 1/(NY*NZ)*self.sin_yz
+            area_zx = 1/(NZ*NX)*self.sin_zx
+            area_xy = 1/(NX*NY)*self.sin_xy
+            chern_number = {
+            'yz' : np.sum(plaquettes['yz'],axis = 0)*area_yz/(2*np.pi),
+            'zx' : np.sum(plaquettes['zx'],axis = 0)*area_yz/(2*np.pi),
+            'xy' : np.sum(plaquettes['xy'],axis = 0)*area_yz/(2*np.pi),
+            }
+            return plaquettes, chern_number        
+        
         return plaquettes
 
     def _finite_diff(self,f_q, dq = 1.0):
         """Compute finite difference approximation df/dq."""
-        return (np.roll(f_q, -1) - np.roll(f_q, 0)) / (1 * dq)
+        return (np.roll(f_q, -1,axis=0) - np.roll(f_q, 0,axis=0)) / (1 * dq)

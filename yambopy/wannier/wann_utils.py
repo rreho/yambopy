@@ -151,3 +151,8 @@ class ChangeBasis():
                         nk_vec[:,n,ik] += 1/self.nk*self._wann_to_bloch_factor(self, mRe, ik, n, p)[:,m,p]
         nk_vec = nk_vec.transpose(1,0,2)
         return nk_vec
+    
+def sin_between_vectors(a, b):
+    cross_norm = np.linalg.norm(np.cross(a, b))  # ||a × b||
+    dot_norm = np.linalg.norm(a) * np.linalg.norm(b)  # ||a|| * ||b||
+    return cross_norm / dot_norm

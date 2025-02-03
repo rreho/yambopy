@@ -231,7 +231,10 @@ class KPointGenerator():
         left_sort = np.argsort(left[:, 1])[::-1]
         left = left[left_sort]  # Top to bottom
         # Ensure periodic continuity without repeating corners
-        sorted_border = np.vstack([bottom, right[1:], top[1:], left[1:]])
+        if (free_axes[0] == 1 and free_axes[1] == 2):
+            sorted_border = np.vstack([bottom, right[1:],top[::-1][1:], left[1:]])
+        else:
+            sorted_border = np.vstack([bottom, right[1:], top[1:], left[1:]])
         # Collect the corresponding indices
         sorted_indices = []
         A = self.k

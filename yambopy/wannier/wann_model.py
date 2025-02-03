@@ -165,8 +165,8 @@ class TBMODEL(tbmodels.Model):
         kvecs_ji = np.zeros((hr.num_wann, hr.num_wann), dtype=np.complex128)
         #pos has shape (nrpts,3)
         if (convention == 'I'):
-            self.pos_ji = self.pos[:, None,:]-self.pos[None,:,:]
-            kvecs_ji = 1j*np.einsum('ijk, k -> ij' , self.pos_ji, k)
+            self.pos_ji = -1*(self.pos[:, None,:]-self.pos[None,:,:])
+            kvecs_ji = 1j*np.einsum('ijk, k -> ji' , self.pos_ji, k)
 
         hlm_k = np.zeros((self.nb, self.nb, 3), dtype=np.complex128)
         kvecs = np.zeros(self.nrpos, dtype=np.complex128)
@@ -217,7 +217,7 @@ class TBMODEL(tbmodels.Model):
         kvecs_ji = np.zeros((hr.num_wann, hr.num_wann), dtype=np.complex128)
         #pos has shape (nrpts,3)
         if (convention == 'I'):
-            self.pos_ji = self.pos[:, None,:]-self.pos[None,:,:]
+            self.pos_ji = -1*(self.pos[:, None,:]-self.pos[None,:,:])
             kvecs_ji = 1j*np.einsum('ijk, k -> ij' , self.pos_ji, k)
         kvecs[:] =  1j*np.dot(Rpos, k)
 
