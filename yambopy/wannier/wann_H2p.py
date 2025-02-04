@@ -80,8 +80,10 @@ class FakeLatticeObject():
     '''
     def __init__(self, model):
         self.alat = model.uc * 1/0.52917720859      # this results in minor difference, do we really want the values from yambo?
+        self.lat = self.alat
         self.lat_vol = np.prod(np.diag(self.alat))  # difference becomes bigger
-
+        self.rlat = model.reciprocal_lattice
+        self.rlat_vol = np.prod(np.diag(self.rlat))
 
 
 class H2P():
@@ -124,9 +126,13 @@ class H2P():
         except ValueError:
             print('Warning! Q=0 index not found')
         self.dimbse = self.bse_nv*self.bse_nc*self.nk
-        self.electronsdb_path = electronsdb_path
-        self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
-        self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
+        if electronsdb_path:
+            self.electronsdb_path = electronsdb_path
+            self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
+            self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
+        else:
+            self.electronsdb = FakeLatticeObject(model)
+            self.latdb = FakeLatticeObject(model)
         self.offset_nv = self.nv-self.bse_nv
         self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
