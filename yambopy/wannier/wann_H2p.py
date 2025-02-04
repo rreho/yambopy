@@ -736,7 +736,7 @@ class H2P():
                     eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*bohr2ang**3*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(np.real(h2peigv[t]-es))/(np.abs(es-h2peigv[t])**2+eta**2) \
                         + 1j*8*np.pi/(self.electronsdb.lat_vol*bohr2ang**3*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)                     
                     #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                    #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+                    #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)            
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
             #self.pl = pl
             #self.w = w
@@ -749,15 +749,19 @@ class H2P():
             # compute eps and pl
             #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
             #pl = eps
-            for ies, es in enumerate(w):
-                for t in range(0,self.dimbse):
-                    ik = self.BSE_table_sort[0][t][0]
-                    iv = self.BSE_table_sort[0][t][1]
-                    ic = self.BSE_table_sort[0][t][2]
-                    eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                        + 1j*8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-                    #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                    #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+            # for ies, es in enumerate(w):
+            #     for t in range(0,self.dimbse):
+            #         ik = self.BSE_table_sort[0][t][0]
+            #         iv = self.BSE_table_sort[0][t][1]
+            #         ic = self.BSE_table_sort[0][t][2]
+                    # eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        # + 1j*8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+            #         #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+            #         #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+            ediff = h2peigv[:, np.newaxis]-w[np.newaxis, :]
+            piVk = 8*np.pi/(self.electronsdb.lat_vol*bohr2ang**3*self.nk)
+            eps = piVk * np.einsum('txy,tw->wxy',self.F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
+            eps += 1j*piVk * np.einsum('txy,tw->wxy',self.F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
             #self.pl = pl
             # self.w = w
