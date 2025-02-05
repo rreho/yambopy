@@ -204,10 +204,10 @@ class TB_dipoles():
             vdot = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,2]]), dothlm) # do a vdot with the einsum eigvec_c and dothlm
             vdot_conj = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,1]]), dothlm_conj) # do a vdot with the einsum eigvec_v and dothlm_conj
             
-            dip = gr[:,np.newaxis] * np.einsum('tp,pa->tpa', dip1.T, vdot)  # take the transpose of dip1 as it is order due to h2peigvec_vck being in the wrong order
+            dip = gr[:,np.newaxis] * np.einsum('tp,pa->tpa', dip1, vdot)  # take the transpose of dip1 as it is order due to h2peigvec_vck being in the wrong order
             dipoles_bse_kcv = dip.reshape(self.nbsetransitions,self.nkpoints,self.bse_nc,self.bse_nv, 3)
             
-            dip_conj = ga[:,np.newaxis]* np.einsum('tp,pa->tpa', np.conjugate(dip1.T), vdot_conj) # complex conjugate
+            dip_conj = ga[:,np.newaxis]* np.einsum('tp,pa->tpa', np.conjugate(dip1), vdot_conj) # complex conjugate
             dipoles_bse_kcv_conj = dip_conj.reshape(self.nbsetransitions,self.nkpoints,self.bse_nc,self.bse_nv, 3)
             # Determine the dimension of hlm
             #dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
