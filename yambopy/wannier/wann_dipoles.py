@@ -166,30 +166,49 @@ class TB_dipoles():
             import time
             print("Starting BSE dipole matrix formation\n")
             t0 = time.time()
-            dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
-            dipoles_bse_kcv_conj = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)            
-            for t in range(0,self.nbsetransitions):
-                for tp in range(0,self.nbsetransitions):
-                    ik = self.BSE_table[tp][0]
-                    iv = self.BSE_table[tp][1]
-                    ic = self.BSE_table[tp][2]
-                    w = self.eigv[ik,ic]
-                    E = self.eigv[ik,iv]
-                    GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
-                    GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
-                    #dipoles_bse_kck lives in the BSE kernel subset that's why we use the indices ic-self.nv and self.bse_nv-self.nv+iv
-                    dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv,0] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
-                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                    dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.offset_nv,1] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
-                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                    dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.offset_nv,2] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
-                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))       
-                    dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv,0] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
-                        np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,ic]))
-                    dipoles_bse_kcv_conj[t,ik, ic-self.nv, iv-self.offset_nv,1] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
-                        np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,ic]))
-                    dipoles_bse_kcv_conj[t,ik, ic-self.nv, iv-self.offset_nv,2] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
-                        np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,ic]))                                
+            # dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
+            # dipoles_bse_kcv_conj = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)            
+            # for t in range(0,self.nbsetransitions):
+            #     for tp in range(0,self.nbsetransitions):
+            #         ik = self.BSE_table[tp][0]
+            #         iv = self.BSE_table[tp][1]
+            #         ic = self.BSE_table[tp][2]
+            #         w = self.eigv[ik,ic]
+            #         E = self.eigv[ik,iv]
+            #         GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
+            #         GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
+            #         #dipoles_bse_kck lives in the BSE kernel subset that's why we use the indices ic-self.nv and self.bse_nv-self.nv+iv
+            #         dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv,0] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
+            #             np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+            #         dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.offset_nv,1] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
+            #             np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+            #         dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.offset_nv,2] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
+            #             np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))       
+            #         dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv,0] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
+            #             np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,ic]))
+            #         dipoles_bse_kcv_conj[t,ik, ic-self.nv, iv-self.offset_nv,1] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
+            #             np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,ic]))
+            #         dipoles_bse_kcv_conj[t,ik, ic-self.nv, iv-self.offset_nv,2] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
+            #             np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,ic]))                                
+            wc1 =self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]]
+            wv1 = self.eigv[self.BSE_table[:,0],self.BSE_table[:,1]]
+
+            gr = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GR
+            ga = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GA 
+            BSE_TABLE = self.BSE_table.copy() - np.array([0, self.offset_nv, self.nv])  # move to the BSE kernel subset
+            
+            dip1 = self.h2peigvec_vck[:,BSE_TABLE[:,1], BSE_TABLE[:,2], BSE_TABLE[:,0]]
+            dothlm = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:] ,self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,1]])  # Take the eigvec_v of the transition
+            dothlm_conj = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:] ,self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,2]]) # Take the eigvec_c of the transition
+
+            vdot = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,2]]), dothlm) # do a vdot with the einsum eigvec_c and dothlm
+            vdot_conj = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,1]]), dothlm_conj) # do a vdot with the einsum eigvec_v and dothlm_conj
+            
+            dip = gr[:,np.newaxis] * np.einsum('tp,pa->tpa', dip1.T, vdot)  # take the transpose of dip1 as it is order due to h2peigvec_vck being in the wrong order
+            dipoles_bse_kcv = dip.reshape(self.nbsetransitions,self.nkpoints,self.bse_nc,self.bse_nv, 3)
+            
+            dip_conj = ga[:,np.newaxis]* np.einsum('tp,pa->tpa', np.conjugate(dip1.T), vdot_conj) # complex conjugate
+            dipoles_bse_kcv_conj = dip_conj.reshape(self.nbsetransitions,self.nkpoints,self.bse_nc,self.bse_nv, 3)
             # Determine the dimension of hlm
             #dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
 
