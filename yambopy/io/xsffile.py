@@ -10,7 +10,7 @@
 import re
 import numpy as np
 from yambopy.dbs.latticedb import *
-
+from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red, red_car
 Bohr2Ang = 0.529177249
 
 class YamboXsf():
@@ -194,15 +194,49 @@ class YamboXsf():
         return xsf_file
     #instance of xsf file from lattice db class
     @staticmethod
-    def from_latticedb(yambolattice):
+    def from_latticedb(yambolattice, space = 'real', yexc = None,excitons = [0], f=None, \
+                       Nkx=1, Nky=1, Nkz=1, grid_name='exc',block_dim=3,sub_grid_name='BSE eigenvec',sub_grid_origin=[0.0,0.0,0.0]):
+        '''
+        Construct an xsf from YamboLatticeDB
+       
+           Arguments:
+            yambolattice -> instance of YamboLatticeDB
+            space -> real/reciprocal space, use reciprocal space to plot BSE coefficients
+            yexc -> instance of YamboExcitonDB
+            excitons -> list of exciton indexes to plot
+            f -> function to apply to the exciton weights. Ex. f=log will compute the 
+                 log of th weight to enhance the small contributions            
+        '''
         xsf_file = YamboXsf()
         xsf_file.set_dim(3) # I am not aware of Yambopy working with 2D 1D or 0D structures, for now
         xsf_file.set_lattice(yambolattice)
-        xsf_file.set_cell_parameters(xsf_file.lattice.lat*Bohr2Ang)
-        for iatom in range(0,len(xsf_file.lattice.car_atomic_positions)):
-            xsf_file.add_atom(xsf_file.lattice.atomic_numbers[iatom],xsf_file.lattice.car_atomic_positions[iatom]*Bohr2Ang)
+        if(space=='real'):
+            xsf_file.set_cell_parameters(xsf_file.lattice.lat*Bohr2Ang)
+            for iatom in range(0,len(xsf_file.lattice.car_atomic_positions)):
+                xsf_file.add_atom(xsf_file.lattice.atomic_numbers[iatom],xsf_file.lattice.car_atomic_positions[iatom]*Bohr2Ang)
+
+        if(space=='reciprocal'):
+            xsf_file.set_cell_parameters(xsf_file.lattice.rlat) # check units of rlat inside yambopy
+            if(yexc is not None):
+                xsf_file.add_atom(0, np.array([0.0,0.0,0.0]))
+                weights = yexc.get_exciton_weights(excitons)
+                #sum all the bands
+                weights_bz_sum = np.sum(weights,axis=1)
+                if f: weights_bz_sum = f(weights_bz_sum)
+
+                kmesh_full, kmesh_idx = replicate_red_kmesh(yexc.lattice.red_kpoints,repx=range(0,1),repy=range(0,1))
+                x,y,z = red_car(kmesh_full,yexc.lattice.rlat)[:,:3].T
+                weights_bz_sum = weights_bz_sum[kmesh_idx]                
+                weights_bz_sum = weights_bz_sum/np.max(weights_bz_sum)
+                print(np.max(weights_bz_sum))
+                #kpoints = np.array([[x,y,z]]).T
+                weights_bz_sum = weights_bz_sum.reshape((Nkx,Nky,Nkz))
+                xsf_file.add_grid_data(grid_name=grid_name, block_dim=block_dim, \
+                                       sub_grid_name=sub_grid_name, sub_grid_size=[Nkx,Nky,Nkz],sub_grid_dim=sub_grid_name,
+                                       sub_grid_origin=sub_grid_origin, sub_grid_vectors=xsf_file.lattice.rlat, 
+                                       data_array=weights_bz_sum)
         return xsf_file
-    
+
     def contribution_twolayers(self, zthreshold, c , fractional = True):
         data = self.data_array
         nGx, nGy, nGz = data.shape # G-vectors in real space
