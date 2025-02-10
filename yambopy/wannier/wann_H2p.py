@@ -445,21 +445,21 @@ class H2P():
             qt_sort = np.zeros((self.nq_double,self.dimbse),dtype=int)
             self.BSE_table_sort = np.zeros((self.nq_double,self.dimbse,3),dtype = int)
             print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape} \n')
+            t0 = time()
             for iq in range(0,self.nq_double):
-                t0 = time()
                 tmph2peigv = np.zeros((self.dimbse), dtype=np.complex128)
                 tmph2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
                 tmph2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
                 tmph2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
-                (auxh2peigv,_) = scipy.linalg.eig(self.H2P[iq])
+                
+                (auxh2peigv,_) = scipy.linalg.eigh(self.H2P[iq])
                 (tmph2peigv, tmph2peigvec,_) = zheev(self.H2P[iq])
                 qt_sort[iq,:] = np.argsort(auxh2peigv)
-                #tmph2peigv = tmph2peigv[qt_sort[iq]]
-                #tmph2peigvec = tmph2peigvec[:,qt_sort[iq]]
+
+
                 tmph2peigvec = tmph2peigvec[qt_sort[iq],:]
                 self.BSE_table_sort[iq,:,:] = self.BSE_table[qt_sort[iq]]
-                #deg_h2peigvec = np.append(deg_h2peigvec, self.find_degenerate_eigenvalues(tmph2peigv, tmph2peigvec))
-                # (self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec) # this needs fixing
+
                 for t in range(self.dimbse):
                     ik, iv, ic = self.BSE_table_sort[iq][t]
                     tmph2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigvec[t,:]   
@@ -474,7 +474,7 @@ class H2P():
             self.h2peigv_vck = h2peigv_vck
             self.h2peigvec = h2peigvec
             self.h2peigvec_vck = h2peigvec_vck
-            #self.deg_h2peigvec = deg_h2peigvec
+
             self.qt_sort = qt_sort
             t1 = time()
 
@@ -564,6 +564,8 @@ class H2P():
         
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
+                        # K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
+                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
             v2dk_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
             ikminusq = self.kminusq_table[:, :, 1]
             eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
@@ -572,7 +574,7 @@ class H2P():
             eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
             
             dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigvp), eigv)
-            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigcp), eigc)
+            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
             dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigv)
             dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigvp), eigcp)
             K_direct = v2dk_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv

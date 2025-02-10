@@ -46,8 +46,15 @@ class CoulombPotentials:
         vsize[0] = np.linalg.norm(self.rlat[0])
         vsize[1] = np.linalg.norm(self.rlat[1])
         vsize[2] = np.linalg.norm(self.rlat[2])
-        a0 = vsize[0]/2+vsize[1]/2        
-        modk = modvec(kpt1, kpt2)
+        a0 = vsize[0]/2+vsize[1]/2     
+
+        # Compute the volume of the cell and modulus of the k-point difference
+        kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+        kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+            
+        # Compute modk for all kpt1 and kpt2 pairs
+        modk = scipy.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
+
         #compute area of unit cell
         vc = np.linalg.norm(np.cross(self.rlat[0],self.rlat[1]))
 
@@ -57,12 +64,10 @@ class CoulombPotentials:
         auxi = (2.0 * self.pi * r0) / (a0 * np.sqrt(gridaux1))
         ed = (ediel[0] + ediel[2]) / 2.0
 
-        if modk < self.tolr:
-            # here factor 2.0*self.pi gets divided by 2*pi
-            v2dk = vbz * (self.alpha* a0 * np.sqrt(gridaux1))/(2.*np.pi*ed) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2)
-        else:
-            v2dk = vbz * (self.alpha/ed) * (1.0 / (modk * (1.0 + r0 * modk)))
-
+        # Compute the potential using vectorized operations
+        safe_modk = np.where(modk < self.tolr, np.inf, modk)
+        v2dk = (vbz * (self.alpha* a0 * np.sqrt(gridaux1))/(2.*np.pi*ed) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2))
+        v2dk = np.where(modk < self.tolr, v2dk,vbz * (self.alpha/ed) * (1.0 / (safe_modk * (1.0 + r0 * safe_modk))))
         return v2dk*ha2ev
 
     def vcoul(self, kpt1, kpt2):
@@ -122,7 +127,7 @@ class CoulombPotentials:
                     (1.0 - np.exp(-0.5 * Qxy * lc) * np.cos(0.5 * lc * vkpt[..., 2]))
         v2dt2 = np.where(modk < self.tolr, 0.0 + 0.j, v2dt2)
 
-        return v2dt2
+        return v2dt2#*ha2ev
     
 
     def v2drk(self, kpt1, kpt2):
@@ -164,7 +169,7 @@ class CoulombPotentials:
         v2drk = np.where(modk < self.tolr, 0.0 + 0.j, v2drk)
 
 
-        return v2drk*ha2ev
+        return v2drk#*ha2ev
     
     def v0dt(self,kpt1,kpt2):
 
