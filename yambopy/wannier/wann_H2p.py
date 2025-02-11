@@ -442,44 +442,72 @@ class H2P():
             h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
             h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
             deg_h2peigvec = np.array([])        
-            qt_sort = np.zeros((self.nq_double,self.dimbse),dtype=int)
-            self.BSE_table_sort = np.zeros((self.nq_double,self.dimbse,3),dtype = int)
+            
             print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape} \n')
             t0 = time()
             for iq in range(0,self.nq_double):
-                tmph2peigv = np.zeros((self.dimbse), dtype=np.complex128)
-                tmph2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
-                tmph2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
-                tmph2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
-                
-                (auxh2peigv,_) = scipy.linalg.eigh(self.H2P[iq])
-                (tmph2peigv, tmph2peigvec,_) = zheev(self.H2P[iq])
-                qt_sort[iq,:] = np.argsort(auxh2peigv)
+
+                (h2peigv[iq],h2peigvec[iq]) = scipy.linalg.eigh(self.H2P[iq])
+
+                h2peigvec_vck[iq][:, self.bse_nv - self.nv+self.BSE_table[:,1], self.BSE_table[:,2]-self.nv, self.BSE_table[:,0]] = h2peigvec[iq].T
+                h2peigv_vck[iq][self.bse_nv - self.nv + self.BSE_table[:,1], self.BSE_table[:,2] - self.nv, self.BSE_table[:,0]] = h2peigv[iq]
 
 
-                tmph2peigvec = tmph2peigvec[qt_sort[iq],:]
-                self.BSE_table_sort[iq,:,:] = self.BSE_table[qt_sort[iq]]
-
-                for t in range(self.dimbse):
-                    ik, iv, ic = self.BSE_table_sort[iq][t]
-                    tmph2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigvec[t,:]   
-                    tmph2peigv_vck[self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigv[t]
-                
-                h2peigv[iq] = tmph2peigv
-                h2peigv_vck[iq] = tmph2peigv_vck        
-                h2peigvec[iq] = tmph2peigvec
-                h2peigvec_vck[iq] = tmph2peigvec_vck
-            
             self.h2peigv = h2peigv
             self.h2peigv_vck = h2peigv_vck
             self.h2peigvec = h2peigvec
             self.h2peigvec_vck = h2peigvec_vck
 
-            self.qt_sort = qt_sort
             t1 = time()
 
             print(f'\n Diagonalization of H2P in {t1-t0:.3f} s')
     
+
+
+    def solve_large_block_diagonal(self):
+        """
+        Constructs a large sparse block-diagonal matrix from H2P and solves for its eigenvalues/eigenvectors.
+        """
+        import scipy.sparse as sp
+        import scipy.sparse.linalg as spla
+        from scipy.sparse import block_diag
+        
+        nq = self.nq_double  # Number of q-points
+        dimbse = self.dimbse  # Number of transitions per q-point
+        h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
+        h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
+ 
+
+        # Step 1: Construct the sparse block-diagonal matrix
+        H2P_blocks = [self.H2P[iq] for iq in range(nq)]  # Extract all H2P[iq] blocks
+        # H2P_sparse = block_diag(H2P_blocks, format='csr')  # Construct block-diagonal sparse matrix
+
+        # print(f"Constructed large sparse H2P matrix with shape: {H2P_sparse.shape}")
+
+        # Step 2: Vectorized eigenvalue decomposition of block-diagonal matrix
+        H2P_dense_blocks = np.stack(H2P_blocks, axis=0)  # Ensure correct 3D shape
+
+        h2peigv_list, h2peigvec_list = zip(*(np.linalg.eigh(H) for H in H2P_blocks))
+        h2peigv = np.vstack(h2peigv_list)  # Stack eigenvalues into (nq, dimbse)
+        h2peigvec = np.block([[vec] for vec in h2peigvec_list])
+        # Step 3: Convert eigenvectors into a large sparse matrix
+        # h2peigv = block_diag(h2peigv, format='csc')  # Sparse block diagonal storage
+        # h2peigvec = block_diag(h2peigvec, format='csc')  # Sparse block diagonal storage
+        # h2peigv = h2peigv.reshape(self.nq_double,self.dimbse)
+        # h2peigvec = h2peigvec.reshape(self.nq_double,self.dimbse, self.dimbse)
+        print("Eigenvalues and eigenvectors computed successfully.")
+
+        for t in range(self.dimbse):
+            ik, iv, ic = self.BSE_table[t]
+            h2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = h2peigvec[:,t, :]
+            h2peigv_vck[self.bse_nv-self.nv+iv, ic-self.nv, ik] = h2peigv[:, t]
+
+        self.h2peigv = h2peigv
+        self.h2peigv_vck = h2peigv_vck
+        self.h2peigvec = h2peigvec
+        self.h2peigvec_vck = h2peigvec_vck
+
+
     def _getKd(self,ik,iv,ic,ikp,ivp,icp):
         if (self.ktype =='IP'):
             K_direct = 0.0
@@ -717,7 +745,7 @@ class H2P():
             h2peigv = self.h2peigv[self.q0index]
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table_sort[0], h2peigvec, \
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
                                 self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
