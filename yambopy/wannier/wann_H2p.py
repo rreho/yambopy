@@ -462,52 +462,6 @@ class H2P():
 
             print(f'\n Diagonalization of H2P in {t1-t0:.3f} s')
     
-
-
-    def solve_large_block_diagonal(self):
-        """
-        Constructs a large sparse block-diagonal matrix from H2P and solves for its eigenvalues/eigenvectors.
-        """
-        import scipy.sparse as sp
-        import scipy.sparse.linalg as spla
-        from scipy.sparse import block_diag
-        
-        nq = self.nq_double  # Number of q-points
-        dimbse = self.dimbse  # Number of transitions per q-point
-        h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
-        h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
- 
-
-        # Step 1: Construct the sparse block-diagonal matrix
-        H2P_blocks = [self.H2P[iq] for iq in range(nq)]  # Extract all H2P[iq] blocks
-        # H2P_sparse = block_diag(H2P_blocks, format='csr')  # Construct block-diagonal sparse matrix
-
-        # print(f"Constructed large sparse H2P matrix with shape: {H2P_sparse.shape}")
-
-        # Step 2: Vectorized eigenvalue decomposition of block-diagonal matrix
-        H2P_dense_blocks = np.stack(H2P_blocks, axis=0)  # Ensure correct 3D shape
-
-        h2peigv_list, h2peigvec_list = zip(*(np.linalg.eigh(H) for H in H2P_blocks))
-        h2peigv = np.vstack(h2peigv_list)  # Stack eigenvalues into (nq, dimbse)
-        h2peigvec = np.block([[vec] for vec in h2peigvec_list])
-        # Step 3: Convert eigenvectors into a large sparse matrix
-        # h2peigv = block_diag(h2peigv, format='csc')  # Sparse block diagonal storage
-        # h2peigvec = block_diag(h2peigvec, format='csc')  # Sparse block diagonal storage
-        # h2peigv = h2peigv.reshape(self.nq_double,self.dimbse)
-        # h2peigvec = h2peigvec.reshape(self.nq_double,self.dimbse, self.dimbse)
-        print("Eigenvalues and eigenvectors computed successfully.")
-
-        for t in range(self.dimbse):
-            ik, iv, ic = self.BSE_table[t]
-            h2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = h2peigvec[:,t, :]
-            h2peigv_vck[self.bse_nv-self.nv+iv, ic-self.nv, ik] = h2peigv[:, t]
-
-        self.h2peigv = h2peigv
-        self.h2peigv_vck = h2peigv_vck
-        self.h2peigvec = h2peigvec
-        self.h2peigvec_vck = h2peigvec_vck
-
-
     def _getKd(self,ik,iv,ic,ikp,ivp,icp):
         if (self.ktype =='IP'):
             K_direct = 0.0
@@ -586,6 +540,7 @@ class H2P():
 
             K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
             K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+            self.dotc = dotc
 
 
             return K_direct, K_Ex
@@ -758,13 +713,14 @@ class H2P():
             # compute eps and pl
             #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
             #pl = eps
+            vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3
             for ies, es in enumerate(w):
                 for t in range(0,self.dimbse):
                     ik = self.BSE_table_sort[0][t][0]
                     iv = self.BSE_table_sort[0][t][1]
                     ic = self.BSE_table_sort[0][t][2]
-                    eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol*bohr2ang**3*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(np.real(h2peigv[t]-es))/(np.abs(es-h2peigv[t])**2+eta**2) \
-                        + 1j*8*np.pi/(self.electronsdb.lat_vol*bohr2ang**3*self.nk)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)                     
+                    eps[ies,:,:] += 8*np.pi/(vbz)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(np.real(h2peigv[t]-es))/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        + 1j*8*np.pi/(vbz)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)                     
                     #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                     #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)            
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
@@ -776,6 +732,8 @@ class H2P():
             self.F_kcv = F_kcv
             # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
             self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
+            vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 * (36/7)**2
+
             # compute eps and pl
             #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
             #pl = eps
@@ -789,7 +747,7 @@ class H2P():
             #         #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
             #         #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             ediff = h2peigv[:, np.newaxis]-w[np.newaxis, :]
-            piVk = 8*np.pi/(self.electronsdb.lat_vol*bohr2ang**3*self.nk)
+            piVk = 8*np.pi/(vbz)
             eps = piVk * np.einsum('txy,tw->wxy',self.F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
             eps += 1j*piVk * np.einsum('txy,tw->wxy',self.F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')

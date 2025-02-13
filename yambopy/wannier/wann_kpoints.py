@@ -66,6 +66,47 @@ class KPointGenerator():
         return folded_k_points, G_vectors
 
 
+
+    def fold_into_ibz_Gs_2(self, k_points, bz_range=(-0.5, 0.5), reciprocal_vectors=None):
+        """
+        Fold k-points into the first Brillouin Zone (BZ) within (-0.5, 0.5] and determine the reciprocal lattice vectors G.
+
+        Parameters:
+        - k_points: Array of k-points in k-space (shape: (..., 3)).
+        - bz_range: Tuple indicating the range of the BZ, default is (-0.5, 0.5] for each direction.
+        - reciprocal_vectors: A list or matrix of reciprocal lattice vectors defining the BZ.
+
+        Returns:
+        - folded_k_points: The folded k-points within the BZ (shape: same as k_points).
+        - G_vectors: The reciprocal lattice vectors that fold the k-points into the BZ (shape: same as k_points).
+        """
+        k_points = np.array(k_points)  # Ensure input is an array
+
+        # Determine the G-vector multipliers for folding
+        G_multiplier = np.floor((k_points - bz_range[0]) / (bz_range[1] - bz_range[0]))
+
+        # Calculate the G_vectors
+        if reciprocal_vectors is not None:
+            reciprocal_vectors = np.array(reciprocal_vectors)  # Ensure reciprocal_vectors is an array
+            G_vectors = np.tensordot(G_multiplier, reciprocal_vectors, axes=([1], [0]))
+        else:
+            # Assume a cubic lattice with unit cell length of 1
+            G_vectors = G_multiplier * (bz_range[1] - bz_range[0])
+
+        # Fold the k-points into the BZ
+        folded_k_points = k_points - G_vectors
+
+        # Map -0.5 to +0.5 while keeping +0.5 unchanged
+        mask_lower_bound = np.isclose(folded_k_points, bz_range[0], atol=1e-10)
+        folded_k_points[mask_lower_bound] = bz_range[1]  # Map -0.5 → +0.5
+        G_vectors[mask_lower_bound] -= (bz_range[1] - bz_range[0])  # Adjust G vectors accordingly
+
+        # Negate G_vectors for consistency
+        G_vectors = -G_vectors
+
+        return folded_k_points, G_vectors
+
+
     def find_closest_kpoint(self, points):
 
         # Convert points to a numpy array
@@ -110,7 +151,7 @@ class KPointGenerator():
         # Applying the modulo operation to shift points within the range [-0.5, 0.5]
         folded_points = np.mod(points + 0.5, 1.0) - 0.5
         # Correcting points where original points were exactly 0.5 to remain 0.5
-        folded_points[(points == 0.5)] = 0.5
+        folded_points[np.isclose(folded_points, -0.5, atol=1e-10)] = 0.5
         return folded_points
     
     def get_plaquette(self, nx, ny, nz, dir = 2):
