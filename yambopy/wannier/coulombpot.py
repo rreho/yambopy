@@ -24,8 +24,8 @@ class CoulombPotentials:
         self.lattice = lattice
         self.rlat = lattice.lat*bohr2ang
         self.tolr = tolr
-        self.dir_vol = lattice.lat_vol*bohr2ang**3  #working in angstrom
-        self.rec_vol = lattice.rlat_vol*2*np.pi*ang2bohr # reciprocal lattice volume in Bohr
+        self.dir_vol = lattice.lat_vol*bohr2ang**3 #working in angstrom
+        self.rec_vol = lattice.rlat_vol*2*np.pi*ang2bohr# reciprocal lattice volume in Bohr
         self.ediel = ediel # ediel(1) Top substrate, ediel(2) \eps_d, ediel(3) Bot substrate     
         self.lc = lc # in angstrom
         self.w = w
