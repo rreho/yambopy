@@ -4,6 +4,8 @@ from yambopy.wannier.wann_utils import *
 from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
+from yambopy.dbs.electronsdb import *
+from yambopy.dbs.latticedb import *
 from yambopy.wannier.wann_io import AMN
 from scipy.linalg.lapack import zheev
 from time import time
