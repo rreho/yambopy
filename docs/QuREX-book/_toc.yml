@@ -1,5 +1,5 @@
 format: jb-book
-root: intro  # The landing page (intro.md)
+root: content/intro  # The landing page (intro.md)
 options:
   numbered: true  # Enable numbering globally
 
