@@ -15,6 +15,7 @@ parts:
         - file: content/theory/wannier_exciton
         - file: content/theory/wannier_chern
         - file: content/theory/wannier_basis
+        - file: content/theory/plane_wave_expansion.md
 - caption: Software
   numbered: false
   chapters:
