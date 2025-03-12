@@ -120,7 +120,7 @@ All the default input flags parsed to ``yambo``
 
 #### *_BSE/BSK_*
 - BSEmod:  [BSE] resonant/retarded/coupling
-- Lkind:   [BSE,X] bar(default)/fullBSE
+- Lkind:   [BSE,X] bar(default)/fullBSE  # Use for gamma  Lkind = full and for other q-points Lkindbar
 - BSEBands: [BSK] Bands range
 - BSENGBlk: [BSK] Screened interaction block size [if -1 uses all the G-vectors of W(q,G,Gp)]
 - BSENGexx: [BSK] Exchange components
