@@ -11,6 +11,7 @@ H_{n m}(k) u_m^n(k)=E_n(k) u_n(k)
 $$(eq:secular-eqHTB)
 
 Coulomb interaction in real-space
+
 $$
 V(\mathbf{r})=\frac{e^2}{\epsilon|\mathbf{r}|}
 $$
@@ -110,12 +111,14 @@ print("Coulomb potential in Tight-Binding basis:\n", np.round(V_TB, 3))
 # Small implementation example
 1. Use G-vectors
 In a periodic system, the Coulomb potential in reciprocal space $V(q)$ must be expanded using reciprocal lattice vectors G:
+
 $$
 V\left(k, k^{\prime}\right)=\sum_G V(G) \delta_{k^{\prime}, k+G}
 $$
 
 Instead of defining $V(q)$ only at discrete k-points, we must expand it over G-vectors to ensure periodicity.
 This ensures that $V(q)$ is defined within the first Brillouin zone (BZ) while still incorporating contributions from higher reciprocal lattice vectors G.
+
 2. Coulomb Potential in Reciprocal Space with G-Vectors
 The screened Coulomb potential in periodic 2D or 3D systems is typically written as:
 
@@ -130,7 +133,7 @@ We now incorporate the G-vector expansion into the BSE Coulomb potential.
 
 ## Step 1: Define the Reciprocal Lattice and G-Vectors
 
-```{python}
+```python
 import numpy as np
 import scipy.linalg as la
 
@@ -147,7 +150,8 @@ k_vals = np.linspace(-np.pi/a, np.pi/a, N, endpoint=False)
 ```
 
 ## Step 2: Define the Coulomb Interaction Using G-Vectors
-```{python}
+
+```python
 # Define screened Coulomb potential in reciprocal space with G-expansion
 def coulomb_potential_G(G, epsilon=2.5, q_TF=0.1):
     return np.where(np.abs(G) > 1e-6, 4 * np.pi * 1.44 / (epsilon * (G**2 + q_TF**2)), 0)
@@ -168,7 +172,7 @@ for i, k in enumerate(k_vals):
 ## Step 3: Transform Coulomb Potential to Bloch Basis
 Now, we project this onto the tight-binding Bloch states.
 
-```{python}
+```python
 # Construct TB Hamiltonian in k-space
 t = 1.0  # Hopping parameter
 H_k = -2 * t * np.cos(k_vals * a)  # Dispersion for 1D tight-binding model
@@ -182,7 +186,8 @@ V_Bloch = U_tb.T @ V_k_kprime @ U_tb
 ```
 
 ## Step 4: Construct and Solve the BSE Hamiltonian
-```{python}
+
+```python
 # Select conduction and valence bands
 v_idx, c_idx = 0, -1  # First valence, last conduction band
 E_v, E_c = E_tb[v_idx], E_tb[c_idx]
