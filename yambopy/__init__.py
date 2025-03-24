@@ -140,4 +140,4 @@ from yambopy.gkkp.refine_gkkp import *
 from yambopy.data import *
 
 #wannier files
-from .wannier import *
+from yambopy.wannier import *

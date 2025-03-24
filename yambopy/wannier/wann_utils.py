@@ -1,4 +1,3 @@
-
 import numpy as np
 
 HA2EV  = 27.211396132
@@ -7,7 +6,7 @@ BOHR2M = 5.29177210903e-11  # Bohr radius in meters
 ANG2BOHR = 1./BOHR2ANG
 HBAR = 1.054571817e-34# J*s => w = E/hbar
 EVTOJ = 1.60218e-19  # Conversion factor from eV to J
-C = 1/137.035999084  # Speed of light
+C = 1./137.035999084  # Speed of light
 HA2J = 4.3597482e-18 # Hartree to Joule
 AU2FS =  0.02418884254 # atomic unit of time
 
@@ -15,7 +14,7 @@ AU2FS =  0.02418884254 # atomic unit of time
 
 def fermi_dirac_T(e, T, fermie):
     # atomic units
-    kb = 3.1671e-06
+    kb = 3.1669147805081354e-06
     fermi = 1.0/(np.exp(e-fermie)/(kb*T))
     return fermi
 
@@ -36,9 +35,9 @@ def fermi_dirac(e, fermie):
 def sort_eig(eigv,eigvec=None):
     "Sort eigenvaules and eigenvectors, if given, and convert to real numbers"
     # first take only real parts of the eigenvalues
-    eigv=np.array(eigv.real,dtype=float)
+    tmpeigv=np.array(eigv.real,dtype=np.float64)
     # sort energies
-    args=eigv.argsort()
+    args=tmpeigv.argsort()
     eigv=eigv[args]
     if not (eigvec is None):
         eigvec=eigvec[args]
@@ -70,6 +69,12 @@ def find_kpoint_index(klist, kpoint):
         print('k-point not found')
         return None
 
+def ensure_shape(array, shape, dtype=None):
+    if array.shape != shape:
+        raise ValueError(f"Expected shape {shape}, but got {array.shape}")
+    if dtype is not None and array.dtype != dtype:
+        raise TypeError(f"Expected dtype {dtype}, but got {array.dtype}")
+    return array
 class ElectricField():
     '''
         Creates a time dependent electric-field

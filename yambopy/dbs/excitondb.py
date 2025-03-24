@@ -67,8 +67,8 @@ class YamboExcitonDB(object):
         Transitions are unpacked in table[ i_k, i_v, i_c, i_s_c, i_s_v ] (last two are spin indices)
     """
     def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None,q_cutoff=None,table=None,eigenvectors=None):
-        # if not isinstance(lattice,YamboLatticeDB):
-            # raise ValueError('Invalid type for lattice argument. It must be YamboLatticeDB')
+        if not isinstance(lattice,YamboLatticeDB):
+            raise ValueError('Invalid type for lattice argument. It must be YamboLatticeDB')
 
         self.Qpt = Qpt
         self.lattice = lattice
@@ -1262,7 +1262,7 @@ class YamboExcitonDB(object):
         if nexcitons == 'all': nexcitons = self.nexcitons
 
         #energy range
-        w = np.arange(emin,emax,estep,dtype=np.float32)
+        w = np.arange(emin,emax,estep,dtype=np.float64)
         nenergies = len(w)
         
         if verbose:
@@ -1346,7 +1346,7 @@ class YamboExcitonDB(object):
         if nexcitons == 'all': nexcitons = self.nexcitons
 
         #energy range
-        w = np.arange(emin,emax,estep,dtype=np.float32)
+        w = np.arange(emin,emax,estep,dtype=np.float64)
         nenergies = len(w)
         
         if verbose:

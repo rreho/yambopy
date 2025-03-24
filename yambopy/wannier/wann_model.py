@@ -10,11 +10,12 @@ import multiprocessing
 import tbmodels
 from time import time
 import typing as ty
-from yambopy.wannier.wann_tb_mp import tb_Monkhorst_Pack
+from yambopy.wannier.wann_asegrid import ase_Monkhorst_Pack
 from yambopy.wannier.wann_Gfuncs import GreensFunctions
 from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T, sort_eig
 from yambopy.wannier.wann_dipoles import TB_dipoles
 import matplotlib.pyplot as plt
+import scipy
 class TBMODEL(tbmodels.Model):
     """
     Class that inherits from tbmodels.Model for TB-model Hamiltonians.
@@ -57,8 +58,8 @@ class TBMODEL(tbmodels.Model):
         self.eigv= np.zeros((self.nk,self.nb),dtype=np.complex128)
         self.eigvec = np.zeros((self.nk,self.nb,self.nb),dtype=np.complex128)
         for ik in range(self.nk):
-            (self.eigv[ik], self.eigvec[ik]) = np.linalg.eigh(self.H_k[ik])
-            (self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
+            (self.eigv[ik], self.eigvec[ik]) = scipy.linalg.eigh(self.H_k[ik])
+            #(self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
         # transpose to have eigvec[:,i] associated with eval[i]
         # one could transpose it to have the opposite, for now commented out bcs I don't like it
         #self.eig = self.eig.T
@@ -91,7 +92,7 @@ class TBMODEL(tbmodels.Model):
         self.eigv= np.zeros((self.nk,self.nb),dtype=np.complex128)
         self.eigvec = np.zeros((self.nk,self.nb,self.nb),dtype=np.complex128)
         for ik in range(self.nk):
-            (self.eigv[ik], self.eigvec[ik]) = np.linalg.eigh(self.H_k[ik])
+            (self.eigv[ik], self.eigvec[ik]) = scipy.linalg.eigh(self.H_k[ik])
             #(self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
         
         self._get_occupations(self.nk, self.nb, self.eigv, fermie)
@@ -174,15 +175,15 @@ class TBMODEL(tbmodels.Model):
         for i in range(0,self.nrpos):
             if (np.array_equal(irpos[i],[0.0,0.0,0.0])):
                 hr_mn_p = np.copy(hr.HR_mn[i,:,:])
-                np.fill_diagonal(hr_mn_p,complex(0.0))
-                hlm_k[:,:,0] = kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] = kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] = kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                np.fill_diagonal(hr_mn_p,np.complex128(0.0))
+                hlm_k[:,:,0] += kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] += kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] += kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
             else:
                 hr_mn_p = hr.HR_mn[i,:,:]
-                hlm_k[:,:,0] = kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,1] = kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
-                hlm_k[:,:,2] = kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,0] += kvecsx[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,1] += kvecsy[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
+                hlm_k[:,:,2] += kvecsz[i]*np.exp(2*np.pi*kvecs[i])*(hr_mn_p)*(1.0/hr.ws_deg[i])
         
         return hlm_k
 
@@ -234,8 +235,8 @@ class TBMODEL(tbmodels.Model):
     def decay_R(self, lat, hr ,fermie, from_hr = True):
         hr_mn_p = self._get_h_R(lat, hr, fermie, from_hr)
         #calculate distances
-        max_hr_p = np.zeros(hr.nrpts, dtype= float)
-        R_dist = np.zeros(hr.nrpts, dtype= float)
+        max_hr_p = np.zeros(hr.nrpts, dtype= np.float64)
+        R_dist = np.zeros(hr.nrpts, dtype= np.float64)
         for i in range(self.nrpos):
             R_dist[i] = np.linalg.norm(self.pos[i])
             max_hr_p[i] = np.max(np.abs(hr_mn_p[i]))
@@ -265,7 +266,52 @@ class TBMODEL(tbmodels.Model):
         H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
         for i in range(0, k.shape[0]):
             H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
-        return [np.linalg.eigvalsh(ham) for ham in H_k]
+        return np.array([scipy.linalg.eigvalsh(ham) for ham in H_k])
+
+    def get_eigenval_and_vec(self, k, from_hr=True):
+        """
+        Returns the eigenvalues at a given k point, or list of k-points.
+
+        Parameters
+        ----------
+        k : ndarray
+            The k-point(s) at which the Hamiltonian is evaluated. If a list
+            of k-points is given, a corresponding list of eigenvalue and 
+            eigenvector arrays is returned.
+
+        from_hr : bool, optional
+            Whether to evaluate the Hamiltonian from the `hr` (default: True).
+        Returns
+        -------
+        list of tuples
+            A list where each element is a tuple of (eigenvalues, eigenvectors)
+            for the corresponding k-point. The eigenvalues are sorted in ascending 
+            order, and the eigenvectors are in column form.
+        """
+        # Initialize the Hamiltonian for all k-points
+    # Ensure input is a NumPy array
+        if not isinstance(k, np.ndarray):
+            raise TypeError("Input `k` must be a NumPy array.")
+
+        # Check dimensionality of `k`
+        if k.ndim != 2 or k.shape[1] != 3:
+            raise ValueError("Input `k` must have shape (n_kpoints, 3).")
+
+        # Initialize the Hamiltonian for all k-points
+        H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
+        for i in range(k.shape[0]):
+            H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
+
+        # Compute eigenvalues and eigenvectors for each k-point
+        eigenvalues = np.zeros((k.shape[0], self.nb), dtype=np.float64)
+        eigenvectors = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
+
+        for i, ham in enumerate(H_k):
+            eigvals, eigvecs = scipy.linalg.eigh(ham)
+            eigenvalues[i] = eigvals
+            eigenvectors[i] = eigvecs
+
+        return eigenvalues, eigenvectors
         
     def pos_operator_matrix(self, eigvec, cartesian = True):
         ''' Computes the position operator along a direction dir at a k-point
@@ -334,7 +380,7 @@ class TBMODEL(tbmodels.Model):
         self.Uknm = Uknm
 
     def _get_overlap(self):
-        Mmn = np.zeros((self.nb, self.nb,self.nk, self.nk), dtype=complex)
+        Mmn = np.zeros((self.nb, self.nb,self.nk, self.nk), dtype=np.complex128)
         # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
         for n in range(self.nb):
             for m in range(self.nb):   
@@ -358,7 +404,7 @@ class TBMODEL(tbmodels.Model):
         for ik in range(self.nk):
             for ikp in range(self.nk):
                 # +1 is for Fortran counting, assume all Gs are 0 for WanTIBEXOS (to be discussed)
-                f_out.write(f'\t{self.kplusq_table[ik,ikp]+1}\t{self.kplusq_table[ik,ikp]+1}\t{0}\t{0}\t{0}\n')
+                f_out.write(f'\t{self.kplusq_table[ik,ikp,1]+1}\t{self.kplusq_table[ik,ikp,1]+1}\t{0}\t{0}\t{0}\n')
                 for n in range(self.nb):
                     for m in range(self.nb):
                         f_out.write(f'\t{np.real(self.Mmn[m,n,ik,ikp]):.14f}\t{np.imag(self.Mmn[m,n,ik,ikp]):.14f}\n')

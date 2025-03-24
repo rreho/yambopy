@@ -7,7 +7,9 @@ from yambopy.wannier.wann_utils import *
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self , nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, BSE_table, h2peigvec_vck = None, method = 'real', rmn = None):
+                 eta, hlm, T_table, BSE_table, h2peigvec,eigv_diff_ttp, eigvecc_t,eigvecv_t,\
+                 h2peigv_vck = None, h2peigvec_vck = None, method = 'real',\
+                 rmn = None,ktype='IP'):
         # hk, hlm are TBMODEL hamiltonians
         self.ntransitions = nc*nv*nkpoints
         self.nbsetransitions = bse_nc*bse_nv*nkpoints
@@ -20,12 +22,17 @@ class TB_dipoles():
         self.bse_nv = bse_nv
         self.bse_nc = bse_nc
         self.bse_nb = bse_nv + bse_nc
+        self.offset_nv = nv-bse_nv
         # self.eigvv = eigvv
         # self.eigvc = eigvc
         # self.eigvecv = eigvecv
         # self.eigvecc = eigvecc
         self.eta = eta
         self.hlm = hlm
+        self.ktype=ktype
+        self.eigv_diff_ttp = eigv_diff_ttp
+        self.eigvecc_t = eigvecc_t
+        self.eigvecv_t = eigvecv_t
         if self.hlm[0][0][0][0] ==0:
             raise ValueError
         else:
@@ -41,12 +48,25 @@ class TB_dipoles():
         # self.d_knm = self._get_dipoles_nm(method)
         if (h2peigvec_vck is not None):
             self.h2peigvec_vck = h2peigvec_vck
+            self.h2peigv_vck = h2peigv_vck
+            self.h2peigvec = h2peigvec
             # self.dipoles_bse = self._get_dipoles_bse(method)
             self.BSE_table = BSE_table
-            self._get_dipoles_bse(method=method)
+            if(self.ktype=='IP'):
+                print('Running IP dipoles')
+                #self._get_dipoles_IP(method=method)
+            else:
+                print('Running BSE dipoles')
+                self._get_dipoles_bse(method=method)
         else:
-            self._get_dipoles(method=method)
-        self._get_osc_strength(method)
+            print('here')
+            #self._get_dipoles(method=method)
+        if(self.ktype=='IP'):
+            print('Running IP oscillator strength')
+            #self._get_osc_strength_IP(method)
+        else:
+            #self._get_osc_strength_IP(method)
+            self._get_osc_strength(method)
 
     # full dipoles matrix, not only cv, needs adaptation
     def _get_dipoles_nm(self, method):
@@ -144,25 +164,51 @@ class TB_dipoles():
     def _get_dipoles_bse(self, method):
         if method == 'real':
             import time
-            print("Starting BSE dipole matrix formation.\n")
+            print("Starting BSE dipole matrix formation\n")
             t0 = time.time()
-            dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
-            for t in range(0,self.nbsetransitions):
-                for tp in range(0,self.nbsetransitions): 
-                    ik = self.BSE_table[tp][0]
-                    iv = self.BSE_table[tp][1]
-                    ic = self.BSE_table[tp][2]
-                    w = self.eigv[ik,ic]
-                    E = self.eigv[ik,ic]
-                    GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
-                    GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
-                    #dipoles_bse_kck lives in the BSE kernel subset that's why we use the indices ic-self.nv and self.bse_nv-self.nv+iv
-                    dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.nv,0] = GR*self.h2peigvec_vck[t,iv-self.nv,ic-self.nv,ik]* \
-                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                    dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.nv,1] = GR*self.h2peigvec_vck[t,iv-self.nv,ic-self.nv,ik]* \
-                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                    dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.nv,2] = GR*self.h2peigvec_vck[t,iv-self.nv,ic-self.nv,ik]* \
-                        np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))            
+            # dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
+            # dipoles_bse_kcv_conj = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)            
+            # for t in range(0,self.nbsetransitions):
+            #     for tp in range(0,self.nbsetransitions):
+            #         ik = self.BSE_table[tp][0]
+            #         iv = self.BSE_table[tp][1]
+            #         ic = self.BSE_table[tp][2]
+            #         w = self.eigv[ik,ic]
+            #         E = self.eigv[ik,iv]
+            #         GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
+            #         GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
+            #         #dipoles_bse_kck lives in the BSE kernel subset that's why we use the indices ic-self.nv and self.bse_nv-self.nv+iv
+            #         dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv,0] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
+            #             np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+            #         dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.offset_nv,1] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
+            #             np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+            #         dipoles_bse_kcv[t,ik, ic-self.nv, iv-self.offset_nv,2] = GR*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik]* \
+            #             np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))       
+            #         dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv,0] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
+            #             np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,ic]))
+            #         dipoles_bse_kcv_conj[t,ik, ic-self.nv, iv-self.offset_nv,1] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
+            #             np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,ic]))
+            #         dipoles_bse_kcv_conj[t,ik, ic-self.nv, iv-self.offset_nv,2] = GA*self.h2peigvec_vck[t,iv-self.offset_nv,ic-self.nv,ik].conj()* \
+            #             np.vdot(self.eigvec[ik,:,iv],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,ic]))                                
+            wc1 =self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]]
+            wv1 = self.eigv[self.BSE_table[:,0],self.BSE_table[:,1]]
+
+            gr = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GR
+            ga = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GA 
+            BSE_TABLE = self.BSE_table.copy() - np.array([0, self.offset_nv, self.nv])  # move to the BSE kernel subset
+            
+            dip1 = self.h2peigvec_vck[:,BSE_TABLE[:,1], BSE_TABLE[:,2], BSE_TABLE[:,0]]
+            dothlm = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:] ,self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,1]])  # Take the eigvec_v of the transition
+            dothlm_conj = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:] ,self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,2]]) # Take the eigvec_c of the transition
+
+            vdot = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,2]]), dothlm) # do a vdot with the einsum eigvec_c and dothlm
+            vdot_conj = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,1]]), dothlm_conj) # do a vdot with the einsum eigvec_v and dothlm_conj
+            
+            dip = gr[:,np.newaxis] * np.einsum('tp,pa->tpa', dip1, vdot)  # take the transpose of dip1 as it is order due to h2peigvec_vck being in the wrong order
+            dipoles_bse_kcv = dip.reshape(self.nbsetransitions,self.nkpoints,self.bse_nc,self.bse_nv, 3)
+            
+            dip_conj = ga[:,np.newaxis]* np.einsum('tp,pa->tpa', np.conjugate(dip1), vdot_conj) # complex conjugate
+            dipoles_bse_kcv_conj = dip_conj.reshape(self.nbsetransitions,self.nkpoints,self.bse_nc,self.bse_nv, 3)
             # Determine the dimension of hlm
             #dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
 
@@ -199,6 +245,7 @@ class TB_dipoles():
             # final_dipoles[np.arange(self.nbsetransitions), c_indices-self.nv, self.bse_nv-self.nv+v_indices, self.nkpoints,:dim_hlm] = dipoles_cvk
 
             self.dipoles_bse_kcv = dipoles_bse_kcv
+            self.dipoles_bse_kcv_conj = dipoles_bse_kcv_conj
 
         print("BSE Dipoles matrix computed successfully.")
         print(f"Time for BSE Dipoles matrix formation: {time.time() - t0:.2f}")
@@ -223,7 +270,33 @@ class TB_dipoles():
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
             #self.dipoles = dipoles Perhaps if method is yambo we want to store dipoles differently                       
-    
+
+    def _get_dipoles_IP(self, method):
+        if method == 'real':
+            import time
+            print("Starting BSE dipole matrix formation.\n")
+            t0 = time.time()
+            dipoles_bse_kcv = np.zeros((self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
+            for tp in range(0,self.nbsetransitions): 
+                ik = self.BSE_table[tp][0]
+                iv = self.BSE_table[tp][1]
+                ic = self.BSE_table[tp][2]
+                w = self.eigv[ik,ic]
+                E = self.eigv[ik,iv]
+                GR = GreensFunctions(w=w, E=E, eta=self.eta).GR           
+                GA = GreensFunctions(w=w, E=E, eta=self.eta).GA 
+                #dipoles_bse_kck lives in the BSE kernel subset that's why we use the indices ic-self.nv and self.bse_nv-self.nv+iv
+                dipoles_bse_kcv[ik, ic-self.nv, iv-self.offset_nv,0] = GR * \
+                    np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                dipoles_bse_kcv[ik, ic-self.nv, iv-self.offset_nv,1] = GR * \
+                    np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                dipoles_bse_kcv[ik, ic-self.nv, iv-self.offset_nv,2] = GR * \
+                    np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))            
+        self.dipoles_bse_kcv = dipoles_bse_kcv
+
+        print("BSE Dipoles matrix computed successfully.")
+        print(f"Time for BSE Dipoles matrix formation: {time.time() - t0:.2f}")
+                
     def _get_osc_strength(self,method):
         '''computes osc strength from dipoles
         F_{\alpha, \beta}^{n, BSE} = ( \Sum_c,v,k = \dfrac{A^n_{c,v,k,0} < c,k | P_{\alpha} |v,k >}{E_{c,k} - E{v,k} + i \eta_1} ) * c.c
@@ -232,6 +305,7 @@ class TB_dipoles():
         import time
         t0 = time.time()
         dipoles_bse_kcv = self.dipoles_bse_kcv
+        dipoles_bse_kcv_conj = self.dipoles_bse_kcv_conj
         F_kcv = np.zeros((self.nbsetransitions, 3, 3), dtype=np.complex128)   
 
 
@@ -240,16 +314,16 @@ class TB_dipoles():
             for t in range(0,self.nbsetransitions):
                 tmp_F_left = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
                 tmp_F_right = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
-                for idip, _ in enumerate(dipoles_bse_kcv):
+                for idip in range(0,self.nbsetransitions):
                     ik = self.BSE_table[idip][0]
                     iv = self.BSE_table[idip][1]
                     ic = self.BSE_table[idip][2]
-                    factorLx = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.nv, 0]
-                    factorRx = factorLx.conj() 
-                    factorLy = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.nv, 1]
-                    factorRy = factorLy.conj() 
-                    factorLz = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.nv, 2]
-                    factorRz = factorLz.conj() 
+                    factorLx = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 0]
+                    factorRx = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 0] 
+                    factorLy = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 1]
+                    factorRy = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 1]
+                    factorLz = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 2]
+                    factorRz = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 2]
                     tmp_F_left[t,0] += factorLx
                     tmp_F_left[t,1] += factorLy
                     tmp_F_left[t,2] += factorLz
@@ -265,9 +339,59 @@ class TB_dipoles():
                 F_kcv[t,1,2] = tmp_F_left[t,1]*tmp_F_right[t,2]
                 F_kcv[t,2,0] = tmp_F_left[t,2]*tmp_F_right[t,0]
                 F_kcv[t,2,1] = tmp_F_left[t,2]*tmp_F_right[t,1]    
-                F_kcv[t,2,2] = tmp_F_left[t,2]*tmp_F_right[t,2]                                        
+                F_kcv[t,2,2] = tmp_F_left[t,2]*tmp_F_right[t,2]                                       
 
                 
+
+        if (method== 'v-gauge'):
+            print('Warning! velocity gauge not implemented yet')
+        if (method== 'r-gauge'):
+            print('Warning! position gauge not implemented yet')
+        if (method== 'covariant'):
+            print('Warning! covariant approach not implemented yet')
+        self.F_kcv = F_kcv        
+        print(f"Oscillation strenght computed succesfully in {time.time()-t0:.2f}s")
+
+    def _get_osc_strength_IP(self,method):
+        '''computes osc strength from dipoles
+        '''
+        print('Computing oscillator strenght')
+        import time
+        t0 = time.time()
+        dipoles_bse_kcv = self.dipoles_bse_kcv
+        F_kcv = np.zeros((self.nkpoints,self.bse_nc,self.bse_nv,3, 3), dtype=np.complex128)   
+
+
+
+        if (method == 'real'):
+                tmp_F_left = np.zeros((self.nkpoints,self.bse_nc,self.bse_nv,3), dtype=np.complex128)
+                tmp_F_right = np.zeros((self.nkpoints,self.bse_nc,self.bse_nv,3), dtype=np.complex128)
+                for idip in range(0,self.nbsetransitions):
+                    ik = self.BSE_table[idip][0]
+                    iv = self.BSE_table[idip][1]
+                    ic = self.BSE_table[idip][2]
+                    factorLx = dipoles_bse_kcv[ik, ic-self.nv, iv-self.offset_nv, 0]
+                    factorRx = factorLx.conj() 
+                    factorLy = dipoles_bse_kcv[ik, ic-self.nv, iv-self.offset_nv, 1]
+                    factorRy = factorLy.conj() 
+                    factorLz = dipoles_bse_kcv[ik, ic-self.nv, iv-self.offset_nv, 2]
+                    factorRz = factorLz.conj() 
+                    tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,0] = factorLx
+                    tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,1] = factorLy
+                    tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,2] = factorLz
+                    tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,0] = factorRx
+                    tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,1] = factorRy
+                    tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,2] = factorRz
+
+                    F_kcv[ik,ic-self.nv,iv-self.offset_nv,0,0] = tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,0]*tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,0]
+                    F_kcv[ik,ic-self.nv,iv-self.offset_nv,0,1] = tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,0]*tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,1]    
+                    F_kcv[ik,ic-self.nv,iv-self.offset_nv,0,2] = tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,0]*tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,2]    
+                    F_kcv[ik,ic-self.nv,iv-self.offset_nv,1,0] = tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,1]*tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,0]
+                    F_kcv[ik,ic-self.nv,iv-self.offset_nv,1,1] = tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,1]*tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,1]    
+                    F_kcv[ik,ic-self.nv,iv-self.offset_nv,1,2] = tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,1]*tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,2]
+                    F_kcv[ik,ic-self.nv,iv-self.offset_nv,2,0] = tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,2]*tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,0]
+                    F_kcv[ik,ic-self.nv,iv-self.offset_nv,2,1] = tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,2]*tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,1]    
+                    F_kcv[ik,ic-self.nv,iv-self.offset_nv,2,2] = tmp_F_left[ik,ic-self.nv,iv-self.offset_nv,2]*tmp_F_right[ik,ic-self.nv,iv-self.offset_nv,2]                                             
 
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')

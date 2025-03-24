@@ -1,21 +1,24 @@
 import numpy as np
-from yambopy.wannier.wann_tb_mp import tb_Monkhorst_Pack
+from yambopy.wannier.wann_asegrid import ase_Monkhorst_Pack
 from yambopy.wannier.wann_utils import *
 from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
+from yambopy.dbs.electronsdb import *
+from yambopy.dbs.latticedb import *
 from yambopy.wannier.wann_io import AMN
+from scipy.linalg.lapack import zheev
 from time import time
+import scipy
 import gc
-
 
 def process_file(args):
     idx, exc_db_file, data_dict = args
     # Unpacking data necessary for processing
-    electronsdb, kernel_path, kpoints_indexes, HA2EV, BSE_table, kplusq_table, kminusq_table_yambo, eigv, f_kn = data_dict.values()
+    latdb, kernel_path, kpoints_indexes, HA2EV, BSE_table, kplusq_table, kminusq_table_yambo, eigv, f_kn = data_dict.values()
 
-    yexc_atk = YamboExcitonDB.from_db_file(electronsdb, filename=exc_db_file)
-    kernel_db = YamboBSEKernelDB.from_db_file(electronsdb, folder=f'{kernel_path}', Qpt=kpoints_indexes[idx]+1)
+    yexc_atk = YamboExcitonDB.from_db_file(latdb, filename=exc_db_file)
+    kernel_db = YamboBSEKernelDB.from_db_file(latdb, folder=f'{kernel_path}', Qpt=kpoints_indexes[idx]+1)
     aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
     K_ttp = kernel_db.kernel[aux_t][:,aux_t]  
     H2P_local = np.zeros((len(BSE_table), len(BSE_table)), dtype=np.complex128)
@@ -31,9 +34,9 @@ def process_file(args):
     ivp = BSE_table[:, 1]
     icp = BSE_table[:, 2]
 
-    ikplusq = kplusq_table[ik, kpoints_indexes[idx]]
-    ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx]]
-    ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+    ikplusq = kplusq_table[ik, kpoints_indexes[idx],1]
+    ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx],1]
+    ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
     # Ensure deltaE is diagonal
     deltaE = np.zeros((len(BSE_table), len(BSE_table)),dtype=np.complex128)
@@ -79,8 +82,10 @@ class FakeLatticeObject():
     '''
     def __init__(self, model):
         self.alat = model.uc * 1/0.52917720859      # this results in minor difference, do we really want the values from yambo?
+        self.lat = self.alat
         self.lat_vol = np.prod(np.diag(self.alat))  # difference becomes bigger
-
+        self.rlat = model.reciprocal_lattice
+        self.rlat_vol = np.prod(np.diag(self.rlat))
 
 
 class H2P():
@@ -88,8 +93,8 @@ class H2P():
         Easy to use only requires the model as input. 
     '''
     def __init__(self, model, electronsdb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
-                 ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
-                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8):
+                 ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, f_qn = None,\
+                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, electronsdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -99,6 +104,7 @@ class H2P():
             bsetype = 'resonant' build H2p resonant
             TD is the Tahm-Dancoff which neglects the coupling
         '''
+        self.model = model
         self.nk = model.nk
         self.nb = model.nb
         self.nc = model.nc
@@ -111,22 +117,27 @@ class H2P():
         self.eigvec = model.eigvec
         self.qmpgrid = qmpgrid
         self.gammaonly=gammaonly
+        self.eta = eta
         if(self.gammaonly):
             self.nq_double = 1
         else:
-            self.nq_double = len(self.kmpgrid.k)
+            self.nq_double = len(self.qmpgrid.k)
         self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid)
         try:
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
         except ValueError:
             print('Warning! Q=0 index not found')
         self.dimbse = self.bse_nv*self.bse_nc*self.nk
-        self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
-        # self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
-        self.offset_nv = self.electronsdb.nbandsv-self.nv  
+        if electronsdb_path:
+            self.electronsdb_path = electronsdb_path
+            self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
+            self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
+        else:
+            self.electronsdb = FakeLatticeObject(model)
+            self.latdb = FakeLatticeObject(model)
+        self.offset_nv = self.nv-self.bse_nv
         self.T_table = model.T_table
         self.BSE_table = self._get_BSE_table()
-        self.ctype = ctype
         self.ktype = ktype
         self.TD = TD #Tahm-Dancoff
         self.TBos = TBos
@@ -137,19 +148,27 @@ class H2P():
         self.skip_diago = False
         self.nproc = nproc
         # consider to build occupations here in H2P with different occupation functions
-        if (f_kn == None):
-            self.f_kn = np.zeros((self.nk,self.nb),dtype=np.longdouble)
+        if not hasattr(self,'f_kn'):
+            self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float64)
             self.f_kn[:,:self.nv] = 1.0
         else:
             self.f_kn = f_kn
+        if not hasattr(self,'f_qn'):
+            self.f_qn = np.zeros((self.nq_double,self.nb),dtype = np.float64)
+            self.f_qn[:,:self.nv] = 1.0
+        else:
+            self.f_qn = f_qn
         if(self.method=='model' and cpot is not None):
-            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
-            (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.electronsdb) # used in building BSE
+            self.ctype = ctype
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
+            (self.qplusk_table, self.qminusk_table) = self.qmpgrid.get_kq_tables(self.kmpgrid, sign='-')  # minus sign to have k-q  
+            #(self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.electronsdb) # used in building BSE
             print('\n Building H2P from model Coulomb potentials. Default is v2dt2\n')
             self.cpot = cpot
             self.H2P = self._buildH2P_fromcpot()
         elif(self.method=='kernel' and cpot is None):
-            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.kmpgrid)
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid)
+            (self.qplusk_table, self.qminusk_table) = self.qmpgrid.get_kq_tables(self.kmpgrid, sign='-')  # minus sign to have k-q  
             (self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.electronsdb) # used in building BSE
             print('\n Building H2P from model YamboKernelDB\n')
             #Remember that the BSEtable in Yambopy start counting from 1 and not to 0
@@ -194,7 +213,7 @@ class H2P():
 
             # Prepare data to be passed
             data_dict = {
-                'electronsdb': self.electronsdb,
+                'latdb': self.latdb,
                 'kernel_path': self.kernel_path,
                 'kpoints_indexes': kpoints_indexes,
                 'HA2EV': HA2EV,
@@ -237,10 +256,10 @@ class H2P():
             t0 = time()
 
             for idx, exc_db_file in enumerate(exciton_db_files):
-                yexc_atk = YamboExcitonDB.from_db_file(self.electronsdb, filename=exc_db_file)
+                yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
                 v_band = np.min(yexc_atk.table[:, 1])
                 c_band = np.max(yexc_atk.table[:, 2])
-                kernel_db = YamboBSEKernelDB.from_db_file(self.electronsdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
+                kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
                 aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
                 K_ttp = kernel_db.kernel[aux_t][:,aux_t]
                 # Operations for matrix element calculations
@@ -253,9 +272,9 @@ class H2P():
                 ivp = BSE_table[:, 1]
                 icp = BSE_table[:, 2]
 
-                ikplusq = self.kplusq_table[ik, kpoints_indexes[idx]]
-                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx]]
-                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+                ikplusq = self.kplusq_table[ik, kpoints_indexes[idx],1]
+                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],1]
+                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
                 # Ensure deltaE is diagonal
                 deltaE = np.zeros((self.dimbse, self.dimbse),dtype=np.complex128)
@@ -298,7 +317,7 @@ class H2P():
             t0 = time()
 
             for idx, exc_db_file in enumerate(exciton_db_files):
-                yexc_atk = YamboExcitonDB.from_db_file(self.electronsdb, filename=exc_db_file)
+                yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
                 aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
                 # Create an array to store the inverse mapping
                 inverse_aux_t = np.empty_like(aux_t)
@@ -354,38 +373,41 @@ class H2P():
                     icp = self.BSE_table[tp][2]
                     K_direct = self._getKd(ik,iv,ic,ikp,ivp,icp)
                     if (t == tp ):
-                        H2P[t,tp] = self.eigv[ik,ic]-self.eigv[ik,iv] - (self.f_kn[ik,iv]-self.f_kn[ik,ic])*K_direct # here -1 because (K_ex-K_direct) and K_ex = 0
+                        H2P[t,tp] = self.eigv[ik,ic]-self.eigv[ik,iv] + (self.f_kn[ik,iv]-self.f_kn[ik,ic])*K_direct # here -1 because (K_ex-K_direct) and K_ex = 0
                     else:
-                        H2P[t,tp] = -(self.f_kn[ik,iv]-self.f_kn[ik,ic])*K_direct
+                        H2P[t,tp] = +(self.f_kn[ik,iv]-self.f_kn[ik,ic])*K_direct
                         #if (self.TD==True):
                         #    H2P[t,tp] = 0.0
-                        #else:                                            
+                        #else:         
             return H2P
         else:
-            H2P = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
+            H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
+            print('initialize buildh2p from cpot')
             t0 = time()
-            for iq in range(self.nq_double):
-                for t in range(self.dimbse):
-                    for tp in range(self.dimbse):
-                        ik = self.BSE_table[t][0]
-                        iv = self.BSE_table[t][1]
-                        ic = self.BSE_table[t][2]
-                        ikp = self.BSE_table[tp][0]
-                        ivp = self.BSE_table[tp][1]
-                        icp = self.BSE_table[tp][2]
-                        # True power of Object oriented programming displayed in the next line
-                        ikplusq = self.kplusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]+self.qmpgrid.k[iq]))
-                        ikminusq = self.kminusq_table[ik,iq]#self.kmpgrid.find_closest_kpoint(self.kmpgrid.fold_into_bz(self.kmpgrid.k[ik]-self.qmpgrid.k[iq]))
-                        K_direct = self._getKdq(ik,iv,ic,ikp,ivp,icp,iq) 
-                        K_Ex = self._getKEx(ik,iv,ic,ikp,ivp,icp,iq)
-                        if(t == tp):
-                            H2P[iq,t,tp] = self.eigv[ik,ic]-self.eigv[ikminusq,iv] + (self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_direct - K_Ex)
-                            # if (self.TD==True):
-                            #     H2P[iq,t,tp] = 0.0
-                        else:
-                            H2P[iq,t,tp] =(self.f_kn[ikminusq,iv]-self.f_kn[ik,ic])*(K_direct - K_Ex)
-            return H2P
 
+            # Precompute kplusq and kminusq tables
+            ikpminusq = self.kplusq_table[:, :, 1]
+            ikminusq = self.kminusq_table[:, :, 1]
+            ikminusgamma = self.kminusq_table[:, :, 0]
+            eigc1 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
+            eigc2 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
+            eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands
+            eigv2 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands
+            
+            K_direct, K_Ex = self._getKdq()       #sorry
+
+            K_diff = K_direct - K_Ex[:,np.newaxis,:]
+            f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
+            H2P = f_diff * K_diff
+            result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
+            eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
+            self.eigv_diff_ttp = eigv_diff
+            self.eigvecc_t = eigc1[:,0,:]
+            self.eigvecv_t = eigv1[:,0,0,:]
+            diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff)  # when t ==tp
+            H2P += diag
+            print(f'Completed in {time() - t0} seconds')
+            return H2P
 
     def _buildKernel(self, kernel):
         pass
@@ -401,12 +423,13 @@ class H2P():
             self.h2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
             h2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
             h2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
-            (self.h2peigv, self.h2peigvec) = np.linalg.eigh(self.H2P)
+            deg_h2peigvec = np.array([])
+            (self.h2peigv, self.h2peigvec,_) = zheev(self.H2P)
             self.deg_h2peigvec = self.find_degenerate_eigenvalues(self.h2peigv, self.h2peigvec)
             #(self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec)  # this needs fixing
             for t in range(self.dimbse):
                 ik, iv, ic = self.BSE_table[t]
-                h2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = self.h2peigvec[:,t]   
+                h2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = self.h2peigvec[t,:]   
                 h2peigv_vck[self.bse_nv-self.nv+iv, ic-self.nv, ik] = self.h2peigv[t]
             
             self.h2peigv_vck = h2peigv_vck        
@@ -421,31 +444,21 @@ class H2P():
             h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
             h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
             deg_h2peigvec = np.array([])        
-            for iq in range(0,self.nq_double):
-                print(f'\nDiagonalizing the H2P matrix with dimensions: {self.dimbse} for q-point: {iq}\n')
-                t0 = time()
-                tmph2peigv = np.zeros((self.dimbse), dtype=np.complex128)
-                tmph2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
-                tmph2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
-                tmph2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
-                (tmph2peigv, tmph2peigvec) = np.linalg.eigh(self.H2P[iq])
-                deg_h2peigvec = np.append(deg_h2peigvec, self.find_degenerate_eigenvalues(tmph2peigv, tmph2peigvec))
-                # (self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec) # this needs fixing
-                for t in range(self.dimbse):
-                    ik, iv, ic = self.BSE_table[t]
-                    tmph2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigvec[:, t]   
-                    tmph2peigv_vck[self.bse_nv-self.nv+iv, ic-self.nv, ik] = tmph2peigv[t]
-                
-                h2peigv[iq] = tmph2peigv
-                h2peigv_vck[iq] = tmph2peigv_vck        
-                h2peigvec[iq] = tmph2peigvec
-                h2peigvec_vck[iq] = tmph2peigvec_vck
             
+            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape} \n')
+            t0 = time()
+            for iq in range(0,self.nq_double):
+
+                (h2peigv[iq],h2peigvec[iq]) = scipy.linalg.eigh(self.H2P[iq])
+
+                h2peigvec_vck[iq][:, self.bse_nv - self.nv+self.BSE_table[:,1], self.BSE_table[:,2]-self.nv, self.BSE_table[:,0]] = h2peigvec[iq].T
+                h2peigv_vck[iq][self.bse_nv - self.nv + self.BSE_table[:,1], self.BSE_table[:,2] - self.nv, self.BSE_table[:,0]] = h2peigv[iq]
+
+
             self.h2peigv = h2peigv
             self.h2peigv_vck = h2peigv_vck
             self.h2peigvec = h2peigvec
             self.h2peigvec_vck = h2peigvec_vck
-            self.deg_h2peigvec = deg_h2peigvec
 
             t1 = time()
 
@@ -459,7 +472,7 @@ class H2P():
         
         elif (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
-            K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
+            K_direct = +self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
                         *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])
         
         elif(self.ctype == 'v2dk'):
@@ -484,61 +497,117 @@ class H2P():
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
-            K_direct = self.cpot.v2drk(self.kmpgrid.car_kpoints[ikp,:],self.kmpgrid.car_kpoints[ik,:])\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
-        
-        elif(self.ctype == 'v0dt'):
-            K_direct = self.cpot.v0dt(self.kmpgrid.car_kpoints[ikp,:],self.kmpgrid.car_kpoints[ik,:])\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
+            # K_direct = self.cpot.v2drk(self.kmpgrid.car_kpoints[ikp,:],self.kmpgrid.car_kpoints[ik,:])\
+                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikp,:, ivp],self.eigvec[ik,:, iv])             
+            ikminusq = self.kminusq_table[ik, 1]
+            eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
+            eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
+            eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
+            eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
+            
+            
+            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
+            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigvp), eigv)
 
-        return K_direct
+            v2drk_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            
+            K_direct = v2drk_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
+            return K_direct
 
-    def _getKdq(self,ik,iv,ic,ikp,ivp,icp,iq):
+    def _getKdq(self):
         if (self.ktype =='IP'):
             K_direct = 0.0
             print('ciao')
 
             return K_direct
-        
-        ikplusq = self.kplusq_table[ik,iq]
-        ikminusq = self.kminusq_table[ik,iq]      
-        ikpplusq = self.kplusq_table[ikp,iq]
-        ikpminusq = self.kminusq_table[ikp,iq]       
+
 
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
-            K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            # Ensure inputs are NumPy arrays
+            #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
+            #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            v2dt2_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            ikminusq = self.kminusq_table[:, :, 1]
+            eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
+            eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
+            eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
+            eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
+            
+            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
+            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
+            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
+            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
+            self.eigvecc_t = eigc[:,0,:]
+            self.eigvecv_t = eigv[:,0,0,:]
+
+            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
+            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+            self.dotc = dotc
+
+
+            return K_direct, K_Ex
         
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
-            K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+                        # K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
+                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            v2dk_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            ikminusq = self.kminusq_table[:, :, 1]
+            eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
+            eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
+            eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
+            eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
+            
+            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigvp), eigv)
+            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
+            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigv)
+            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigvp), eigcp)
+            K_direct = v2dk_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
+            K_Ex = v2dk_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+
+            return K_Ex, K_direct
         
         elif(self.ctype == 'vcoul'):
             #print('''\n Kernel built from screened Coulomb potential.\n
             #   Screening should be set via the instance of the Coulomb Potential class.\n
             #   ''')
             K_direct = self.cpot.vcoul(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])          
-        
+                        *np.einsum('i,i->', self.eigvec[ik, :, ic].conj(), self.eigvec[ikp, :, icp])  \
+                        *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikminusq, :, iv])
+            
         elif(self.ctype == 'v2dt'):
             #print('''\n Kernel built from v2dt Coulomb potential.\n
             #   ''')
             K_direct = self.cpot.v2dt(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])          
-        
+                        *np.einsum('i,i->', self.eigvec[ik, :, ic].conj(), self.eigvec[ikp, :, icp])  \
+                        *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikminusq, :, iv])
+            
         elif(self.ctype == 'v2drk'):
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
-            K_direct = self.cpot.v2drk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])            
-        elif(self.ctype == 'v0dt'):
-            K_direct = self.cpot.v0dt(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-            *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv]) 
+            # K_direct = self.cpot.v2drk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
+                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])            
+            # K_ex = self.cpot.v2drk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
+                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
+        
+            v2dt2_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            ikminusq = self.kminusq_table[:, :, 1]
+            eigc1 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
+            eigc2 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
+            eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands
+            eigv2 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands
+            
+            dotc12 = np.einsum('ijk,ijk->ij',np.conjugate(eigc1), eigc2)
+            dotv21 = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv2), eigv1)
+            dotc1v1 = np.einsum('ijk,jilk->li',np.conjugate(eigc1), eigv1)
+            dotv2c2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv2), eigc2)
 
-        return K_direct
+            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc12*dotv21
+            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc1v1 * dotv2c2
+
+            return K_direct, K_Ex
     
     def _getKEx(self,ik,iv,ic,ikp,ivp,icp,iq):
         if (self.ktype =='IP'):
@@ -547,44 +616,73 @@ class H2P():
 
             return K_ex
 
-        ikplusq = self.kplusq_table[ik,iq]
-        ikminusq = self.kminusq_table[ik,iq]      
-        ikpplusq = self.kplusq_table[ikp,iq]
-        ikpminusq = self.kminusq_table[ikp,iq]         
+        ikplusq = self.kplusq_table[ik,iq,1]
+        ikminusq = self.kminusq_table[ik,iq,1]      
+        ikpplusq = self.kplusq_table[ikp,iq,1]
+        ikpminusq = self.kminusq_table[ikp,iq,1]         
 
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
-            K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikpminusq,: ,icp])
-        
+            # K_ex = self.cpot.v2dt2(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
+                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
+            kpt1 = self.kmpgrid.car_kpoints
+            kpt2 = self.kmpgrid.car_kpoints
+
+            kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+            kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+                
+            # Compute modk for all kpt1 and kpt2 pairs
+            modk = np.linalg.norm(kpt1_broadcasted - [0.0,0.0,0.0], axis=-1)
+                
+                # Volume of the Brillouin zone
+            vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
+            lc = self.lc
+            Zc = 0.5 * self.rlat[2, 2]  # Half of the c lattice parameter
+
+                # Compute differences between k-points
+            vkpt = kpt1_broadcasted - kpt2_broadcasted
+                
+                # In-plane momentum transfer
+            Qxy = np.sqrt(vkpt[..., 0]**2 + vkpt[..., 1]**2)
+            Qz = np.sqrt(vkpt[..., 2]**2)   
+                # Factor for the potential
+            factor = 1.0  # This could also be 4.0 * pi, depending on the model
+                
+                # Compute the potential using vectorized operations
+            v2dt2_array = np.where(
+                modk < self.tolr,
+                1.0,
+                (vbz * self.alpha) * (factor / modk**2) *
+                (1.0 - np.exp(-Qxy * Zc) * np.cos(Qz * Zc))
+            )
+            return v2dt2_array
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             K_ex = self.cpot.v2dk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikpminusq,: ,icp])
-        
+                        *np.einsum('i,i->', self.eigvec[ik, :, ic].conj(), self.eigvec[ikminusq, :, iv])  \
+                        *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikp, :, icp])          
+            
         elif(self.ctype == 'vcoul'):
             #print('''\n Kernel built from screened Coulomb potential.\n
             #   Screening should be set via the instance of the Coulomb Potential class.\n
             #   ''')
             K_ex = self.cpot.vcoul(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikpminusq,: ,icp])
+                        *np.einsum('i,i->', self.eigvec[ik, :, ic].conj(), self.eigvec[ikminusq, :, iv])  \
+                        *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikp, :, icp])          
         
         elif(self.ctype == 'v2dt'):
             #print('''\n Kernel built from v2dt Coulomb potential.\n
-            #   ''')œ
-            K_ex = self.cpot.v2dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikpminusq,: ,icp])
+            #   ''')
+            K_ex = self.cpot.v2dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0])\
+                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
         
         elif(self.ctype == 'v2drk'):
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
             K_ex = self.cpot.v2drk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikpminusq,: ,icp])
-        
-        elif(self.ctype == 'v0dt'):
-            K_ex = self.cpot.v0dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikpminusq,: ,icp])
+                        *np.einsum('i,i->', self.eigvec[ik, :, ic].conj(), self.eigvec[ikminusq, :, iv])  \
+                        *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikp, :, icp])          
         return K_ex
         
     def get_eps(self, hlm, emin, emax, estep, eta):
@@ -593,50 +691,73 @@ class H2P():
         dipole_left/right = l/r_residuals.
         \eps_{\alpha\beta} = 1 + \sum_{kcv} dipole_left*dipole_right*(GR + GA)
         '''        
-        w = np.arange(emin,emax,estep,dtype=np.float32)
+        w = np.arange(emin,emax,estep,dtype=np.float64)
         F_kcv = np.zeros((self.dimbse,3,3), dtype=np.complex128)
         eps = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
-            np.fill_diagonal(eps[i,:,:], 1)
+            np.fill_diagonal(eps[i,:,:], 1.0)
         # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
         if(self.nq_double != 1): 
             h2peigvec_vck=self.h2peigvec_vck[self.q0index]
             h2peigv_vck = self.h2peigv_vck[self.q0index]
             h2peigvec = self.h2peigvec[self.q0index]
             h2peigv = self.h2peigv[self.q0index]
-        #IP approximation, he doesnt have h2peigvec_vck and then you call _get_dipoles()
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table, \
-                                h2peigvec_vck=h2peigvec_vck, method='real')
+
+        #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
+                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
-        F_kcv = tb_dipoles.F_kcv
-        self.F_kcv = F_kcv
-        # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
-        self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
-        # compute eps and pl
-        #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
-        #pl = eps
+        # self.dipoles_bse = tb_dipoles.dipoles_bse
+        #self.dipoles = tb_dipoles.dipoles # ??? gargabe now
+        if(self.ktype=='IP'):
+            F_kcv = tb_dipoles.F_kcv
+            self.F_kcv = F_kcv
+            # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
+            self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
+            # compute eps and pl
+            #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
+            #pl = eps
+            vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3
+            for ies, es in enumerate(w):
+                for t in range(0,self.dimbse):
+                    ik = self.BSE_table_sort[0][t][0]
+                    iv = self.BSE_table_sort[0][t][1]
+                    ic = self.BSE_table_sort[0][t][2]
+                    eps[ies,:,:] += 8*np.pi/(vbz)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(np.real(h2peigv[t]-es))/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        + 1j*8*np.pi/(vbz)*F_kcv[ik,ic-self.nv,iv-self.offset_nv,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)                     
+                    #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                    #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2)            
+            print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
+            #self.pl = pl
+            #self.w = w
+            #self.eps_0 = eps_0            
+        else:
+            F_kcv = tb_dipoles.F_kcv
+            self.F_kcv = F_kcv
+            # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
+            self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
+            vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 * (36/7)**2
 
-        # Reshape w for broadcasting (adding extra axes)
-        w_expanded = w[np.newaxis, :]  # Shape: (len(w), 1, 1)
-        h2peigv_expanded = h2peigv[:, np.newaxis]  # Shape: (1, dimbse, 1, 1)
-        # Broadcasted difference and denominator
-        delta = h2peigv_expanded - w_expanded  # Shape: (len(w), dimbse, 1, 1)
-        denominator = np.abs(delta) ** 2 + eta**2  # Shape: (len(w), dimbse, 1, 1)
-        delta_expanded = delta[:, :, np.newaxis, np.newaxis]  # Shape: (ntransitions, n, 1, 1)
-        denominator_expanded = denominator[:, :, np.newaxis, np.newaxis]  # Shape: (ntransitions, n, 1, 1)
-        F_expanded = F_kcv[:, np.newaxis, :, :]  # Shape: (ntransitions, 1, ndim, ndim)        # Compute real and imaginary parts separately
-        real_part = (8 * np.pi / (self.electronsdb.lat_vol * self.nk)) * F_expanded * delta_expanded / denominator_expanded
-        imag_part = (8 * np.pi / (self.electronsdb.lat_vol * self.nk)) * F_expanded * eta / denominator_expanded
-
-        # Sum over the first axis (dimbse) to aggregate results
-        eps = np.sum(real_part + 1j * imag_part, axis=0)  # Shape: (len(w), F_kcv.shape[1], F_kcv.shape[2])
-
-        #         #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-        print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
-        #self.pl = pl
-        # self.w = w
-        # self.eps_0 = eps_0
+            # compute eps and pl
+            #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
+            #pl = eps
+            # for ies, es in enumerate(w):
+            #     for t in range(0,self.dimbse):
+            #         ik = self.BSE_table_sort[0][t][0]
+            #         iv = self.BSE_table_sort[0][t][1]
+            #         ic = self.BSE_table_sort[0][t][2]
+                    # eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        # + 1j*8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+            #         #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+            #         #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
+            ediff = h2peigv[:, np.newaxis]-w[np.newaxis, :]
+            piVk = 8*np.pi/(vbz)
+            eps = piVk * np.einsum('txy,tw->wxy',self.F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
+            eps += 1j*piVk * np.einsum('txy,tw->wxy',self.F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
+            print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
+            #self.pl = pl
+            # self.w = w
+            # self.eps_0 = eps_0
         return w, eps
     
     def get_eps_yambo(self, hlm, emin, emax, estep, eta):
@@ -645,7 +766,7 @@ class H2P():
         dipole_left/right = l/r_residuals.
         \eps_{\alpha\beta} = 1 + \sum_{kcv} dipole_left*dipole_right*(GR + GA)
         '''        
-        w = np.arange(emin,emax,estep,dtype=np.float32)
+        w = np.arange(emin,emax,estep,dtype=np.float64)
         F_kcv = np.zeros((self.dimbse,3,3), dtype=np.complex128)
         eps = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
@@ -673,7 +794,7 @@ class H2P():
                     + 1j*8*np.pi/(self.electronsdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
                 #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                 #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-        print('Excitonic Direct Ground state: ', h2peigv[0], ' [eV]')
+        print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
         #self.pl = pl
         # self.w = w
         # self.eps_0 = eps_0
@@ -835,7 +956,7 @@ class H2P():
         # f_out.close()
 
     def write_exc_eig(self, seedname='wannier90_exc', trange = [0]):
-        exc_eig = np.zeros((len(trange), self.qmpgrid.nkpoints), dtype=complex)
+        exc_eig = np.zeros((len(trange), self.qmpgrid.nkpoints), dtype=np.complex128)
         f_out = open(f'{seedname}.eig', 'w')
         for iq, ikq in enumerate(self.kindices_table):
             for it,t in enumerate(trange):
@@ -927,7 +1048,7 @@ class H2P():
     #                 matrix[j, i] = np.conjugate(matrix[i, j])
     #     return matrix
     def _get_aux_maps(self):
-        yexc_atk = YamboExcitonDB.from_db_file(self.electronsdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q1')
+        yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q1')
         aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
         # Create an array to store the inverse mapping
         inverse_aux_t = np.empty_like(aux_t)
