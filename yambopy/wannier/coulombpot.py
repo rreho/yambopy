@@ -111,10 +111,10 @@ class CoulombPotentials:
         
         # Use nested where to handle all three conditions
         v2dt = np.where(mask1,
-            (vbz * self.alpha) * (1/2.0 * rc * rc),
+            (vbz * self.alpha) * (-1/2.0 * rc * rc),
             np.where(mask2,
                 (vbz * self.alpha) * (factor / safe_modk**2) * (1.0 - np.cos(gz * rc) - (gz * rc * np.sin(gz * rc))),
-                (vbz * 2*self.alpha) * (factor / safe_modk**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
+                (vbz * self.alpha) * (factor / safe_modk**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
             ))
 
         return v2dt#*ha2ev
