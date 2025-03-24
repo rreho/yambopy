@@ -82,28 +82,42 @@ class CoulombPotentials:
         return vcoul*ha2ev
 
     def v2dt(self, kpt1, kpt2):
-        vc = self.dir_vol
-        vbz = 1.0 / (np.prod(self.ngrid) * vc)
-        vkpt = np.array(kpt1) - np.array(kpt2)
-        gz = abs(vkpt[2])
-        gpar = np.sqrt(vkpt[0]**2 + vkpt[1]**2)
+        kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+        kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+        
+        modk = scipy.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
+
+        vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
+        vkpt = kpt1_broadcasted - kpt2_broadcasted
+        gz = np.abs(vkpt[..., 2])
+        # gpar = np.sqrt(np.square(vkpt[:,0]) + np.square(vkpt[:,1]))
+        gpar = np.sqrt(vkpt[..., 0]**2 + vkpt[..., 1]**2)
+
         rc = 0.5 * self.rlat[2, 2]
         factor = 1.0  # or 4.0 * self.pi if needed
-        modk = modvec(kpt1,kpt2)
+        
+        safe_modk = np.where(modk < self.tolr, np.inf, modk)
 
-        if gpar < self.tolr and gz < self.tolr:
-            v2dt = (vbz * self.alpha) * (1/2.0 * rc * rc)
-        elif gpar < self.tolr and gz >= self.tolr:
-            v2dt = (vbz * self.alpha) * (factor / modk**2) * (1.0 - np.cos(gz * rc) - (gz * rc * np.sin(gz * rc)))
-        else:
-            aux1 = gz / gpar
-            aux2 = gpar * rc
-            aux3 = gz * rc
-            aux4 = aux1 * np.sin(aux3)
-            aux5 = np.cos(aux3)
-            v2dt = (vbz * 2*self.alpha) * (factor / modk**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
+        # Create masks for conditions
+        mask1 = (gpar < self.tolr) & (gz < self.tolr)
+        mask2 = (gpar < self.tolr) & (gz >= self.tolr)
+        
+        # Compute aux values safely
+        aux1 = np.divide(gz, gpar, where=gpar != 0)
+        aux2 = gpar * rc
+        aux3 = gz * rc
+        aux4 = aux1 * np.sin(aux3)
+        aux5 = np.cos(aux3)
+        
+        # Use nested where to handle all three conditions
+        v2dt = np.where(mask1,
+            (vbz * self.alpha) * (1/2.0 * rc * rc),
+            np.where(mask2,
+                (vbz * self.alpha) * (factor / safe_modk**2) * (1.0 - np.cos(gz * rc) - (gz * rc * np.sin(gz * rc))),
+                (vbz * 2*self.alpha) * (factor / safe_modk**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
+            ))
 
-        return v2dt*ha2ev
+        return v2dt#*ha2ev
 
     def v2dt2(self, kpt1, kpt2):
         kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
