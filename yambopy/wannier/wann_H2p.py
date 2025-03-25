@@ -690,6 +690,7 @@ class H2P():
         \eps_{\alpha\beta} = 1 + \sum_{kcv} dipole_left*dipole_right*(GR + GA)
         '''        
         w = np.arange(emin,emax,estep,dtype=np.float64)
+        self.w = w.copy()
         F_kcv = np.zeros((self.dimbse,3,3), dtype=np.complex128)
         eps = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
@@ -703,7 +704,7 @@ class H2P():
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
-                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
+                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
         #self.dipoles = tb_dipoles.dipoles # ??? gargabe now
@@ -734,7 +735,12 @@ class H2P():
             self.F_kcv = F_kcv
             # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
             self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
-            vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 * (36/7)**2
+            ediff = h2peigv[:, np.newaxis]-w[np.newaxis, :]
+            ibz_factor = 1
+
+                # ibz_factor = len(self.model.mpgrid.red_kpoints_full) / self.model.nk
+                
+            
 
             # compute eps and pl
             #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
@@ -748,10 +754,26 @@ class H2P():
                         # + 1j*8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             #         #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
             #         #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-            ediff = h2peigv[:, np.newaxis]-w[np.newaxis, :]
+
+            if hasattr(self.model.mpgrid, 'red_kpoints_full'): # ibz case
+                # nk = self.nk  # number of IBZ k-points
+                # split = self.ntransitions // nk
+
+                # base = np.arange(nk * split).reshape(nk, split)
+                # reordered = base[self.model.mpgrid.kpoint_indices]
+
+                # ibz_to_bz = reordered.reshape(-1)
+                # F_kcv = self.F_kcv[ibz_to_bz]
+                weight_bse = self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]]
+                # F_kcv*=1/weight_bse[:,np.newaxis,np.newaxis]
+                # ediff = h2peigv*weight_bse[:, np.newaxis] - self.w[np.newaxis, :]
+                # ediff = h2peigv[ibz_to_bz][:, np.newaxis] - self.w[np.newaxis, :]
+
+
+            vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 #* ibz_factor**2
             piVk = 8*np.pi/(vbz)
-            eps = piVk * np.einsum('txy,tw->wxy',self.F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
-            eps += 1j*piVk * np.einsum('txy,tw->wxy',self.F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
+            eps = piVk * np.einsum('txy,tw->wxy',F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
+            eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
             #self.pl = pl
             # self.w = w
