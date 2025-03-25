@@ -8,11 +8,12 @@ class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self , nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
                  eta, hlm, T_table, BSE_table, h2peigvec,eigv_diff_ttp, eigvecc_t,eigvecv_t,\
-                 mpgrid,\
+                 mpgrid, cpot, \
                  h2peigv_vck = None, h2peigvec_vck = None, method = 'real',\
                  rmn = None,ktype='IP'):
         # hk, hlm are TBMODEL hamiltonians
         self.mpgrid = mpgrid
+        self.cpot =cpot
         self.ntransitions = nc*nv*nkpoints
         self.nbsetransitions = bse_nc*bse_nv*nkpoints
         self.nc = nc
@@ -291,11 +292,17 @@ class TB_dipoles():
         dipoles_bse_kcv_conj = self.dipoles_bse_kcv_conj
         F_kcv = np.zeros((self.nbsetransitions, 3, 3), dtype=np.complex128)   
 
-        weights = np.zeros(self.nkpoints)+1
-        bse_weights = 1
+        weights = np.zeros(self.nkpoints) + 1
+        bse_weights = np.zeros(self.nbsetransitions) + 1
         if hasattr(self.mpgrid, 'red_kpoints_full'): # ibz case
-            weights = 1/self.mpgrid.kpoint_weights
+            weights = self.mpgrid.kpoint_weights#*self.nkpoints
             bse_weights = weights[self.BSE_table[:,0]]
+        # else:
+        #     # self.cpot.lattice.expand_kpoints()
+        #     orig_weights = self.cpot.lattice.weights_ibz.copy()
+        #     orig_weights[:8]=1
+        #     orig_weights[[0,1,2,3,7,8,14,4,5,6,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35]]
+        #     weight_bse = orig_weights[self.BSE_table[:,0]]#*self.cpot.lattice.nkpoints
 
 
         if (method == 'real'):
@@ -312,22 +319,22 @@ class TB_dipoles():
                     factorRy = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 1]
                     factorLz = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 2]
                     factorRz = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 2]
-                    tmp_F_left[t,0]  += factorLx * np.sqrt(weights[ik])
-                    tmp_F_left[t,1]  += factorLy * np.sqrt(weights[ik])
-                    tmp_F_left[t,2]  += factorLz * np.sqrt(weights[ik])
-                    tmp_F_right[t,0] += factorRx * np.sqrt(weights[ik])
-                    tmp_F_right[t,1] += factorRy * np.sqrt(weights[ik])
-                    tmp_F_right[t,2] += factorRz * np.sqrt(weights[ik])
+                    tmp_F_left[t,0]  += factorLx * weights[ik]
+                    tmp_F_left[t,1]  += factorLy * weights[ik]
+                    tmp_F_left[t,2]  += factorLz * weights[ik]
+                    tmp_F_right[t,0] += factorRx * weights[ik]
+                    tmp_F_right[t,1] += factorRy * weights[ik]
+                    tmp_F_right[t,2] += factorRz * weights[ik]
 
-                F_kcv[t,0,0] = tmp_F_left[t,0] * tmp_F_right[t,0]
-                F_kcv[t,0,1] = tmp_F_left[t,0] * tmp_F_right[t,1]
-                F_kcv[t,0,2] = tmp_F_left[t,0] * tmp_F_right[t,2]
-                F_kcv[t,1,0] = tmp_F_left[t,1] * tmp_F_right[t,0]
-                F_kcv[t,1,1] = tmp_F_left[t,1] * tmp_F_right[t,1]
-                F_kcv[t,1,2] = tmp_F_left[t,1] * tmp_F_right[t,2]
-                F_kcv[t,2,0] = tmp_F_left[t,2] * tmp_F_right[t,0]
-                F_kcv[t,2,1] = tmp_F_left[t,2] * tmp_F_right[t,1]    
-                F_kcv[t,2,2] = tmp_F_left[t,2] * tmp_F_right[t,2]                                       
+                F_kcv[t,0,0] = tmp_F_left[t,0] * tmp_F_right[t,0]# * bse_weights[t]
+                F_kcv[t,0,1] = tmp_F_left[t,0] * tmp_F_right[t,1]# * bse_weights[t]
+                F_kcv[t,0,2] = tmp_F_left[t,0] * tmp_F_right[t,2]# * bse_weights[t]
+                F_kcv[t,1,0] = tmp_F_left[t,1] * tmp_F_right[t,0]# * bse_weights[t]
+                F_kcv[t,1,1] = tmp_F_left[t,1] * tmp_F_right[t,1]# * bse_weights[t]
+                F_kcv[t,1,2] = tmp_F_left[t,1] * tmp_F_right[t,2]# * bse_weights[t]
+                F_kcv[t,2,0] = tmp_F_left[t,2] * tmp_F_right[t,0]# * bse_weights[t]
+                F_kcv[t,2,1] = tmp_F_left[t,2] * tmp_F_right[t,1]# * bse_weights[t]
+                F_kcv[t,2,2] = tmp_F_left[t,2] * tmp_F_right[t,2]# * bse_weights[t]
 
                 
 

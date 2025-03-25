@@ -28,12 +28,13 @@ class symmetrized_mp_grid(KPointGenerator):
         red_kpoints_ibz, sort_indices = np.unique(self.red_kpoints_full[point_map], axis=0, return_index=True)
 
         red_kpoints_ibz = red_kpoints_ibz[np.argsort(sort_indices)]
-
+        sort_indices = sort_indices[np.argsort(sort_indices)]
         mapping = {val: idx for idx, val in enumerate(sort_indices)}
+        
         # Vectorized remapping
         self.kpoint_indices = np.vectorize(mapping.get)(point_map)
         _, counts = np.unique(self.kpoint_indices, return_counts=True)
-        self.kpoint_weights = 1/counts
+        self.kpoint_weights = counts/len(self.red_kpoints_full)
         # red_kpoints_ibz[:, [0, 1]] = red_kpoints_ibz[:, [1, 0]]     #swap the x and y coordinates
         self.k = red_kpoints_ibz
         self.red_kpoints = red_kpoints_ibz

@@ -727,7 +727,7 @@ class H2P():
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
-                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
+                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
         # self.dipoles_bse = tb_dipoles.dipoles_bse
         #self.dipoles = tb_dipoles.dipoles # ??? gargabe now
@@ -777,7 +777,7 @@ class H2P():
                         # + 1j*8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             #         #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
             #         #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-
+            weight_bse = np.zeros(self.ntransitions)+1
             if hasattr(self.model.mpgrid, 'red_kpoints_full'): # ibz case
                 # nk = self.nk  # number of IBZ k-points
                 # split = self.ntransitions // nk
@@ -787,16 +787,21 @@ class H2P():
 
                 # ibz_to_bz = reordered.reshape(-1)
                 # F_kcv = self.F_kcv[ibz_to_bz]
-                weight_bse = self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]]
+                weight_bse = self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]]#*self.model.mpgrid.nkpoints
                 # F_kcv*=1/weight_bse[:,np.newaxis,np.newaxis]
                 # ediff = h2peigv*weight_bse[:, np.newaxis] - self.w[np.newaxis, :]
                 # ediff = h2peigv[ibz_to_bz][:, np.newaxis] - self.w[np.newaxis, :]
-
+            # else:
+            #     # self.cpot.lattice.expand_kpoints()
+            #     orig_weights = self.cpot.lattice.weights_ibz.copy()
+            #     orig_weights[:8]=1
+            #     orig_weights[[0,1,2,3,7,8,14,4,5,6,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35]]
+            #     weight_bse = orig_weights[self.BSE_table[:,0]]#*self.cpot.lattice.nkpoints
 
             vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 #* ibz_factor**2
             piVk = 8*np.pi/(vbz)
-            eps = piVk * np.einsum('txy,tw->wxy',F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
-            eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
+            eps = piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
+            eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
             #self.pl = pl
             # self.w = w
