@@ -25,7 +25,7 @@ class CoulombPotentials:
         self.rlat = lattice.lat*bohr2ang
         self.tolr = tolr
         self.dir_vol = lattice.lat_vol*bohr2ang**3 #working in angstrom
-        self.rec_vol = lattice.rlat_vol*2*np.pi*ang2bohr# reciprocal lattice volume in Bohr
+        self.rec_vol = lattice.rlat_vol*(2*np.pi*ang2bohr)**3# reciprocal lattice volume in Bohr
         self.ediel = ediel # ediel(1) Top substrate, ediel(2) \eps_d, ediel(3) Bot substrate     
         self.lc = lc # in angstrom
         self.w = w
@@ -65,10 +65,14 @@ class CoulombPotentials:
         ed = (ediel[0] + ediel[2]) / 2.0
 
         # Compute the potential using vectorized operations
+
+	# if (modk .lt. tolr) then
+	# 	v2dk = vbz*(cic/ed)*(a0*sqrt(gridaux1)/(2.*pi))*(alpha1+auxi*alpha2+alpha3*auxi**2)
+	# 	v2dk = vbz*(cic/ed)*(1./(modk*(1+(r0*modk))))
         safe_modk = np.where(modk < self.tolr, np.inf, modk)
-        v2dk = (vbz * (self.alpha* a0 * np.sqrt(gridaux1))/(2.*np.pi*ed) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2))
-        v2dk = np.where(modk < self.tolr, v2dk,vbz * (self.alpha/ed) * (1.0 / (safe_modk * (1.0 + r0 * safe_modk))))
-        return v2dk*ha2ev
+        v2dk = (vbz * (self.alpha/ed) * (a0 * np.sqrt(gridaux1))/(2.*np.pi) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2))
+        v2dk = np.where(modk < self.tolr, v2dk,vbz * (self.alpha/ed) * (1.0 / (safe_modk * (1.0 + (r0 * safe_modk)))))
+        return v2dk#*ha2ev
 
     def vcoul(self, kpt1, kpt2):
         modk = modvec(kpt1, kpt2)

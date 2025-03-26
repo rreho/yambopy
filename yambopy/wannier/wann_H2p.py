@@ -552,19 +552,24 @@ class H2P():
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
                         # K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
                         # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
-            v2dk_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            v2dt2_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
             ikminusq = self.kminusq_table[:, :, 1]
             eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
             eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
             eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
             eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
             
-            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigvp), eigv)
             dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
-            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigv)
-            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigvp), eigcp)
-            K_direct = v2dk_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
-            K_Ex = v2dk_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
+            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
+            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
+            self.eigvecc_t = eigc[:,0,:]
+            self.eigvecv_t = eigv[:,0,0,:]
+
+            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
+            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+            self.dotc = dotc
+
 
             return K_direct, K_Ex
         
@@ -613,20 +618,24 @@ class H2P():
             # K_ex = self.cpot.v2drk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
                         # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
         
-            v2drk_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            v2dt2_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
             ikminusq = self.kminusq_table[:, :, 1]
-            eigc1 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
-            eigc2 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
-            eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands
-            eigv2 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands
+            eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
+            eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
+            eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
+            eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
             
-            dotc12 = np.einsum('ijk,ijk->ij',np.conjugate(eigc1), eigc2)
-            dotv21 = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv2), eigv1)
-            dotc1v1 = np.einsum('ijk,jilk->li',np.conjugate(eigc1), eigv1)
-            dotv2c2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv2), eigc2)
+            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
+            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
+            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
+            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
+            self.eigvecc_t = eigc[:,0,:]
+            self.eigvecv_t = eigv[:,0,0,:]
 
-            K_direct = v2drk_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc12*dotv21
-            K_Ex = v2drk_array[0][self.BSE_table[:,0]] * dotc1v1 * dotv2c2
+            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
+            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+            self.dotc = dotc
+
 
             return K_direct, K_Ex
     
