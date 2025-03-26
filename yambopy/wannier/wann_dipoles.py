@@ -319,12 +319,12 @@ class TB_dipoles():
                     factorRy = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 1]
                     factorLz = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 2]
                     factorRz = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 2]
-                    tmp_F_left[t,0]  += factorLx * weights[ik]
-                    tmp_F_left[t,1]  += factorLy * weights[ik]
-                    tmp_F_left[t,2]  += factorLz * weights[ik]
-                    tmp_F_right[t,0] += factorRx * weights[ik]
-                    tmp_F_right[t,1] += factorRy * weights[ik]
-                    tmp_F_right[t,2] += factorRz * weights[ik]
+                    tmp_F_left[t,0]  += factorLx #* (weights[ik])**(1/6)
+                    tmp_F_left[t,1]  += factorLy #* (weights[ik])**(1/6)
+                    tmp_F_left[t,2]  += factorLz #* (weights[ik])**(1/6)
+                    tmp_F_right[t,0] += factorRx #* (weights[ik])**(1/6)
+                    tmp_F_right[t,1] += factorRy #* (weights[ik])**(1/6)
+                    tmp_F_right[t,2] += factorRz #* (weights[ik])**(1/6)
 
                 F_kcv[t,0,0] = tmp_F_left[t,0] * tmp_F_right[t,0]# * bse_weights[t]
                 F_kcv[t,0,1] = tmp_F_left[t,0] * tmp_F_right[t,1]# * bse_weights[t]

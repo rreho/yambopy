@@ -787,7 +787,7 @@ class H2P():
 
                 # ibz_to_bz = reordered.reshape(-1)
                 # F_kcv = self.F_kcv[ibz_to_bz]
-                weight_bse = self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]]#*self.model.mpgrid.nkpoints
+                weight_bse = (self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]])**(1/6)#*self.model.mpgrid.nkpoints
                 # F_kcv*=1/weight_bse[:,np.newaxis,np.newaxis]
                 # ediff = h2peigv*weight_bse[:, np.newaxis] - self.w[np.newaxis, :]
                 # ediff = h2peigv[ibz_to_bz][:, np.newaxis] - self.w[np.newaxis, :]
