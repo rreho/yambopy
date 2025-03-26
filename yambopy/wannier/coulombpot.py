@@ -24,8 +24,8 @@ class CoulombPotentials:
         self.lattice = lattice
         self.rlat = lattice.lat*bohr2ang
         self.tolr = tolr
-        self.dir_vol = lattice.lat_vol*bohr2ang**3  #working in angstrom
-        self.rec_vol = lattice.rlat_vol*2*np.pi*ang2bohr # reciprocal lattice volume in Bohr
+        self.dir_vol = lattice.lat_vol*bohr2ang**3 #working in angstrom
+        self.rec_vol = lattice.rlat_vol*(2*np.pi*ang2bohr)**3# reciprocal lattice volume in Bohr
         self.ediel = ediel # ediel(1) Top substrate, ediel(2) \eps_d, ediel(3) Bot substrate     
         self.lc = lc # in angstrom
         self.w = w
@@ -65,10 +65,14 @@ class CoulombPotentials:
         ed = (ediel[0] + ediel[2]) / 2.0
 
         # Compute the potential using vectorized operations
+
+	# if (modk .lt. tolr) then
+	# 	v2dk = vbz*(cic/ed)*(a0*sqrt(gridaux1)/(2.*pi))*(alpha1+auxi*alpha2+alpha3*auxi**2)
+	# 	v2dk = vbz*(cic/ed)*(1./(modk*(1+(r0*modk))))
         safe_modk = np.where(modk < self.tolr, np.inf, modk)
-        v2dk = (vbz * (self.alpha* a0 * np.sqrt(gridaux1))/(2.*np.pi*ed) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2))
-        v2dk = np.where(modk < self.tolr, v2dk,vbz * (self.alpha/ed) * (1.0 / (safe_modk * (1.0 + r0 * safe_modk))))
-        return v2dk*ha2ev
+        v2dk = (vbz * (self.alpha/ed) * (a0 * np.sqrt(gridaux1))/(2.*np.pi) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2))
+        v2dk = np.where(modk < self.tolr, v2dk,vbz * (self.alpha/ed) * (1.0 / (safe_modk * (1.0 + (r0 * safe_modk)))))
+        return v2dk
 
     def vcoul(self, kpt1, kpt2):
         modk = modvec(kpt1, kpt2)
@@ -79,31 +83,45 @@ class CoulombPotentials:
         else:
             vcoul = vbz * (self.alpha / ed) * (1.0 / (modk ** 2))
 
-        return vcoul*ha2ev
+        return vcoul
 
     def v2dt(self, kpt1, kpt2):
-        vc = self.dir_vol
-        vbz = 1.0 / (np.prod(self.ngrid) * vc)
-        vkpt = np.array(kpt1) - np.array(kpt2)
-        gz = abs(vkpt[2])
-        gpar = np.sqrt(vkpt[0]**2 + vkpt[1]**2)
+        kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+        kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+        
+        modk = scipy.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
+
+        vbz = 1.0 / (np.prod(self.ngrid) * self.dir_vol)
+        vkpt = kpt1_broadcasted - kpt2_broadcasted
+        gz = np.abs(vkpt[..., 2])
+        # gpar = np.sqrt(np.square(vkpt[:,0]) + np.square(vkpt[:,1]))
+        gpar = np.sqrt(vkpt[..., 0]**2 + vkpt[..., 1]**2)
+
         rc = 0.5 * self.rlat[2, 2]
         factor = 1.0  # or 4.0 * self.pi if needed
-        modk = modvec(kpt1,kpt2)
+        
+        safe_modk = np.where(modk < self.tolr, np.inf, modk)
 
-        if gpar < self.tolr and gz < self.tolr:
-            v2dt = (vbz * self.alpha) * (1/2.0 * rc * rc)
-        elif gpar < self.tolr and gz >= self.tolr:
-            v2dt = (vbz * self.alpha) * (factor / modk**2) * (1.0 - np.cos(gz * rc) - (gz * rc * np.sin(gz * rc)))
-        else:
-            aux1 = gz / gpar
-            aux2 = gpar * rc
-            aux3 = gz * rc
-            aux4 = aux1 * np.sin(aux3)
-            aux5 = np.cos(aux3)
-            v2dt = (vbz * 2*self.alpha) * (factor / modk**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
+        # Create masks for conditions
+        mask1 = (gpar < self.tolr) & (gz < self.tolr)
+        mask2 = (gpar < self.tolr) & (gz >= self.tolr)
+        
+        # Compute aux values safely
+        aux1 = np.divide(gz, gpar, where=gpar != 0)
+        aux2 = gpar * rc
+        aux3 = gz * rc
+        aux4 = aux1 * np.sin(aux3)
+        aux5 = np.cos(aux3)
+        
+        # Use nested where to handle all three conditions
+        v2dt = np.where(mask1,
+            (vbz * self.alpha) * (-1/2.0 * rc * rc),
+            np.where(mask2,
+                (vbz * self.alpha) * (factor / safe_modk**2) * (1.0 - np.cos(gz * rc) - (gz * rc * np.sin(gz * rc))),
+                (vbz * self.alpha) * (factor / safe_modk**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
+            ))
 
-        return v2dt*ha2ev
+        return v2dt
 
     def v2dt2(self, kpt1, kpt2):
         kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
@@ -127,7 +145,7 @@ class CoulombPotentials:
                     (1.0 - np.exp(-0.5 * Qxy * lc) * np.cos(0.5 * lc * vkpt[..., 2]))
         v2dt2 = np.where(modk < self.tolr, 0.0 + 0.j, v2dt2)
 
-        return v2dt2#*ha2ev
+        return v2dt2
     
 
     def v2drk(self, kpt1, kpt2):
@@ -162,14 +180,18 @@ class CoulombPotentials:
         aux3 = r0 * modk * np.exp(-modk * w)
 
         ew = (aux1 / aux2) + aux3       #F(Q)
-
+		# aux1 = (1.0-(pb*pt*dexp(-2.0*modk*eta*lc)))*kappa
+		# aux2 = (1.0-(pt*dexp(-eta*modk*lc)))*(1.0-(pb*dexp(-eta*modk*lc)))
+		# aux3 = r0*modk*dexp(-modk*w)
+		# ew = (aux1/aux2)+aux3
+		# v2drk = (vbz*cic)*dexp(-modk*w)*(1.0/ew)*(1.0/modk)
 
         safe_modk = np.where(modk < self.tolr, np.inf, modk)
         v2drk = (vbz * self.alpha) * np.exp(-modk * w) * (1.0 / ew) * (1.0 / safe_modk)
         v2drk = np.where(modk < self.tolr, 0.0 + 0.j, v2drk)
 
 
-        return v2drk#*ha2ev
+        return v2drk
     
     def v0dt(self,kpt1,kpt2):
 
@@ -178,7 +200,7 @@ class CoulombPotentials:
         rmin = np.min(np.linalg.norm(self.lattice.lat,axis=1))
         cr = 0.5 * rmin
 
-        factor = 1.0
+        factor = 0.0
 
         if modk < self.tolr:
             v0dt = 1/2.*self.alpha*vbz*cr**2
