@@ -89,31 +89,31 @@ This shows that when the periodic potential \( V(r) \) acts on a plane wave \( e
 
 When you write the matrix elements of the Hamiltonian in the plane-wave basis:
 
-\[
+$$
 H_{kq} = \langle e^{i k \cdot r} | H | e^{i q \cdot r} \rangle.
-\]
+$$
 
 Breaking it down:
 
-\[
+$$
 H_{kq} = \int e^{-i k \cdot r} \left( \frac{-\hbar^2}{2m} \nabla^2 + V(r) \right) e^{i q \cdot r} d^3r.
-\]
+$$
 
 Since plane waves are **eigenfunctions of the kinetic energy operator**, we get:
 
-\[
+$$
 H_{kq} = \delta_{kq} \frac{k^2}{2m} + \int e^{-i k \cdot r} V(r) e^{i q \cdot r} d^3r.
-\]
+$$
 
 Using the Fourier expansion of \( V(r) \):
 
-\[
+$$
 H_{kq} = \delta_{kq} \frac{k^2}{2m} + \sum_G V_G \int e^{-i k \cdot r} e^{i G \cdot r} e^{i q \cdot r} d^3r.
-\]
+$$
 
-\[
+$$
 H_{kq} = \delta_{kq} \frac{k^2}{2m} + \sum_G V_G \int e^{-i (k-q) \cdot r} e^{i G \cdot r} d^3r.
-\]
+$$
 
 Since the integral gives a **nonzero contribution** only when:
 
