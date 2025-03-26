@@ -410,3 +410,112 @@ class TBMODEL(tbmodels.Model):
                         f_out.write(f'\t{np.real(self.Mmn[m,n,ik,ikp]):.14f}\t{np.imag(self.Mmn[m,n,ik,ikp]):.14f}\n')
         
         f_out.close()
+
+
+    def interpolate_gw(self,lat_k,quasiparticle_files,what='QP+KS',lpratio=5,valence=None,verbose=1,**kwargs):
+        """
+        Interpolate the QP corrections on a k-point path, requires the lattice structure
+        """
+        from yambopy.tools.skw import SkwInterpolator
+        from yambopy.dbs import YamboQPDB
+        from yambopy.lattice import red_car
+        if verbose:
+            print("This interpolation is provided by the SKW interpolator implemented in Abipy")
+        lattice = lat_k
+        cell = (lat_k.lat, lattice.red_atomic_positions, lattice.atomic_numbers)
+        nelect = 0
+        fermie = kwargs.pop('fermie',0)
+        qp_db = YamboQPDB.from_db_file(filename="ndb.QP",folder=quasiparticle_files)
+        self.spin=False
+        # #consistency check with lattice points
+        if len(lattice.iku_kpoints)!=len(qp_db.kpoints_iku):
+            print(len(lattice.iku_kpoints),len(qp_db.kpoints_iku))
+            raise ValueError("The QP database is not consistent with the lattice")
+        if not np.isclose(lattice.iku_kpoints,qp_db.kpoints_iku).all():
+            print(lattice.iku_kpoints)
+            print(qp_db.kpoints_iku)
+            raise ValueError("The QP database is not consistent with the lattice")
+        
+        #interpolate the dft eigenvalues
+        kpoints = self.mpgrid.k
+        sym_rec  = lattice.sym_rec
+        symrel = [sym for sym,trev in zip(lattice.sym_rec_red,lattice.time_rev_list) if trev==False ]
+        time_rev = True
+        
+        # band_kpoints_rlu = self.mpgrid.k
+        # Obtain quantities in cc needed for plot (since interpolation wants rlu)
+        path_car = self.mpgrid.car_kpoints
+        band_kpoints = red_car(kpoints,lattice.rlat)
+        
+        #interpolate KS
+        ks_ebands, qp_ebands = None, None
+        kp_eigens_kpath, qp_eigens_kpath = None, None
+        if 'KS' in what:
+            if self.spin == True:
+                print('Spin-polarized bands DFT')
+                eigens_up = self.eigenvalues_dft[np.newaxis,:,:,0]
+                eigens_dw = self.eigenvalues_dft[np.newaxis,:,:,1]
+                skw_up = SkwInterpolator(lpratio,kpoints,eigens_up,fermie,nelect,cell,symrel,time_rev,verbose=verbose)
+                skw_dw = SkwInterpolator(lpratio,kpoints,eigens_dw,fermie,nelect,cell,symrel,time_rev,verbose=verbose)
+                dft_eigens_up_kpath = skw_up.interp_kpts(kpoints).eigens[0]
+                dft_eigens_dw_kpath = skw_dw.interp_kpts(kpoints).eigens[0]
+                #if valence: kwargs['fermie'] = np.max(dft_eigens_kpath[:,:valence])
+                # tricky 
+                # ks_ebands_up = YambopyBandStructure(dft_eigens_up_kpath,band_kpoints,kpath=path_car,**kwargs)
+                # ks_ebands_dw = YambopyBandStructure(dft_eigens_dw_kpath,band_kpoints,kpath=path_car,**kwargs)
+            else:
+                print('No spin-polarized bands DFT')
+                eigens  = np.array(self.eigenval(k=kpoints))[np.newaxis,:]
+                skw = SkwInterpolator(lpratio,kpoints,eigens,fermie,nelect,cell,symrel,time_rev,verbose=verbose)
+                #kpoints_path = path.get_klist()[:,:3]
+                dft_eigens_kpath = skw.interp_kpts(kpoints).eigens[0]
+                if valence: kwargs['fermie'] = np.max(dft_eigens_kpath[:,:valence])
+                # ks_ebands = YambopyBandStructure(dft_eigens_kpath,band_kpoints,kpath=path_car,**kwargs)
+        
+        #interpolate QP
+        if 'QP' in what:
+            if self.spin == True:
+                print('Spin-polarized bands QP')
+                eigens_up = self.eigenvalues_qp[np.newaxis,:,:,0]
+                eigens_dw = self.eigenvalues_qp[np.newaxis,:,:,1]
+                print('GW eigenvalues are sorted in ascending energy')
+                #sorting
+                aux_up, aux_dw = eigens_up, eigens_dw
+                for ik in range(self.nkpoints):
+                    eigens_up[0,ik,:], eigens_dw[0,ik,:] = sorted(aux_up[0,ik,:]), sorted(aux_dw[0,ik,:])
+                #end sorting
+                skw_up = SkwInterpolator(lpratio,kpoints,eigens_up,fermie,nelect,cell,symrel,time_rev,verbose=verbose)
+                skw_dw = SkwInterpolator(lpratio,kpoints,eigens_dw,fermie,nelect,cell,symrel,time_rev,verbose=verbose)
+                #kpoints_path = path.get_klist()[:,:3]
+                qp_eigens_up_kpath = skw_up.interp_kpts(kpoints).eigens[0]
+                qp_eigens_dw_kpath = skw_dw.interp_kpts(kpoints).eigens[0]
+                #if valence: kwargs['fermie'] = np.max(dft_eigens_kpath[:,:valence])
+                # tricky 
+                # qp_ebands_up = YambopyBandStructure(qp_eigens_up_kpath,band_kpoints,kpath=path_car,**kwargs)
+                # qp_ebands_dw = YambopyBandStructure(qp_eigens_dw_kpath,band_kpoints,kpath=path_car,**kwargs)
+            else:
+                print('No spin-polarized bands DFT')
+                eigens  = qp_db.eigenvalues_qp[np.newaxis,:]
+                #sorting
+                aux = eigens
+                for ik in range(self.mpgrid.nkpoints):
+                    eigens[0,ik,:] = sorted(aux[0,ik,:])
+                #end sorting
+                skw = SkwInterpolator(lpratio,kpoints,eigens,fermie,nelect,cell,symrel,time_rev,verbose=verbose)
+                #kpoints_path = path.get_klist()[:,:3]
+                qp_eigens_kpath = skw.interp_kpts(kpoints).eigens[0]
+                if valence: kwargs['fermie'] = np.max(qp_eigens_kpath[:,:valence])
+                # qp_ebands = YambopyBandStructure(qp_eigens_kpath,band_kpoints,kpath=path_car,**kwargs)
+                #qp_ebands = YambopyBandStructure(qp_eigens_kpath,kpoints_path,kpath=path,weights=qp_z_kpath,size=0.1,**kwargs)
+            
+            qp_z_kpath = None
+            if 'Z' in what:
+                eigens = self.z[np.newaxis,:]
+                skw = SkwInterpolator(lpratio,kpoints,eigens,fermie,nelect,cell,symrel,time_rev,verbose=verbose)
+                #kpoints_path = path.get_klist()[:,:3]
+                qp_z_kpath = skw.interp_kpts(kpoints).eigens[0]
+                
+        if self.spin == True:
+            return ks_ebands_up, ks_ebands_dw , qp_ebands_up, qp_ebands_dw
+        else: 
+            return ks_ebands, qp_eigens_kpath
