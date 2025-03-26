@@ -72,7 +72,7 @@ class CoulombPotentials:
         safe_modk = np.where(modk < self.tolr, np.inf, modk)
         v2dk = (vbz * (self.alpha/ed) * (a0 * np.sqrt(gridaux1))/(2.*np.pi) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2))
         v2dk = np.where(modk < self.tolr, v2dk,vbz * (self.alpha/ed) * (1.0 / (safe_modk * (1.0 + (r0 * safe_modk)))))
-        return v2dk#*ha2ev
+        return v2dk
 
     def vcoul(self, kpt1, kpt2):
         modk = modvec(kpt1, kpt2)
@@ -83,7 +83,7 @@ class CoulombPotentials:
         else:
             vcoul = vbz * (self.alpha / ed) * (1.0 / (modk ** 2))
 
-        return vcoul*ha2ev
+        return vcoul
 
     def v2dt(self, kpt1, kpt2):
         kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
@@ -121,7 +121,7 @@ class CoulombPotentials:
                 (vbz * self.alpha) * (factor / safe_modk**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
             ))
 
-        return v2dt#*ha2ev
+        return v2dt
 
     def v2dt2(self, kpt1, kpt2):
         kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
@@ -145,7 +145,7 @@ class CoulombPotentials:
                     (1.0 - np.exp(-0.5 * Qxy * lc) * np.cos(0.5 * lc * vkpt[..., 2]))
         v2dt2 = np.where(modk < self.tolr, 0.0 + 0.j, v2dt2)
 
-        return v2dt2#*ha2ev
+        return v2dt2
     
 
     def v2drk(self, kpt1, kpt2):
@@ -180,14 +180,18 @@ class CoulombPotentials:
         aux3 = r0 * modk * np.exp(-modk * w)
 
         ew = (aux1 / aux2) + aux3       #F(Q)
-
+		# aux1 = (1.0-(pb*pt*dexp(-2.0*modk*eta*lc)))*kappa
+		# aux2 = (1.0-(pt*dexp(-eta*modk*lc)))*(1.0-(pb*dexp(-eta*modk*lc)))
+		# aux3 = r0*modk*dexp(-modk*w)
+		# ew = (aux1/aux2)+aux3
+		# v2drk = (vbz*cic)*dexp(-modk*w)*(1.0/ew)*(1.0/modk)
 
         safe_modk = np.where(modk < self.tolr, np.inf, modk)
         v2drk = (vbz * self.alpha) * np.exp(-modk * w) * (1.0 / ew) * (1.0 / safe_modk)
         v2drk = np.where(modk < self.tolr, 0.0 + 0.j, v2drk)
 
 
-        return v2drk#*ha2ev
+        return v2drk
     
     def v0dt(self,kpt1,kpt2):
 
