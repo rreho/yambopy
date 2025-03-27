@@ -361,68 +361,49 @@ class H2P():
 
     def _buildH2P_fromcpot(self):
         'build resonant h2p from model coulomb potential'
-        if (self.nq_double == 1):        
-            H2P = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
-            for t in range(self.dimbse):
-                for tp in range(self.dimbse):
-                    ik = self.BSE_table[t][0]
-                    iv = self.BSE_table[t][1]
-                    ic = self.BSE_table[t][2]
-                    ikp = self.BSE_table[tp][0]
-                    ivp = self.BSE_table[tp][1]
-                    icp = self.BSE_table[tp][2]
-                    K_direct = self._getKd(ik,iv,ic,ikp,ivp,icp)
-                    if (t == tp ):
-                        H2P[t,tp] = self.eigv[ik,ic]-self.eigv[ik,iv] + (self.f_kn[ik,iv]-self.f_kn[ik,ic])*K_direct # here -1 because (K_ex-K_direct) and K_ex = 0
-                    else:
-                        H2P[t,tp] = +(self.f_kn[ik,iv]-self.f_kn[ik,ic])*K_direct
-                        #if (self.TD==True):
-                        #    H2P[t,tp] = 0.0
-                        #else:         
-            return H2P
-        else:
-            H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-            print('initialize buildh2p from cpot')
-            t0 = time()
 
-            # Precompute kplusq and kminusq tables
-            # ikpminusq = self.kplusq_table[:, :, 1]
-            ikminusq = self.kminusq_table[:, :, 1]
-            ikminusgamma = self.kminusq_table[:, :, 0]
+        H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
+        print('initialize buildh2p from cpot')
+        t0 = time()
+
+        # Precompute kplusq and kminusq tables
+        # ikpminusq = self.kplusq_table[:, :, 1]
+        ikminusq = self.kminusq_table[:, :, 1]
+        ikminusgamma = self.kminusq_table[:, :, 0]
 
 
 
-            K_direct, K_Ex = self._getKdq()       #sorry
+        K_direct, K_Ex = self._getKdq()       #sorry
 
-            gc.collect()
-            K_diff = K_direct - K_Ex[:,np.newaxis,:]
-            f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
-            # f_kmqn = self.f_qn.tile().reshape(self.nk, self.nq_double, self.nb)
-            # f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]]
-            # f_diff -=f_kmqn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
+        gc.collect()
+        K_diff = K_direct - K_Ex[:,np.newaxis,:]
+        f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
+        # f_kmqn = self.f_qn.tile().reshape(self.nk, self.nq_double, self.nb)
+        # f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]]
+        # f_diff -=f_kmqn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
 
-            f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
-            del K_Ex
-            gc.collect()
-            
-            H2P = f_diff * K_diff
-            del K_diff, f_diff
-            gc.collect()
-            
-            result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
-            eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
-            del result
-            gc.collect()
-            self.eigv_diff_ttp = eigv_diff
-            del eigv_diff
-            gc.collect()
-            
-            diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), self.eigv_diff_ttp)  # when t ==tp
-            H2P += diag
-            del diag 
-            gc.collect()
-            print(f'Completed in {time() - t0} seconds')
-            return H2P
+        f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
+        del K_Ex
+        gc.collect()
+        
+        H2P = f_diff * K_diff
+        del K_diff, f_diff
+        gc.collect()
+        
+        result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
+        eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
+        del result
+        gc.collect()
+        self.eigv_diff_ttp = eigv_diff
+        del eigv_diff
+        gc.collect()
+        
+        diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), self.eigv_diff_ttp)  # when t ==tp
+        H2P += diag
+        del diag 
+        gc.collect()
+        print(f'Completed in {time() - t0} seconds')
+        return H2P
 
     def _buildKernel(self, kernel):
         pass
@@ -431,53 +412,31 @@ class H2P():
         pass
         
     def solve_H2P(self):
-        if(self.nq_double == 1):
-            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.dimbse}\n')
-            t0 = time()
-            self.h2peigv = np.zeros((self.dimbse), dtype=np.complex128)
-            self.h2peigvec = np.zeros((self.dimbse,self.dimbse),dtype=np.complex128)
-            h2peigv_vck = np.zeros((self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
-            h2peigvec_vck = np.zeros((self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128)
-            deg_h2peigvec = np.array([])
-            (self.h2peigv, self.h2peigvec,_) = zheev(self.H2P)
-            self.deg_h2peigvec = self.find_degenerate_eigenvalues(self.h2peigv, self.h2peigvec)
-            #(self.h2peigv,self.h2peigvec) = sort_eig(self.h2peigv,self.h2peigvec)  # this needs fixing
-            for t in range(self.dimbse):
-                ik, iv, ic = self.BSE_table[t]
-                h2peigvec_vck[:,self.bse_nv-self.nv+iv, ic-self.nv, ik] = self.h2peigvec[t,:]   
-                h2peigv_vck[self.bse_nv-self.nv+iv, ic-self.nv, ik] = self.h2peigv[t]
-            
-            self.h2peigv_vck = h2peigv_vck        
-            self.h2peigvec_vck = h2peigvec_vck
-            self.deg_h2peigvec = deg_h2peigvec
-            t1 = time()
 
-            print(f'\n Diagonalization of H2P in {t1-t0:.3f} s')
-        else:
-            h2peigv = np.zeros((self.nq_double,self.dimbse), dtype=np.complex128)
-            h2peigvec = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
-            h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
-            h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
-            deg_h2peigvec = np.array([])        
-            
-            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape} \n')
-            t0 = time()
-            for iq in range(0,self.nq_double):
+        h2peigv = np.zeros((self.nq_double,self.dimbse), dtype=np.complex128)
+        h2peigvec = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
+        h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
+        h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
+        deg_h2peigvec = np.array([])        
+        
+        print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape} \n')
+        t0 = time()
+        for iq in range(0,self.nq_double):
 
-                (h2peigv[iq],h2peigvec[iq]) = scipy.linalg.eigh(self.H2P[iq])
+            (h2peigv[iq],h2peigvec[iq]) = scipy.linalg.eigh(self.H2P[iq])
 
-                h2peigvec_vck[iq][:, self.bse_nv - self.nv+self.BSE_table[:,1], self.BSE_table[:,2]-self.nv, self.BSE_table[:,0]] = h2peigvec[iq].T
-                h2peigv_vck[iq][self.bse_nv - self.nv + self.BSE_table[:,1], self.BSE_table[:,2] - self.nv, self.BSE_table[:,0]] = h2peigv[iq]
+            h2peigvec_vck[iq][:, self.bse_nv - self.nv+self.BSE_table[:,1], self.BSE_table[:,2]-self.nv, self.BSE_table[:,0]] = h2peigvec[iq].T
+            h2peigv_vck[iq][self.bse_nv - self.nv + self.BSE_table[:,1], self.BSE_table[:,2] - self.nv, self.BSE_table[:,0]] = h2peigv[iq]
+        
 
+        self.h2peigv = h2peigv
+        self.h2peigv_vck = h2peigv_vck
+        self.h2peigvec = h2peigvec
+        self.h2peigvec_vck = h2peigvec_vck
 
-            self.h2peigv = h2peigv
-            self.h2peigv_vck = h2peigv_vck
-            self.h2peigvec = h2peigvec
-            self.h2peigvec_vck = h2peigvec_vck
+        t1 = time()
 
-            t1 = time()
-
-            print(f'\n Diagonalization of H2P in {t1-t0:.3f} s')
+        print(f'\n Diagonalization of H2P in {t1-t0:.3f} s')
     
     def _getKd(self,ik,iv,ic,ikp,ivp,icp):
         if (self.ktype =='IP'):
@@ -591,6 +550,13 @@ class H2P():
 
         dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
         dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
+        K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
+        del dotc, dotv
+        gc.collect()
+        
+        if self.nq_double == 1:
+            return K_direct, np.array([[0.0]])
+        
         dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
         dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
         
@@ -598,9 +564,8 @@ class H2P():
         gc.collect()
 
 
-        K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
         K_Ex = cpot_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
-        del dotc, dotv, cpot_array
+        del cpot_array
         gc.collect()
 
         return K_direct, K_Ex
@@ -694,11 +659,11 @@ class H2P():
         for i in range(eps.shape[0]):
             np.fill_diagonal(eps[i,:,:], 1.0)
         # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
-        if(self.nq_double != 1): 
-            h2peigvec_vck=self.h2peigvec_vck[self.q0index]
-            h2peigv_vck = self.h2peigv_vck[self.q0index]
-            h2peigvec = self.h2peigvec[self.q0index]
-            h2peigv = self.h2peigv[self.q0index]
+
+        h2peigvec_vck=self.h2peigvec_vck[self.q0index]
+        h2peigv_vck = self.h2peigv_vck[self.q0index]
+        h2peigvec = self.h2peigvec[self.q0index]
+        h2peigv = self.h2peigv[self.q0index]
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
