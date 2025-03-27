@@ -386,26 +386,37 @@ class H2P():
             t0 = time()
 
             # Precompute kplusq and kminusq tables
-            ikpminusq = self.kplusq_table[:, :, 1]
+            # ikpminusq = self.kplusq_table[:, :, 1]
             ikminusq = self.kminusq_table[:, :, 1]
             ikminusgamma = self.kminusq_table[:, :, 0]
-            eigc1 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
-            eigc2 = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands
-            eigv1 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands
-            eigv2 = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands
-            
+
+
+
             K_direct, K_Ex = self._getKdq()       #sorry
 
+            gc.collect()
             K_diff = K_direct - K_Ex[:,np.newaxis,:]
             f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]] -  self.f_kn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
+            
+            del K_Ex
+            gc.collect()
+            
             H2P = f_diff * K_diff
+            del K_diff, f_diff
+            gc.collect()
+            
             result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
             eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
+            del result
+            gc.collect()
             self.eigv_diff_ttp = eigv_diff
-            self.eigvecc_t = eigc1[:,0,:]
-            self.eigvecv_t = eigv1[:,0,0,:]
-            diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff)  # when t ==tp
+            del eigv_diff
+            gc.collect()
+            
+            diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), self.eigv_diff_ttp)  # when t ==tp
             H2P += diag
+            del diag 
+            gc.collect()
             print(f'Completed in {time() - t0} seconds')
             return H2P
 
@@ -509,9 +520,15 @@ class H2P():
             dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
             dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigvp), eigv)
 
+            del eigc, eigcp, eigv, eigvp
+            gc.collect()
+
             v2drk_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
             
             K_direct = v2drk_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
+            del dotc, dotv, v2drk_array
+            gc.collect()
+
             return K_direct
 
     def _getKdq(self):
@@ -520,94 +537,34 @@ class H2P():
             print('ciao')
 
             return K_direct
-
+        cpot_array = None
 
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
             # Ensure inputs are NumPy arrays
             #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
             #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
-            v2dt2_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            ikminusq = self.kminusq_table[:, :, 1]
-            eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
-            eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
-            eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
-            eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
-            
-            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
-            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
-            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
-            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
-            self.eigvecc_t = eigc[:,0,:]
-            self.eigvecv_t = eigv[:,0,0,:]
+            cpot_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
 
-            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
-            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
-            self.dotc = dotc
-
-
-            return K_direct, K_Ex
         
         elif(self.ctype == 'v2dk'):
             #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
                         # K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
                         # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
-            v2dt2_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            ikminusq = self.kminusq_table[:, :, 1]
-            eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
-            eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
-            eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
-            eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
-            
-            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
-            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
-            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
-            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
-            self.eigvecc_t = eigc[:,0,:]
-            self.eigvecv_t = eigv[:,0,0,:]
+            cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
 
-            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
-            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
-            self.dotc = dotc
-
-
-            return K_direct, K_Ex
         
         elif(self.ctype == 'vcoul'):
             #print('''\n Kernel built from screened Coulomb potential.\n
             #   Screening should be set via the instance of the Coulomb Potential class.\n
             #   ''')
-            K_direct = self.cpot.vcoul(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-                        *np.einsum('i,i->', self.eigvec[ik, :, ic].conj(), self.eigvec[ikp, :, icp])  \
-                        *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikminusq, :, iv])
-            
+            cpot_array = self.cpot.vcoul(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+
         elif(self.ctype == 'v2dt'):
             #print('''\n Kernel built from v2dt Coulomb potential.\n
             #   ''')
-            v2dt_array = self.cpot.v2dt(self.kmpgrid.car_kpoints, self.kmpgrid.car_kpoints)
-            ikminusq = self.kminusq_table[:, :, 1]
-            eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
-            eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
-            eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
-            eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
-            
-            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
-            dotvp = np.einsum('ijkl,ijkl->kij',np.conjugate(eigvp), eigv)
-            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigv)
-            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigvp), eigcp)
+            cpot_array = self.cpot.v2dt(self.kmpgrid.car_kpoints, self.kmpgrid.car_kpoints)
 
-            K_direct = v2dt_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotvp
-            K_Ex = v2dt_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
-            
-            self.eigvecc_t = eigc[:,0,:]
-            self.eigvecv_t = eigv[:,0,0,:]
-            # K_direct = self.cpot.v2dt(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-                        # *np.einsum('i,i->', self.eigvec[ik, :, ic].conj(), self.eigvec[ikp, :, icp])  \
-                        # *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikminusq, :, iv])
-            # K_ex = self.cpot.v2dt(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0])\
-            #             *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
-        
-            return K_direct, K_Ex
 
         elif(self.ctype == 'v2drk'):
             #print('''\n Kernel built from v2drk Coulomb potential.\n
@@ -617,28 +574,32 @@ class H2P():
                         # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])            
             # K_ex = self.cpot.v2drk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
                         # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
+            cpot_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+
+        ikminusq = self.kminusq_table[:, :, 1]
+        eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
+        eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
+        eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
+        eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
+
+        self.eigvecc_t = eigc[:,0,:]
+        self.eigvecv_t = eigv[:,0,0,:]
+
+        dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
+        dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
+        dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
+        dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
         
-            v2drk_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            ikminusq = self.kminusq_table[:, :, 1]
-            eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
-            eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
-            eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
-            eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
-            
-            dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
-            dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
-            dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
-            dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
-            self.eigvecc_t = eigc[:,0,:]
-            self.eigvecv_t = eigv[:,0,0,:]
-
-            K_direct = v2dt2_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
-            K_Ex = v2dt2_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
-            self.dotc = dotc
+        del eigc, eigcp, eigv, eigvp  
+        gc.collect()
 
 
+        K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
+        K_Ex = cpot_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+        del dotc, dotv, cpot_array
+        gc.collect()
 
-            return K_direct, K_Ex
+        return K_direct, K_Ex
     
     def _getKEx(self,ik,iv,ic,ikp,ivp,icp,iq):
         if (self.ktype =='IP'):
