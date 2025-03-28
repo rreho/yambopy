@@ -80,13 +80,15 @@ class FakeLatticeObject():
     YamboBSEKernelDB class only uses it when it needs kernel values per bands, and in that case it only need nkpoints
     
     '''
-    def __init__(self, model):
+    def __init__(self, model,win_file=None):
         self.alat = model.uc * 1/0.52917720859      # this results in minor difference, do we really want the values from yambo?
         self.lat = self.alat
         self.lat_vol = np.prod(np.diag(self.alat))  # difference becomes bigger
         self.rlat = model.reciprocal_lattice
         self.rlat_vol = np.prod(np.diag(self.rlat))
-
+        if win_file:
+            from .wann_io import WIN
+            self.red_atomic_positions, self.atomic_numbers =  WIN(win_file).read_positions()
 
 class H2P():
     '''Build the 2-particle resonant Hamiltonian H2P
