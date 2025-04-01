@@ -41,31 +41,64 @@ class ExcitonBands(H2P):
         eigvec_kmq = np.array(eigvec_kmq).reshape(self.nk, self.nq_list, self.nb, self.nb)
         eigv_k = self.eigv
         eigvec_k = self.eigvec
+        
+        eigc = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
+        eigcp = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
+        eigv = eigvec_kmq[self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
+        eigvp = eigvec_kmq[self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
+        dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
+        dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
 
-        eigc1 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis, :]   # conduction bands
-        eigc2 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,:,np.newaxis]   # conduction bands
-        eigv1 = eigvec_kmq[self.BSE_table[:,0], :, :, self.BSE_table[:,1]][:, :, np.newaxis,  : ]  # Valence bands
-        eigv2 = eigvec_kmq[self.BSE_table[:,0], :, :, self.BSE_table[:,1]][:, :, :, np.newaxis]  # Valence bands
-        dotc = np.einsum('ijk, lkj -> il ',np.conjugate(eigc1), eigc2)
-        dotv = np.einsum('ijpl, mjlp -> jim ',np.conjugate(eigv1), eigv2)
-        dotc2 = np.einsum('ijk,lmkj->mil',np.conjugate(eigc1), eigv2)
+        dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
+        dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
+                
+        del eigc, eigcp, eigv, eigvp
+        gc.collect()
+        
+        cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+        K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
+        del dotc, dotv
+        gc.collect()
+        K_Ex = cpot_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
 
-        dotv2 = np.einsum('ijkl,mlk->jim',np.conjugate(eigv1), eigc2)
-        v2dt2_array_ex = self.cpot.v2dt2(self.car_kpoints,np.array([[0.0,0.0,0.0]]))
-        v2dt2_array_d  = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+        K_diff = K_direct - K_Ex[:,np.newaxis,:]
+        f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
+        # f_kmqn = self.f_qn.tile().reshape(self.nk, self.nq_double, self.nb)
+        # f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]]
+        # f_diff -=f_kmqn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
+
+        f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
+        del K_Ex
+        gc.collect()
+
+        # eigv_diff_ttp = eigv_diff
+        H2P = f_diff * K_diff
+        # diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff_ttp)  # when t ==tp
+        # H2P += diag
+        # eigc1 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis, :]   # conduction bands
+        # eigc2 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,:,np.newaxis]   # conduction bands
+        # eigv1 = eigvec_kmq[self.BSE_table[:,0], :, :, self.BSE_table[:,1]][:, :, np.newaxis,  : ]  # Valence bands
+        # eigv2 = eigvec_kmq[self.BSE_table[:,0], :, :, self.BSE_table[:,1]][:, :, :, np.newaxis]  # Valence bands
+        # dotc = np.einsum('ijk, lkj -> il ',np.conjugate(eigc1), eigc2)
+        # dotv = np.einsum('ijpl, mjlp -> jim ',np.conjugate(eigv1), eigv2)
+        # dotc2 = np.einsum('ijk,lmkj->mil',np.conjugate(eigc1), eigv2)
+
+        # dotv2 = np.einsum('ijkl,mlk->jim',np.conjugate(eigv1), eigc2)
+        # v2dt2_array_ex = self.cpot.v2dk(self.car_kpoints,np.array([[0.0,0.0,0.0]]))
+        # v2dt2_array_d  = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
         # #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
         # #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
         
-        f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-self.f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
-        v2dt2_array_d = v2dt2_array_d[self.BSE_table[:,0],:][:, self.BSE_table[:,0]]
+        # f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-self.f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
+        # v2dt2_array_d = v2dt2_array_d[self.BSE_table[:,0],:][:, self.BSE_table[:,0]]
 
-        K_d = v2dt2_array_d*dotc*dotv
+        # K_d = v2dt2_array_d*dotc*dotv
         # ## Ex term
-        K_ex = np.einsum('ab, acd -> acd', v2dt2_array_ex, dotc2*dotv2)
-        K_d[:, range(K_d.shape[1]), range(K_d.shape[2])] = 0.0    #replaces the line where Kernel is 0 if t=tp
-        K_ex[:, range(K_ex.shape[1]), range(K_ex.shape[2])] = 0.0 #replaces the line where Kernel is 0 if t=tp
+        # K_ex = np.einsum('ab, acd -> acd', v2dt2_array_ex, dotc2*dotv2)
+        # K_d[:, range(K_d.shape[1]), range(K_d.shape[2])] = 0.0    #replaces the line where Kernel is 0 if t=tp
+        # K_ex[:, range(K_ex.shape[1]), range(K_ex.shape[2])] = 0.0 #replaces the line where Kernel is 0 if t=tp
 
-        H2P = f_diff*(K_d - K_ex)
+        # H2P = f_diff*(K_d - K_ex)
         eigv_diff = (eigv_k[:,None, self.BSE_table[:,2]]-eigv_kmq[:,:,self.BSE_table[:,1]])[self.BSE_table[:,0],:,:].swapaxes(1,0)
         diag = np.einsum('lm, klm -> klm', np.eye(self.dimbse), eigv_diff) # when t ==tp
         H2P += diag
