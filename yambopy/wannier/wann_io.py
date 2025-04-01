@@ -368,7 +368,7 @@ class WIN():
 
         self.red_atomic_positions = np.array(atoms)
         self.k_points = np.array(k_points)
-        self.symbols = symbols
+        self.symbols = np.array(symbols)
         
         t1 = time()
         print(f"Time for WIN.__init__() : {t1 - t0}")
