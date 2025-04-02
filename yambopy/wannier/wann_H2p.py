@@ -135,6 +135,7 @@ class H2P():
             self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
             self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
         else:
+            self.electronsdb_path = None    # required when initializing ExcitonBands in pp
             self.electronsdb = FakeLatticeObject(model)
             self.latdb = FakeLatticeObject(model)
         self.offset_nv = self.nv-self.bse_nv
