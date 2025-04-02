@@ -1,6 +1,7 @@
 from yambopy.lattice import red_car
 import numpy as np
 from scipy.spatial import cKDTree
+
 class KPointGenerator():
     def __init__(self):
         self.k = None
@@ -9,10 +10,19 @@ class KPointGenerator():
         self.red_kpoints = None
         self.car_kpoints = None
         self.k_tree = None
-
-    def generate(self):
-        """Abstract method to generate k-points."""
-        raise NotImplementedError("This method must be implemented in subclasses.")
+    
+    @staticmethod
+    def create_instance(type_, *args, **kwargs):
+        from yambopy.wannier.wann_mpgrid import symmetrized_mp_grid, tb_Monkhorst_Pack
+        from yambopy.wannier.wann_nnkpgrid import NNKP_Grids
+        if type_ == "NNKP_Grids":
+            return NNKP_Grids(*args, **kwargs)
+        elif type_ == "symmetrized_mp_grid":
+            return symmetrized_mp_grid(*args, **kwargs)
+        elif type_ == "tb_Monkhorst_Pack":
+            return tb_Monkhorst_Pack(*args, **kwargs)        
+        else:
+            return KPointGenerator()  # Default to A if type is unknown
 
     def validate(self):
         """Validate the generated k-points."""
@@ -188,3 +198,7 @@ class KPointGenerator():
                 counter +=1            
 
         self.qplaquette_grid = qplaquette_grid
+
+
+    def __str__(self):
+        return "Instance of KPointGenerator"   

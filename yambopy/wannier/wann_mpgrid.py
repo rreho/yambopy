@@ -18,6 +18,8 @@ class symmetrized_mp_grid(KPointGenerator):
         self.rlat = self.latdb.rlat*2*np.pi*ang2bohr
         self.shift = shift
         self.cell = (latdb.lat, latdb.red_atomic_positions, latdb.atomic_numbers)
+        self.generate()
+
     def generate(self):
         """
         Generate a monkhorst mesh symmetriced
@@ -383,3 +385,6 @@ class tb_Monkhorst_Pack(KPointGenerator):
             ],
             axis=-1
         ).astype(int)  # Shape (nkpoints, nqpoints, nnkpts, 5)
+
+    def __str__(self):
+        return "Instance of symmetrized_mp_grid"   

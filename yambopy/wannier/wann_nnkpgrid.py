@@ -9,6 +9,7 @@ class NNKP_Grids(KPointGenerator):
         self.nnkp_grid = NNKP(seedname)
         self.latdb = latdb
         self.yambo_grid = yambo_grid
+        self.generate()
 
     def __getattr__(self, name):
         # Delegate attribute access to self.nnkp_grid if the attribute doesn't exist in NNKP_Grids
@@ -296,3 +297,6 @@ class NNKP_Grids(KPointGenerator):
         self.kpq_grid_table = kpq_grid_table
 
         return kpq_grid, kpq_grid_table
+
+    def __str__(self):
+        return "Instance of NNKP_Grids"    
