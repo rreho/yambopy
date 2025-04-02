@@ -26,7 +26,15 @@ class symmetrized_mp_grid(KPointGenerator):
         point_map, kpoints_mesh = spglib.get_ir_reciprocal_mesh(self.grid_shape,self.cell)
         self.red_kpoints_full = kpoints_mesh/self.grid_shape
         red_kpoints_ibz, sort_indices = np.unique(self.red_kpoints_full[point_map], axis=0, return_index=True)
+
         red_kpoints_ibz = red_kpoints_ibz[np.argsort(sort_indices)]
+        sort_indices = sort_indices[np.argsort(sort_indices)]
+        mapping = {val: idx for idx, val in enumerate(sort_indices)}
+        
+        # Vectorized remapping
+        self.kpoint_indices = np.vectorize(mapping.get)(point_map)
+        _, counts = np.unique(self.kpoint_indices, return_counts=True)
+        self.kpoint_weights = counts/len(self.red_kpoints_full)
         # red_kpoints_ibz[:, [0, 1]] = red_kpoints_ibz[:, [1, 0]]     #swap the x and y coordinates
         self.k = red_kpoints_ibz
         self.red_kpoints = red_kpoints_ibz
@@ -34,6 +42,7 @@ class symmetrized_mp_grid(KPointGenerator):
         self.nkpoints = len(self.k)
         self.k_tree = cKDTree(self.k)   # in ibz
         self.point_map = point_map
+        self.sort_indices = sort_indices
         self.kpoints_mesh = kpoints_mesh
         self.k_tree_full = cKDTree(self.red_kpoints_full)
 
@@ -124,7 +133,7 @@ class symmetrized_mp_grid(KPointGenerator):
 
         distance, closest_indices = self.k_tree_full.query(points, k=1) # closest in the full bz
 
-        _, closest_indices_ibz = self.k_tree.query(self.red_kpoints_full[self.point_map[closest_indices]], k=1)
+        _, closest_indices_ibz = self.k_tree.query(self.red_kpoints_full[self.point_map[closest_indices]], k=1)#!
 
 
         # Return the appropriate type
