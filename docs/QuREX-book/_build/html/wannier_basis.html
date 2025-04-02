@@ -1,0 +1,642 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Wannier representation &#8212; QuREX Documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=a3416100" />
+    <link rel="stylesheet" type="text/css" href="_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
+    <link rel="stylesheet" type="text/css" href="_static/proof.css?v=b4b7a797" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="_static/togglebutton.js?v=4a39c7ea"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script async="async" src="_static/sphinx-thebe.js?v=c100c467"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'wannier_basis';</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search this book..."
+         aria-label="Search this book..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="intro.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">QuREX Documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="intro.html">
+                    QuREX Theoretical Formalism
+                </a>
+            </li>
+        </ul>
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Theory</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="content/theory/theoretical_background.html">Theoretical Background</a></li>
+
+
+
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Software</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="content/software/software.html">Software</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/software/yambo/yambo.html">Yambo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/software/yambo/yambo_input_flags.html">Yambo Input variables</a></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/wannier_basis.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Wannier representation</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Wannier representation</a></li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#representations-in-band-theory">Representations in band theory</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#wavefunction-representations">Wavefunction representations</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#crystal-momentum">Crystal momentum</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#position-representation">Position representation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>
+</ul>
+
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="wannier-representation">
+<h1>Wannier representation<a class="headerlink" href="#wannier-representation" title="Link to this heading">#</a></h1>
+<p>We refer to <span class="math notranslate nohighlight">\(|u_{n\mathbf{k}}&gt;\)</span> as the Bloch function computed by the DFT code (i.e. QE).
+We distinguish between Bloch-like functions in the <code class="docutils literal notranslate"><span class="pre">Wannier</span> <span class="pre">basis</span></code>, <strong>Wannier gauge</strong> (which for our purpose can be any localized basis set), and the ones expressed in a Bloch-like band basis <strong>Hamiltonian gauge</strong>.</p>
+<ul>
+<li><p><strong>Wannier gauge</strong>:</p>
+<div class="math notranslate nohighlight" id="equation-eq-wannier-bloch-function">
+<span class="eqno">()<a class="headerlink" href="#equation-eq-wannier-bloch-function" title="Link to this equation">#</a></span>\[
+  |u^{W}_{n\mathbf{k}}&gt; = \sum_{\mathbf{R}} e^{-i \mathbf{k} \cdot(\hat{\mathbf{r}}-\mathbf{R})}|\mathbf{R} n\rangle
+  \]</div>
+</li>
+<li><p><strong>Hamiltonian gauge</strong>:</p>
+<div class="math notranslate nohighlight" id="equation-eq-hamiltonian-bloch-function">
+<span class="eqno">()<a class="headerlink" href="#equation-eq-hamiltonian-bloch-function" title="Link to this equation">#</a></span>\[
+    \left|u_{n \mathbf{k}}^{(\mathrm{H})}\right\rangle=\sum_m\left|u_{m \mathbf{k}}^{(\mathrm{W})}\right\rangle U_{m n}(\mathbf{k})
+  \]</div>
+</li>
+</ul>
+<p>where <span class="math notranslate nohighlight">\(U\)</span> is the unitary matrix that diagonalizes <a class="reference internal" href="#equation-eq-wannier-bloch-function">()</a></p>
+</section>
+<section class="tex2jax_ignore mathjax_ignore" id="representations-in-band-theory">
+<h1>Representations in band theory<a class="headerlink" href="#representations-in-band-theory" title="Link to this heading">#</a></h1>
+<p>In 1962 Blount <span id="id1">[<a class="reference internal" href="workflows/exciton_phonon.html#id107" title="EI Blount. Formalisms of band theory. In Solid state physics, volume 13, pages 305–373. Elsevier, 1962.">Blount, 1962</a>]</span> reviewed the formalism of band theory, pointing out the existence of different representations for electronic states: the crystal momentum representation (CMR) developed by Adams, the Kohn-Luttinger CMR or Modified CMR (MCMR), and the Wannier one.
+In this work, he focused on the Schroedinger, Pauli and Dirac Hamiltonians but his results are easily generalizable for applications with DFT Hamiltonians:</p>
+<ol class="arabic simple">
+<li><p>Schrödinger: <span class="math notranslate nohighlight">\(H=\frac{p^2}{2 m}+U\)</span></p></li>
+<li><p>Pauli: <span class="math notranslate nohighlight">\(H=\frac{p^2}{2 m}+\frac{e^2}{4 m^2 c^2} \mathbf{p} \cdot \mathbf{\sigma} \times \nabla \mathrm{U}+U\)</span></p></li>
+<li><p>Dirac: <span class="math notranslate nohighlight">\(H=c \boldsymbol{\alpha} \cdot \mathrm{p}+U\)</span></p></li>
+</ol>
+<p>The velocity operator is defined as:</p>
+<div class="math notranslate nohighlight">
+\[
+\mathfrak{B}=-\frac{i}{\hbar}[\mathbf{x}, H]=\nabla_{\mathbf{p}}H
+\]</div>
+<p>When U is a periodic potential, Bloch’s theorem applies and we classify eigenfunctions <span class="math notranslate nohighlight">\(\psi_{n\mathbf{k}}(\mathbf{x})\)</span> by (<span class="math notranslate nohighlight">\(\mathbf{k}, n\)</span>) quantum numbers</p>
+<div class="math notranslate nohighlight" id="equation-eq-blochwf">
+<span class="eqno">()<a class="headerlink" href="#equation-eq-blochwf" title="Link to this equation">#</a></span>\[
+\psi_{n \mathbf{k}}(\mathbf{x})=e^{(i \mathbf{k} \cdot \mathbf{x})} u_{n \mathbf{k}}(\mathbf{x})
+\]</div>
+<p>with <span class="math notranslate nohighlight">\(u_{n\mathbf{k}}\)</span> the periodic part of the Bloch function.</p>
+<p>We write an EOM for <span class="math notranslate nohighlight">\(u\)</span> in the form
+$<span class="math notranslate nohighlight">\(
+H(\mathbf{k}) u_{n \mathbf{k}}(\mathbf{x})=E_n(\mathbf{k}) u_{n \mathbf{k}}(\mathbf{x})
+\)</span>$ (eq:EOM-u)</p>
+<p>with</p>
+<div class="math notranslate nohighlight">
+\[
+H(\mathbf{k}) \equiv e^{(-i \mathbf{k} \mathbf{x})} H e^{(i \mathbf{k} \cdot \mathbf{x})}
+\]</div>
+<p>The solutions of <code class="xref eq docutils literal notranslate"><span class="pre">eq:EOM-u</span></code> are peridic. Hence, <span class="math notranslate nohighlight">\(\psi_{n\mathbf{k}}\)</span> and the functions <span class="math notranslate nohighlight">\(\psi_{n\mathbf{k+K}}\)</span> span the same space and it is enough
+to restrict ourself to the first unit cell in <span class="math notranslate nohighlight">\(\mathbf{k}\)</span> k space.</p>
+<section id="wavefunction-representations">
+<h2>Wavefunction representations<a class="headerlink" href="#wavefunction-representations" title="Link to this heading">#</a></h2>
+<p>Any wavefunction <span class="math notranslate nohighlight">\(f(\mathbf{x})\)</span> can be expressed as a suporposition of Bloch functions with <span class="math notranslate nohighlight">\(f_{n}(\mathbf{k})\)</span> the wavefunction in the CMR.</p>
+<div class="math notranslate nohighlight">
+\[
+f(\mathbf{x})=\sum_n \int d^3 k f_n(\mathbf{k}) \psi_{n \mathbf{k}}(\mathbf{x})
+\]</div>
+<section id="crystal-momentum">
+<h3>Crystal momentum<a class="headerlink" href="#crystal-momentum" title="Link to this heading">#</a></h3>
+<p>The crystal momentum operator is <span class="math notranslate nohighlight">\(\mathbf{p_e} = \hbar \mathbf{k}\)</span>, with matrix elements</p>
+<div class="math notranslate nohighlight" id="equation-eq-crystalmomentumoperator">
+<span class="eqno">()<a class="headerlink" href="#equation-eq-crystalmomentumoperator" title="Link to this equation">#</a></span>\[
+\mathbf{p}_{e,nn^\prime}(\mathbf{k},\mathbf{k^\prime})
+\]</div>
+<p>while the true momentum has the form</p>
+<div class="math notranslate nohighlight">
+\[
+\mathbf{p}_{n n^{\prime}}\left(\mathbf{k}, \mathbf{k}^{\prime}\right)=\delta\left(\mathbf{k}-\mathbf{k}^{\prime}\right)\left(\hbar \mathbf{k} \delta_{n n^{\prime}}-i \hbar \int_{uc} u_n{ }^* \frac{\partial u_{n^{\prime}}}{\partial \mathbf{x}} d \tau\right)
+\]</div>
+<p>the velocity operator has matrix elements <span class="math notranslate nohighlight">\(\mathfrak{B}_{nn\prime}(\mathbf{k})\)</span> (<span class="math notranslate nohighlight">\(n=n\prime\)</span> are intrabands, <span class="math notranslate nohighlight">\(n\neq n^\prime\)</span> are interband)$</p>
+</section>
+<section id="position-representation">
+<h3>Position representation<a class="headerlink" href="#position-representation" title="Link to this heading">#</a></h3>
+<p>Representation of <span class="math notranslate nohighlight">\(\mathbf{x}\)</span> involevs evaluating the following integral</p>
+<div class="math notranslate nohighlight" id="equation-eq-posrepr1">
+<span class="eqno">()<a class="headerlink" href="#equation-eq-posrepr1" title="Link to this equation">#</a></span>\[\begin{split}
+\begin{align}
+I_{n^{\prime} \mathbf{k}^{\prime} n \mathbf{k}} &amp; =\int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* \mathbf{x} \psi_{n \mathbf{k}} d^3 \mathbf{x} \nonumber\\
+&amp;=\delta_{n n^{\prime}} \sum_R e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{R}\right]} \mathbf{R}+ \nonumber \\
+&amp;\sum e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{R}\right]} \xi_{n^{\prime} n}(\mathbf{k})
+\end{align}
+\end{split}\]</div>
+<p>where we used the usual trick of replacing the integration over the whole cell with the integration over the unit cell.</p>
+<div class="math notranslate nohighlight">
+\[
+\mathbf{\xi}_{n^{\prime} n}(k)=\int_{uc} u_{n^{\prime} \mathbf{k}}^* \mathbf{x} u_{n \mathbf{k}} d \tau
+\]</div>
+<p><code class="xref eq docutils literal notranslate"><span class="pre">eq:posrep1</span></code> has two problems. The first term is not well defined and the second term depends on the choice of the unit cell.
+A different approach could be to write</p>
+<div class="math notranslate nohighlight" id="equation-eq-posrepr2">
+<span class="eqno">()<a class="headerlink" href="#equation-eq-posrepr2" title="Link to this equation">#</a></span>\[\begin{split}
+\begin{align}
+I_{n^{\prime} \mathbf{k}^{\prime} n \mathbf{k}} &amp; =\int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* x^\mu \psi_{n \mathbf{k}} d^3 \mathbf{x} \nonumber\\
+&amp;=-i \frac{\partial}{\partial k^\mu} \int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* \psi_{n \mathbf{k}} d^3 x \\
+&amp; \quad+\int u_{n^{\prime} \mathbf{k}^{\prime}}^* e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{x}\right]} \frac{i \partial u_{n \mathbf{k}}}{\partial k^\mu} d^3 x \\
+&amp; =-i \frac{\partial}{\partial k^\mu} \Delta_{n^{\prime} n}\left(\mathbf{k}^{\prime}, \mathbf{k}\right)+\delta\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \mathfrak{X}_{n^{\prime} n}^\mu(\mathbf{k})
+\end{align}
+\end{split}\]</div>
+<p>where <span class="math notranslate nohighlight">\(\Delta_{n^{\prime} n}\left(\mathbf{k}^{\prime}, \mathbf{k}\right)=\int \psi_{x^{\prime} \mathbf{k}^{\prime}}^* \psi_{n \mathbf{k}} d^8 x\)</span> (cannot be assumed to be <span class="math notranslate nohighlight">\(\delta\)</span> because we need to differentiate) and <span class="math notranslate nohighlight">\(\mathfrak{X}_{n^{\prime} n}(\mathbf{k})=\int u_{n^{\prime} \mathbf{k}}^* i \frac{\partial u_{n \mathbf{k}}}{\partial \mathbf{k}} d \tau\)</span>.</p>
+<p><span class="math notranslate nohighlight">\(\mathfrak{X}\)</span> is not sensitive to the choice of the unit cell but <span class="math notranslate nohighlight">\(\psi_{n\mathbf{k}}\)</span> is not differential w.r.t. <span class="math notranslate nohighlight">\(\mathbf{k}\)</span></p>
+<p>For all pratical calculation representation <a class="reference internal" href="#equation-eq-posrepr2">()</a> is used.
+The action of <span class="math notranslate nohighlight">\(\mathbf{x}\)</span> on a generic wave function <span class="math notranslate nohighlight">\(f_n(\mathbf{k})\)</span> is given by:</p>
+<div class="math notranslate nohighlight" id="equation-eq-xoff">
+<span class="eqno">()<a class="headerlink" href="#equation-eq-xoff" title="Link to this equation">#</a></span>\[
+\mathbf{x} = i\frac{\partial}{f_n}{\mathbf{k}} + \sum \mathbf{\mathfrak{X}}_{nn^\prime}f_{n^\prime}
+\]</div>
+<p>The arbitrariness in <span class="math notranslate nohighlight">\(\mathfrak{X}\)</span> arises from the arbitrary phase phactor <span class="math notranslate nohighlight">\(e^{-i\phi(\mathbf{k})}\)</span>in the <span class="math notranslate nohighlight">\(u's\)</span>: <span class="math notranslate nohighlight">\(i\frac{\partial u}{\partial\mathbf{k}}\rightarrow e^{-i\phi}(i\frac{\partial u}{\partial{\mathbf{k}}} + u\frac{\partial \phi}{\partial \mathbf{k}})\)</span>
+Under this phase transformation <span class="math notranslate nohighlight">\(\mathfrak{X}_{nn^\prime}\)</span> does not transform as an operator for <span class="math notranslate nohighlight">\(n = n^\prime\)</span>.</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}
+\begin{align}
+&amp; \mathfrak{X}_{n n^{\prime}}^{\prime}=\exp \left(i \varphi_n\right) \mathfrak{X}_{n n^{\prime}} \exp \left(-i \varphi_{n^{\prime}}\right) \quad n \neq n^{\prime} \\
+&amp; \mathfrak{X}_{n n}^{\prime}=\mathfrak{X}_{n n}+\frac{\partial \varphi_n}{\partial \mathbf{k}}
+\end{align}
+\end{split}\]</div>
+<p>However, a compensantory term in the first term of <a class="reference internal" href="#equation-eq-xoff">()</a> makes it in such a way that <span class="math notranslate nohighlight">\(\mathbf{x_c} = i\partial/\partial\mathbf{k} + \mathfrak{X}_{nn}\)</span> transforms like an operator. So that <span class="math notranslate nohighlight">\(\mathbf{x} = \)</span>\mathbf{x}_c<span class="math notranslate nohighlight">\( + X\)</span> is a well defined position operator.
+<span class="math notranslate nohighlight">\(X\)</span> has only interband matrix elements equal to <span class="math notranslate nohighlight">\(\mathfrak{X}_{nn^\prime}\)</span> (<span class="math notranslate nohighlight">\(n\neq n^\prime\)</span>)</p>
+</section>
+</section>
+</section>
+<section class="tex2jax_ignore mathjax_ignore" id="references">
+<h1>References<a class="headerlink" href="#references" title="Link to this heading">#</a></h1>
+<div class="docutils container" id="id2">
+<div role="list" class="citation-list">
+<div class="citation" id="id107" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">Blo62</a><span class="fn-bracket">]</span></span>
+<p>EI Blount. Formalisms of band theory. In <em>Solid state physics</em>, volume 13, pages 305–373. Elsevier, 1962.</p>
+</div>
+<div class="citation" id="id43" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>DSQ23<span class="fn-bracket">]</span></span>
+<p>Alexandre C Dias, Julian FRV Silveira, and Fanyao Qu. Wantibexos: a wannier based tight binding code for electronic band structure, excitonic and optoelectronic properties of solids. <em>Computer Physics Communications</em>, 285:108636, 2023.</p>
+</div>
+<div class="citation" id="id71" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>GAB+17<span class="fn-bracket">]</span></span>
+<p>Paolo Giannozzi, Oliviero Andreussi, Thomas Brumme, Oana Bunau, M Buongiorno Nardelli, Matteo Calandra, Roberto Car, Carlo Cavazzoni, Davide Ceresoli, Matteo Cococcioni, and others. Advanced capabilities for materials modelling with quantum espresso. <em>Journal of physics: Condensed matter</em>, 29(46):465901, 2017.</p>
+</div>
+<div class="citation" id="id9" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>GBB+09<span class="fn-bracket">]</span></span>
+<p>Paolo Giannozzi, Stefano Baroni, Nicola Bonini, Matteo Calandra, Roberto Car, Carlo Cavazzoni, Davide Ceresoli, Guido L Chiarotti, Matteo Cococcioni, Ismaila Dabo, and others. Quantum espresso: a modular and open-source software project for quantum simulations of materials. <em>Journal of physics: Condensed matter</em>, 21(39):395502, 2009.</p>
+</div>
+<div class="citation" id="id103" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>HQdJN23<span class="fn-bracket">]</span></span>
+<p>Jonah B Haber, Diana Y Qiu, Felipe H da Jornada, and Jeffrey B Neaton. Maximally localized exciton wannier functions for solids. <em>Physical Review B</em>, 108(12):125118, 2023.</p>
+</div>
+<div class="citation" id="id61" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>KS65<span class="fn-bracket">]</span></span>
+<p>Walter Kohn and Lu Jeu Sham. Self-consistent equations including exchange and correlation effects. <em>Physical review</em>, 140(4A):A1133, 1965.</p>
+</div>
+<div class="citation" id="id108" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>LPSA23<span class="fn-bracket">]</span></span>
+<p>Pierre Lechifflart, Fulvio Paleari, Davide Sangalli, and Claudio Attaccalite. First-principles study of luminescence in hexagonal boron nitride single layer: exciton-phonon coupling and the role of substrate. <em>Phys. Rev. Mater.</em>, 7:024006, Feb 2023. URL: <a class="reference external" href="https://link.aps.org/doi/10.1103/PhysRevMaterials.7.024006">https://link.aps.org/doi/10.1103/PhysRevMaterials.7.024006</a>, <a class="reference external" href="https://doi.org/10.1103/PhysRevMaterials.7.024006">doi:10.1103/PhysRevMaterials.7.024006</a>.</p>
+</div>
+<div class="citation" id="id32" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>MHGruningV09<span class="fn-bracket">]</span></span>
+<p>Andrea Marini, Conor Hogan, Myrta Grüning, and Daniele Varsano. Yambo: an ab initio tool for excited state calculations. <em>Computer Physics Communications</em>, 180(8):1392–1403, 2009.</p>
+</div>
+<div class="citation" id="id42" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>MMY+12<span class="fn-bracket">]</span></span>
+<p>Nicola Marzari, Arash A Mostofi, Jonathan R Yates, Ivo Souza, and David Vanderbilt. Maximally localized wannier functions: theory and applications. <em>Reviews of Modern Physics</em>, 84(4):1419, 2012.</p>
+</div>
+<div class="citation" id="id104" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>MYL+08<span class="fn-bracket">]</span></span>
+<p>Arash A Mostofi, Jonathan R Yates, Young-Su Lee, Ivo Souza, David Vanderbilt, and Nicola Marzari. Wannier90: a tool for obtaining maximally-localised wannier functions. <em>Computer physics communications</em>, 178(9):685–699, 2008.</p>
+</div>
+<div class="citation" id="id29" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>ORR02<span class="fn-bracket">]</span></span>
+<p>Giovanni Onida, Lucia Reining, and Angel Rubio. Electronic excitations: density-functional versus many-body green’s-function approaches. <em>Reviews of modern physics</em>, 74(2):601, 2002.</p>
+</div>
+<div class="citation" id="id6" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>SFM+19<span class="fn-bracket">]</span></span>
+<p>Davide Sangalli, Andrea Ferretti, Henrique Miranda, Claudio Attaccalite, Ivan Marri, Elena Cannuccia, P Melo, Margherita Marsili, Fulvio Paleari, Antimo Marrazzo, and others. Many-body perturbation theory calculations using the yambo code. <em>Journal of Physics: Condensed Matter</em>, 31(32):325902, 2019.</p>
+</div>
+<div class="citation" id="id105" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>YWVS07<span class="fn-bracket">]</span></span>
+<p>Jonathan R Yates, Xinjie Wang, David Vanderbilt, and Ivo Souza. Spectral and fermi surface properties from wannier interpolation. <em>Physical Review B—Condensed Matter and Materials Physics</em>, 75(19):195121, 2007.</p>
+</div>
+</div>
+</div>
+</section>
+
+    <script type="text/x-thebe-config">
+    {
+        requestKernel: true,
+        binderOptions: {
+            repo: "binder-examples/jupyter-stacks-datascience",
+            ref: "master",
+        },
+        codeMirrorConfig: {
+            theme: "abcdef",
+            mode: "python"
+        },
+        kernelOptions: {
+            name: "python3",
+            path: "./."
+        },
+        predefinedOutput: true
+    }
+    </script>
+    <script>kernelName = 'python3'</script>
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Wannier representation</a></li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#representations-in-band-theory">Representations in band theory</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#wavefunction-representations">Wavefunction representations</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#crystal-momentum">Crystal momentum</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#position-representation">Position representation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>
+</ul>
+
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Riccardo Reho
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2023.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
