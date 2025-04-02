@@ -34,9 +34,9 @@ def process_file(args):
     ivp = BSE_table[:, 1]
     icp = BSE_table[:, 2]
 
-    ikplusq = kplusq_table[ik, kpoints_indexes[idx],1]
-    ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx],1]
-    ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
+    ikplusq = kplusq_table[ik, kpoints_indexes[idx],0]
+    ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx],0]
+    ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx],0]
 
     # Ensure deltaE is diagonal
     deltaE = np.zeros((len(BSE_table), len(BSE_table)),dtype=np.complex128)
@@ -275,9 +275,9 @@ class H2P():
                 ivp = BSE_table[:, 1]
                 icp = BSE_table[:, 2]
 
-                ikplusq = self.kplusq_table[ik, kpoints_indexes[idx],1]
-                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],1]
-                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
+                ikplusq = self.kplusq_table[ik, kpoints_indexes[idx],0]
+                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],0]
+                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],0]
 
                 # Ensure deltaE is diagonal
                 deltaE = np.zeros((self.dimbse, self.dimbse),dtype=np.complex128)
