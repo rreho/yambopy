@@ -34,9 +34,9 @@ def process_file(args):
     ivp = BSE_table[:, 1]
     icp = BSE_table[:, 2]
 
-    ikplusq = kplusq_table[ik, kpoints_indexes[idx],0]
-    ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx],0]
-    ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx],0]
+    ikplusq = kplusq_table_yambo[ik, kpoints_indexes[idx],1]
+    ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx],1]
+    ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
     # Ensure deltaE is diagonal
     deltaE = np.zeros((len(BSE_table), len(BSE_table)),dtype=np.complex128)
@@ -209,7 +209,7 @@ class H2P():
                 file_suffix = 'ndb.BS_diago_Q1'
             else:
                 H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
+                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[self.kindices_table[iq]] + 1}' for iq in range(self.nq_double)]
 
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
             t0 = time()
@@ -251,7 +251,7 @@ class H2P():
                 file_suffix = 'ndb.BS_diago_Q1'
             else:
                 H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
+                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[self.kindices_table[iq]] + 1}' for iq in range(self.nq_double)]
 
             # Common setup for databases (Yambo databases)
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
@@ -275,9 +275,9 @@ class H2P():
                 ivp = BSE_table[:, 1]
                 icp = BSE_table[:, 2]
 
-                ikplusq = self.kplusq_table[ik, kpoints_indexes[idx],0]
-                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],0]
-                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],0]
+                ikplusq = self.kplusq_table_yambo[ik, kpoints_indexes[idx],1]
+                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],1]
+                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
                 # Ensure deltaE is diagonal
                 deltaE = np.zeros((self.dimbse, self.dimbse),dtype=np.complex128)
@@ -291,6 +291,7 @@ class H2P():
                 K = -(K_ttp[np.arange(self.dimbse)[:, None], np.arange(self.dimbse)[None, :]]) * HA2EV
 
                 element_value = deltaE + occupation_diff[:, None] * K
+              
                 if self.nq_double == 1:
                     H2P[:, :] = element_value
                 else:
@@ -771,7 +772,7 @@ class H2P():
 
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=h2peigvec_vck, method='yambo')
         # compute osc strength
-        self.dipoles_bse = tb_dipoles.dipoles_bse
+        self.dipoles_bse = tb_dipoles.dipoles
         # self.dipoles = tb_dipoles.dipoles
         F_kcv = tb_dipoles.F_kcv
         self.F_kcv = F_kcv
@@ -833,11 +834,11 @@ class H2P():
                 ivp = iv
                 icp = icp
 
-            iqpb = self.kmpgrid.qpb_grid_table[iq, ib, 1]
-            ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]
+            iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1]
+            ikmq = self.kminusq_table[ik, iq, 1]
             ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
             ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
-            term1 = np.conjugate(self.h2peigvec_vck[ikq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+            term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
             term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
             term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
@@ -893,7 +894,7 @@ class H2P():
         for it,t in enumerate(trange):
             for itp, tp in enumerate(tprange):
                 for iq, ikq in enumerate(self.kindices_table):
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, ikq)        
+                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
@@ -951,7 +952,7 @@ class H2P():
         f_out = open(f'{seedname}.eig', 'w')
         for iq, ikq in enumerate(self.kindices_table):
             for it,t in enumerate(trange):
-                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[ikq,it]):.13f}\n')
+                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[iq,it]):.13f}\n')
     
     def write_exc_nnkp(self, seedname='wannier90_exc', trange = [0]):
         f_out = open(f'{seedname}.nnkp', 'w')

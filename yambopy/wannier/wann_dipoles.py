@@ -7,8 +7,8 @@ from yambopy.wannier.wann_utils import *
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self , nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, BSE_table, h2peigvec,eigv_diff_ttp, eigvecc_t,eigvecv_t,\
-                 mpgrid, cpot, \
+                 eta, hlm, T_table, BSE_table, h2peigvec,eigv_diff_ttp=None, eigvecc_t=None,eigvecv_t=None,\
+                 mpgrid=None, cpot=None, \
                  h2peigv_vck = None, h2peigvec_vck = None, method = 'real',\
                  rmn = None,ktype='IP'):
         # hk, hlm are TBMODEL hamiltonians
@@ -106,40 +106,7 @@ class TB_dipoles():
                 dipoles_kcv[ik, ic, iv,2] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
 
             self.dipoles_kcv = dipoles_kcv
-            # # Determine the dimension of hlm
-            # dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
 
-            # # Extract k, v, c from T_table
-            # k_indices, v_indices, c_indices = self.T_table.T
-
-            # # Compute Green's function for all transitions
-            # w = self.eigv[k_indices, c_indices]
-            # E = self.eigv[k_indices, v_indices]
-            # GR = GreensFunctions(w=w, E=E, eta=self.eta).GR
-
-            # # Initialize dipoles array
-            # dipoles = np.zeros((self.ntransitions, dim_hlm), dtype=np.complex128)
-
-            # # Prepare eigenvectors
-            # eigvec_c = self.eigvec[k_indices, :, c_indices]
-            # eigvec_v = self.eigvec[k_indices, :, v_indices]
-            # print('shape eigvec', eigvec_c.shape)
-            # # Compute dipoles
-            # for dim in range(dim_hlm):
-            #     # Compute the dot product
-            #     print('shape hlm',self.hlm[k_indices,:,:,dim].shape)
-            #     dot_product = np.einsum('ijk,ij->ik', self.hlm[k_indices, :, :, dim],eigvec_v)
-                
-            #     # Compute the vdot and multiply with GR
-            #     dipoles[:, dim] = GR * np.einsum('ij,jk->i',np.conjugate(eigvec_c),dot_product)
-            #     #* np.sum(np.conjugate(eigvec_c) * dot_product, axis=1)
-
-            # # Reshape dipoles to match your original shape
-            # final_dipoles = np.zeros((self.ntransitions, 3), dtype=np.complex128)
-            # final_dipoles[np.arange(self.ntransitions), :dim_hlm] = dipoles
-            # #self.dipoles_kcv = final_dipoles / (HA2EV ** 3)
-            # print("Dipoles matrix computed successfully in serial mode.")
-            # print(f"Time for Dipoles matrix formation: {time.time() - t0:.2f}")
         if (method == 'yambo'):
             dipoles = np.zeros((self.ntransitions, self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
             for n in range(0, self.ntransitions):
@@ -154,7 +121,7 @@ class TB_dipoles():
                     dipoles[n, ik, ic, iv, 0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
                     dipoles[n, ik, ic, iv, 1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
                     dipoles[n, ik, ic, iv, 2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
-            self.dipoles = dipoles/(HA2EV**3)  
+            self.dipoles = dipoles#/(HA2EV**3)  
 
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')
