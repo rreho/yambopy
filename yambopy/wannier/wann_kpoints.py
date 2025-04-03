@@ -133,6 +133,17 @@ class KPointGenerator():
         # Return the appropriate type
         return closest_indices if points.shape[0] > 1 else int(closest_indices[0])
 
+    def find_closest_kpoint_yambo(self, point):
+        # Convert point to a numpy array
+        point = np.array(point)
+        
+        # Calculate distances considering periodic boundary conditions
+        distances = np.linalg.norm((self.k - point + 0.5) % 1 - 0.5, axis=1)
+        
+        # Find the index of the minimum distance
+        closest_idx = np.argmin(distances)
+        
+        return int(closest_idx)
 
     def get_kq_tables(self,qmpgrid, sign = '+'):
         kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
@@ -155,6 +166,14 @@ class KPointGenerator():
         self.kindices_fromq = kindices_fromq
 
         return kindices_fromq
+
+    def fold_into_bz_yambo(self,points):
+        'Fold a point in the first BZ defined in the range ]-0.5,0.5]'
+        # Applying the modulo operation to shift points within the range [-0.5, 0.5]
+        folded_points = points%1.0
+        # Correcting points where original points were exactly 0.5 to remain 0.5
+        folded_points[folded_points > 0.5] -= 1
+        return folded_points
 
     def fold_into_bz(self,points):
         'Fold a point in the first BZ defined in the range [-0.5,0.5]'

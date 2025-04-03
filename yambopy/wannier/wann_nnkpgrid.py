@@ -207,25 +207,25 @@ class NNKP_Grids(KPointGenerator):
         ).astype(int)  # Shape (nkpoints, nqpoints, nnkpts, 5)
 
     def get_kq_tables_yambo(self,electronsdb):
+
         kplusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz),dtype=int)
         kminusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz), dtype=int)
         
-        _,kplusq_table = self.get_kpq_grid_yambo(electronsdb.red_kpoints)
-        _,kminusq_table = self.get_kmq_grid_yambo(electronsdb.red_kpoints)
-        # kplusq = self.k[:, np.newaxis, :] + electronsdb.red_kpoints[np.newaxis, :, :]
-        # kminusq = self.k[:, np.newaxis, :] - electronsdb.red_kpoints[np.newaxis, :, :]
+        #_,kplusq_table = self.get_kpq_grid_yambo(electronsdb.red_kpoints)
+        #_,kminusq_table = self.get_kmq_grid_yambo(electronsdb.red_kpoints)
 
-        # # Fold all kplusq and kminusq into the Brillouin zone
-        # kplusq = self.fold_into_bz(kplusq)
-        # kminusq = self.fold_into_bz(kminusq)
+        for ik, k in enumerate(self.k):
+            for iq, q in enumerate(electronsdb.red_kpoints):
+                kplusq = k+q
+                kminusq = k-q
+                kplusq = self.fold_into_bz(kplusq)
+                kminusq = self.fold_into_bz(kminusq)
+                idxkplusq = self.find_closest_kpoint_yambo(kplusq)
+                idxkminusq = self.find_closest_kpoint_yambo(kminusq)
+                kplusq_table[ik,iq] = idxkplusq
+                kminusq_table[ik,iq] = idxkminusq
 
-        # # Find closest k-points for all combinations
-        # idxkplusq = np.apply_along_axis(self.find_closest_kpoint, -1, kplusq)
-        # idxkminusq = np.apply_along_axis(self.find_closest_kpoint, -1, kminusq)
-
-        # # Assign to tables
-        # kplusq_table = idxkplusq
-        # kminusq_table = idxkminusq
+        return kplusq_table, kminusq_table
 
 
         return kplusq_table, kminusq_table
