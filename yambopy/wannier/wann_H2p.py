@@ -34,7 +34,7 @@ def process_file(args):
     ivp = BSE_table[:, 1]
     icp = BSE_table[:, 2]
 
-    ikplusq = kplusq_table_yambo[ik, kpoints_indexes[idx],1]
+    ikplusq = kplusq_table[ik, kpoints_indexes[idx],1]
     ikminusq = kminusq_table_yambo[ik, kpoints_indexes[idx],1]
     ikpminusq = kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
@@ -251,7 +251,7 @@ class H2P():
                 file_suffix = 'ndb.BS_diago_Q1'
             else:
                 H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-                file_suffix = [f'ndb.BS_diago_Q{iq + 1}' for iq in range(self.nq_double_yambo)]
+                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
 
             # Common setup for databases (Yambo databases)
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
@@ -262,7 +262,7 @@ class H2P():
                 yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
                 v_band = np.min(yexc_atk.table[:, 1])
                 c_band = np.max(yexc_atk.table[:, 2])
-                kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=idx + 1)
+                kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
                 aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
                 K_ttp = kernel_db.kernel[aux_t][:,aux_t]
                 # Operations for matrix element calculations
@@ -275,9 +275,9 @@ class H2P():
                 ivp = BSE_table[:, 1]
                 icp = BSE_table[:, 2]
 
-                ikplusq = self.kplusq_table_yambo[ik, idx,1]
-                ikminusq = self.kminusq_table_yambo[ik, idx,1]
-                ikpminusq = self.kminusq_table_yambo[ikp, idx,1]
+                ikplusq = self.kplusq_table_yambo[ik, kpoints_indexes[idx],1]
+                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],1]
+                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
                 # Ensure deltaE is diagonal
                 deltaE = np.zeros((self.dimbse, self.dimbse),dtype=np.complex128)

@@ -241,7 +241,7 @@ class NNKP_Grids(KPointGenerator):
         kq_diff = k_grid - q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing
+        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3))#,bz_range=(0.0,1.0))  # Flatten for batch processing
         kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
@@ -274,7 +274,7 @@ class NNKP_Grids(KPointGenerator):
         kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing
+        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3))#,bz_range=(0.0,1.0))  # Flatten for batch processing
         kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
