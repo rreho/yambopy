@@ -50,7 +50,7 @@ class NNKP_Grids(KPointGenerator):
         elif sign == "-":
             kq_diff = -k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
         # Fold into the Brillouin Zone and get G-vectors
-        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3))  # Flatten for batch processing
+        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),include_upper_bound=False)  # Flatten for batch processing
         kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
@@ -84,7 +84,7 @@ class NNKP_Grids(KPointGenerator):
         kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3))  # Flatten for batch processing
+        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3),include_upper_bound=False)  # Flatten for batch processing
         kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
@@ -121,7 +121,7 @@ class NNKP_Grids(KPointGenerator):
         qpb_grid_table = np.zeros((qmpgrid.nkpoints, qmpgrid.nnkpts, 5), dtype = int)
         for iq, q in enumerate(qmpgrid.k):
             for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
-                tmp_qpb, tmp_Gvec = qmpgrid.fold_into_bz_Gs(q+b)
+                tmp_qpb, tmp_Gvec = qmpgrid.fold_into_bz_Gs(q+b,include_upper_bound=False)
                 idxqpb = self.find_closest_kpoint(tmp_qpb)
                 qpb_grid[iq, ib] = tmp_qpb
                 # here it should be tmp_Gvec, but with yambo grid I have inconsistencies because points are at 0.75
@@ -141,7 +141,7 @@ class NNKP_Grids(KPointGenerator):
         k_expanded = self.k[:, np.newaxis, :]  # Shape (nkpoints, 1, 3)
         combined_kb = k_expanded + b_grid  # Shape (nkpoints, nnkpts, 3)
         # Fold into the BZ for all k + b combinations
-        folded_kb, Gvec = self.fold_into_bz_Gs(combined_kb.reshape(-1, 3))  # Flatten first two dims
+        folded_kb, Gvec = self.fold_into_bz_Gs(combined_kb.reshape(-1, 3),include_upper_bound=False)  # Flatten first two dims
         folded_kb = folded_kb.reshape(self.nkpoints, self.nnkpts, 3)
         Gvec = Gvec.reshape(self.nkpoints, self.nnkpts, 3)
         # Find closest kpoints
@@ -187,7 +187,7 @@ class NNKP_Grids(KPointGenerator):
         )  # Final Shape (nkpoints, nqpoints, nnkpts, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kqmbover2_folded, Gvec = self.fold_into_bz_Gs(kqmbover2.reshape(-1, 3))  # Flatten for batch processing
+        kqmbover2_folded, Gvec = self.fold_into_bz_Gs(kqmbover2.reshape(-1, 3),include_upper_bound=False)  # Flatten for batch processing
         kqmbover2_folded = kqmbover2_folded.reshape(nkpoints, nqpoints, nnkpts, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, nnkpts, 3)
 
@@ -207,26 +207,12 @@ class NNKP_Grids(KPointGenerator):
         ).astype(int)  # Shape (nkpoints, nqpoints, nnkpts, 5)
 
     def get_kq_tables_yambo(self,electronsdb):
-
+        
         kplusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz),dtype=int)
         kminusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz), dtype=int)
         
-        #_,kplusq_table = self.get_kpq_grid_yambo(electronsdb.red_kpoints)
-        #_,kminusq_table = self.get_kmq_grid_yambo(electronsdb.red_kpoints)
-
-        for ik, k in enumerate(self.k):
-            for iq, q in enumerate(electronsdb.red_kpoints):
-                kplusq = k+q
-                kminusq = k-q
-                kplusq = self.fold_into_bz(kplusq)
-                kminusq = self.fold_into_bz(kminusq)
-                idxkplusq = self.find_closest_kpoint_yambo(kplusq)
-                idxkminusq = self.find_closest_kpoint_yambo(kminusq)
-                kplusq_table[ik,iq] = idxkplusq
-                kminusq_table[ik,iq] = idxkminusq
-
-        return kplusq_table, kminusq_table
-
+        _,kplusq_table = self.get_kpq_grid_yambo(electronsdb.red_kpoints)
+        _,kminusq_table = self.get_kmq_grid_yambo(electronsdb.red_kpoints)
 
         return kplusq_table, kminusq_table
 
@@ -241,7 +227,7 @@ class NNKP_Grids(KPointGenerator):
         kq_diff = k_grid - q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3))#,bz_range=(0.0,1.0))  # Flatten for batch processing
+        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3))
         kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
@@ -274,7 +260,7 @@ class NNKP_Grids(KPointGenerator):
         kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3))#,bz_range=(0.0,1.0))  # Flatten for batch processing
+        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3))
         kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 

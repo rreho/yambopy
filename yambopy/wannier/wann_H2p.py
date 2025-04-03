@@ -275,9 +275,9 @@ class H2P():
                 ivp = BSE_table[:, 1]
                 icp = BSE_table[:, 2]
 
-                ikplusq = self.kplusq_table_yambo[ik, kpoints_indexes[idx]]
-                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx]]
-                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx]]
+                ikplusq = self.kplusq_table_yambo[ik, kpoints_indexes[idx],1]
+                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],1]
+                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
                 # Ensure deltaE is diagonal
                 deltaE = np.zeros((self.dimbse, self.dimbse),dtype=np.complex128)
