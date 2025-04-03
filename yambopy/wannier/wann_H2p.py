@@ -203,13 +203,13 @@ class H2P():
             pool = mp.Pool(self.nproc)
             full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
             # full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.expand_kpts()
-
+            self.nq_double_yambo = len(full_kpoints)
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
                 file_suffix = 'ndb.BS_diago_Q1'
             else:
                 H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[self.kindices_table[iq]] + 1}' for iq in range(self.nq_double)]
+                file_suffix = [f'ndb.BS_diago_Q{iq + 1}' for iq in range(self.nq_double_yambo)]
 
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
             t0 = time()
@@ -244,14 +244,14 @@ class H2P():
         else:
             # Expanded k-points and symmetry are prepared for operations that might need them
             full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
-
+            self.nq_double_yambo = len(full_kpoints)
             # Pre-fetch all necessary data based on condition
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
                 file_suffix = 'ndb.BS_diago_Q1'
             else:
                 H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[self.kindices_table[iq]] + 1}' for iq in range(self.nq_double)]
+                file_suffix = [f'ndb.BS_diago_Q{iq + 1}' for iq in range(self.nq_double_yambo)]
 
             # Common setup for databases (Yambo databases)
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
@@ -262,7 +262,7 @@ class H2P():
                 yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
                 v_band = np.min(yexc_atk.table[:, 1])
                 c_band = np.max(yexc_atk.table[:, 2])
-                kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
+                kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=idx + 1)
                 aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
                 K_ttp = kernel_db.kernel[aux_t][:,aux_t]
                 # Operations for matrix element calculations
@@ -275,9 +275,9 @@ class H2P():
                 ivp = BSE_table[:, 1]
                 icp = BSE_table[:, 2]
 
-                ikplusq = self.kplusq_table_yambo[ik, kpoints_indexes[idx],1]
-                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],1]
-                ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
+                ikplusq = self.kplusq_table_yambo[ik, idx,1]
+                ikminusq = self.kminusq_table_yambo[ik, idx,1]
+                ikpminusq = self.kminusq_table_yambo[ikp, idx,1]
 
                 # Ensure deltaE is diagonal
                 deltaE = np.zeros((self.dimbse, self.dimbse),dtype=np.complex128)
