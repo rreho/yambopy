@@ -202,14 +202,14 @@ class H2P():
             print(f"CPU count involved in H2P loading pool: {cpucount}")
             pool = mp.Pool(self.nproc)
             full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
+            self.nq_double = len(full_kpoints)
             # full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.expand_kpts()
-            self.nq_double_yambo = len(full_kpoints)
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
                 file_suffix = 'ndb.BS_diago_Q1'
             else:
                 H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-                file_suffix = [f'ndb.BS_diago_Q{iq + 1}' for iq in range(self.nq_double_yambo)]
+                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
 
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
             t0 = time()
@@ -244,7 +244,7 @@ class H2P():
         else:
             # Expanded k-points and symmetry are prepared for operations that might need them
             full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
-            self.nq_double_yambo = len(full_kpoints)
+            self.nq_double = len(full_kpoints)
             # Pre-fetch all necessary data based on condition
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
