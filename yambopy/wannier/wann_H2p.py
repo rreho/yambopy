@@ -189,6 +189,7 @@ class H2P():
             print('Method skip-diago running only for post-processing of wannier exc data: Remember to set dimslepc')
             self.skip_diago = True
             self.dimslepc=dimslepc
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid)
             (self.h2peigv, self.h2peigvec,self.h2peigv_vck, self.h2peigvec_vck) = self._buildH2Peigv()
             (self.aux_t,self.inverse_aux_t) = self._get_aux_maps()
         else:
