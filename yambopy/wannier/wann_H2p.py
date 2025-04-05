@@ -202,6 +202,7 @@ class H2P():
             print(f"CPU count involved in H2P loading pool: {cpucount}")
             pool = mp.Pool(self.nproc)
             full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
+            
             self.nq_double = len(full_kpoints)
             # full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.expand_kpts()
             if self.nq_double == 1:
@@ -810,7 +811,7 @@ class H2P():
     #             Mssp_ttp += np.conjugate(self.h2peigvec_vck[ikq,t,self.bse_nv-self.nv+iv,ic-self.nv,ik])*self.h2peigvec_vck[iqpb,tp,self.bse_nv-self.nv+ivp,icp-self.nv, ikpbover2]*\
     #                             np.vdot(self.eigvec[ik,:, ic], self.eigvec[ikpbover2,:, icp])*np.vdot(self.eigvec[ikmqmbover2,:,ivp], self.eigvec[ikmq,:,iv]) 
     #     return Mssp_ttp
-    def _get_exc_overlap_ttp(self, t, tp, iq, ikq, ib):
+    def _get_exc_overlap_ttp(self, t, tp, iq, ib):
         '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
         #Extract indices from BSE_table
         if self.method == 'skip-diago':
@@ -834,12 +835,13 @@ class H2P():
                 ivp = iv
                 icp = icp
 
-            iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1]
-            ikmq = self.kminusq_table[ik, iq, 1]
-            ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1]
-            ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1]
-            term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-            term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
+            iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
+            iqpb_ibz_ink = self.electronsdb.kpoints_indexes[self.kindices_table[iqpb]] # qpb point belonging in the IBZ going expressed in k grid
+            ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
+            ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
+            ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
+            term1 = np.conjugate(self.h2peigvec_vck[iqpb_ibz_ink, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+            term2 = self.h2peigvec_vck[iqpb_ibz_ink, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
             term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
             term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
@@ -857,36 +859,18 @@ class H2P():
         print(f"eigvec count: {np.count_nonzero(self.eigvec)}")
         print(f"h2peigvec_vck count: {np.count_nonzero(self.h2peigvec_vck)}")
 
+        vectorized_overlap_ttp = np.vectorize(self._get_exc_overlap_ttp, signature='(),(),(),()->()')
+        # il ip: transition range
+        # iq is the q index in the qgrid
+        # kindices_table[iq] returns the index of the q-point in the k-grid
+        # ib is the index of the neighbourg in qgrid
+        Mssp = vectorized_overlap_ttp(il, ilp, iq, ib) 
+        
 
+        self.Mssp = Mssp 
 
-        vectorized_overlap_ttp = np.vectorize(self._get_exc_overlap_ttp, signature='(),(),(),(),()->()')
-        Mssp = vectorized_overlap_ttp(il, ilp, iq, self.kindices_table[iq], ib)
-
-        self.Mssp = Mssp
-
-    # def get_exc_overlap(self, trange = [0], tprange = [0]):
-    #     Mssp = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints, self.qmpgrid.nnkpts), dtype=np.complex128)
-    #     # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
-    #     for il, l in enumerate(trange):
-    #         for ilp, lp in enumerate(tprange):   
-    #             for iq,ikq in enumerate(self.kindices_table):
-    #                 for ib in range(self.qmpgrid.nnkpts):
-    #                     Mssp[l,lp,iq, ib] = self._get_exc_overlap_ttp(l,lp,iq,ikq,ib)
-    #     self.Mssp = Mssp   
-    
-
-    def _get_amn_ttp(self, t, tp, ikq):
-        # A_squared = np.abs(self.h2peigv_vck)**2
-        # w_qk = np.sum(A_squared, axis = (2,3))
-        # ik = self.BSE_table[t][0]
-        # iv = self.BSE_table[t][1] 
-        # ic = self.BSE_table[t][2] 
-        #ikp = self.BSE_table[tp][0]
-        #ivp = self.BSE_table[tp][1] 
-        #icp = self.BSE_table[tp][2] 
-        #ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
-        #Ammn_ttp = w_qk[ikq, t] #self.h2peigvec_vck[iq,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]#*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
-        Ammn_ttp = np.sum(self.h2peigvec_vck[ikq, t, :, :, :] * np.conjugate(self.h2peigvec_vck[ikq, tp, :, :, :]))
+    def _get_amn_ttp(self, t, tp, iq_ibz):
+        Ammn_ttp = np.sum(self.h2peigvec_vck[iq_ibz, t, :, :, :] * np.conjugate(self.h2peigvec_vck[iq_ibz, tp, :, :, :]))
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0], tprange = [0]):
@@ -894,7 +878,8 @@ class H2P():
         for it,t in enumerate(trange):
             for itp, tp in enumerate(tprange):
                 for iq, ikq in enumerate(self.kindices_table):
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq)        
+                    iq_ibz = self.electronsdb.kpoints_indexes[iq]
+                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq_ibz)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
@@ -932,27 +917,13 @@ class H2P():
         with open(f'{seedname}.mmn', 'w') as f_out:
             f_out.writelines(output_lines)
 
-        # current_datetime = datetime.now()
-        # date_time_string = current_datetime.strftime("%Y-%m-%d at %H:%M:%S")
-        # f_out = open(f'{seedname}.mmn', 'w')
-        # f_out.write(f'Created on {date_time_string}\n')
-        # f_out.write(f'\t{len(trange)}\t{self.qmpgrid.nkpoints}\t{self.qmpgrid.nnkpts}\n')        
-        # for iq in range(self.qmpgrid.nkpoints):
-        #     for ib in range(self.qmpgrid.nnkpts):
-        #         # +1 is for Fortran counting
-        #         f_out.write(f'\t{self.qmpgrid.qpb_grid_table[iq,ib][0]+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][1]+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][2]}\t{self.qmpgrid.qpb_grid_table[iq,ib][3]}\t{self.qmpgrid.qpb_grid_table[iq,ib][4]}\n')
-        #         for it,t in enumerate(trange):
-        #             for itp,tp in enumerate(tprange):
-        #                 f_out.write(f'\t{np.real(self.Mssp[tp,t,iq,ib]):.14f}\t{np.imag(self.Mssp[tp,t,iq,ib]):.14f}\n')
-        
-        # f_out.close()
-
     def write_exc_eig(self, seedname='wannier90_exc', trange = [0]):
         exc_eig = np.zeros((len(trange), self.qmpgrid.nkpoints), dtype=np.complex128)
         f_out = open(f'{seedname}.eig', 'w')
         for iq, ikq in enumerate(self.kindices_table):
+            iq_ibz_ink = self.electronsdb.kpoints_indexes[self.kindices_table[iq]]
             for it,t in enumerate(trange):
-                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[iq,it]):.13f}\n')
+                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[iq_ibz_ink,it]):.13f}\n')
     
     def write_exc_nnkp(self, seedname='wannier90_exc', trange = [0]):
         f_out = open(f'{seedname}.nnkp', 'w')
