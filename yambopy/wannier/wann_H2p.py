@@ -124,7 +124,8 @@ class H2P():
             self.nq_double = 1
         else:
             self.nq_double = len(self.qmpgrid.k)
-        self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid)
+        self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid) # get a q point in the qgrid and return index the the q point in the k grid
+        self.qindices_table={v: i for i, v in enumerate(self.kindices_table)} # get a q point in the qgrid expressed in the k grid and return index of the qpoint in the qgrid
         try:
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
         except ValueError:
@@ -166,7 +167,7 @@ class H2P():
             (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
             (self.qplusk_table, self.qminusk_table) = self.qmpgrid.get_kq_tables(self.kmpgrid, sign='-')  # minus sign to have k-q  
             #(self.kplusq_table_yambo, self.kminusq_table_yambo) = self.kmpgrid.get_kq_tables_yambo(self.electronsdb) # used in building BSE
-            print('\n Building H2P from model Coulomb potentials. Default is v2dt2\n')
+            print(f'\n Building H2P from model Coulomb potentials {self.ctype}\n')
             self.cpot = cpot
             self.H2P = self._buildH2P_fromcpot()
         elif(self.method=='kernel' and cpot is None):
@@ -189,6 +190,8 @@ class H2P():
             print('Method skip-diago running only for post-processing of wannier exc data: Remember to set dimslepc')
             self.skip_diago = True
             self.dimslepc=dimslepc
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid)
+
             (self.h2peigv, self.h2peigvec,self.h2peigv_vck, self.h2peigvec_vck) = self._buildH2Peigv()
             (self.aux_t,self.inverse_aux_t) = self._get_aux_maps()
         else:
@@ -306,13 +309,14 @@ class H2P():
         if self.skip_diago:
             H2P = None
             full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
-
+            self.qgrid_toibzk = self.electronsdb.kpoints_indexes[self.kindices_table[:]]
+            self.ibzk_toqgrid={v: i for i, v in enumerate(self.qgrid_toibzk)}
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
                 file_suffix = 'ndb.BS_diago_Q1'
             else:
                 H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-                file_suffix = [f'ndb.BS_diago_Q{kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
+                file_suffix = [f'ndb.BS_diago_Q{self.qgrid_toibzk[iq] + 1}' for iq in range(self.nq_double)]
 
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
             h2peigv_vck = np.zeros((self.nq_double, self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
@@ -836,7 +840,7 @@ class H2P():
                 icp = icp
 
             iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
-            iqpb_ibz_ink = self.electronsdb.kpoints_indexes[self.kindices_table[iqpb]] # qpb point belonging in the IBZ going expressed in k grid
+            iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
             ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
             ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
             ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
@@ -877,8 +881,8 @@ class H2P():
         Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
         for it,t in enumerate(trange):
             for itp, tp in enumerate(tprange):
-                for iq, ikq in enumerate(self.kindices_table):
-                    iq_ibz = self.electronsdb.kpoints_indexes[iq]
+                for iq in range(self.qmpgrid.nkpoints):
+                    iq_ibz = self.qgrid_toibzk[iq]
                     Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq_ibz)        
         self.Amn = Amn
 
@@ -900,7 +904,7 @@ class H2P():
 
 
         # Generate output for each point
-        for iq,ikq in enumerate(self.kindices_table):
+        for iq in range(self.qmpgrid.nkpoints):
             for ib in range(self.qmpgrid.nnkpts):
                 # Header for each block
                 output_lines.append(f'\t{self.qmpgrid.qpb_grid_table[iq,ib][0]+1}\t{self.qmpgrid.qpb_grid_table[iq,ib][1]+1}' +
@@ -920,8 +924,8 @@ class H2P():
     def write_exc_eig(self, seedname='wannier90_exc', trange = [0]):
         exc_eig = np.zeros((len(trange), self.qmpgrid.nkpoints), dtype=np.complex128)
         f_out = open(f'{seedname}.eig', 'w')
-        for iq, ikq in enumerate(self.kindices_table):
-            iq_ibz_ink = self.electronsdb.kpoints_indexes[self.kindices_table[iq]]
+        for iq in range(self.qmpgrid.nkpoints):
+            iq_ibz_ink = self.qgrid_toibz[iq]
             for it,t in enumerate(trange):
                 f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[iq_ibz_ink,it]):.13f}\n')
     
