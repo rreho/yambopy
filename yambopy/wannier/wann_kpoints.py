@@ -170,6 +170,5 @@ class KPointGenerator():
 
         self.qplaquette_grid = qplaquette_grid
 
-
     def __str__(self):
         return "Instance of KPointGenerator"   

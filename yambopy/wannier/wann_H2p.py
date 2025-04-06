@@ -839,12 +839,12 @@ class H2P():
                 icp = icp
 
             iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
-            iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
+            #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
             ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
             ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
             ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
-            term1 = np.conjugate(self.h2peigvec_vck[iqpb_ibz_ink, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-            term2 = self.h2peigvec_vck[iqpb_ibz_ink, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
+            term1 = np.conjugate(self.h2peigvec_vck[iqpb, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+            term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
             term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
             term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
@@ -882,7 +882,7 @@ class H2P():
             for itp, tp in enumerate(tprange):
                 for iq in range(self.qmpgrid.nkpoints):
                     iq_ibz = self.qgrid_toibzk[iq]
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq_ibz)        
+                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq)        
         self.Amn = Amn
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
@@ -924,9 +924,9 @@ class H2P():
         exc_eig = np.zeros((len(trange), self.qmpgrid.nkpoints), dtype=np.complex128)
         f_out = open(f'{seedname}.eig', 'w')
         for iq in range(self.qmpgrid.nkpoints):
-            iq_ibz_ink = self.qgrid_toibz[iq]
+            #iq_ibz_ink = self.qgrid_toibzk[iq]
             for it,t in enumerate(trange):
-                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[iq_ibz_ink,it]):.13f}\n')
+                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[iq,it]):.13f}\n')
     
     def write_exc_nnkp(self, seedname='wannier90_exc', trange = [0]):
         f_out = open(f'{seedname}.nnkp', 'w')
