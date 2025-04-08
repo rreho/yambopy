@@ -869,11 +869,20 @@ class H2P():
         # ib is the index of the neighbourg in qgrid
         Mssp = vectorized_overlap_ttp(il, ilp, iq, ib) 
         
-
-        self.Mssp = Mssp 
+        self.Mssp = Mssp/(self.bse_nv**2*self.bse_nc**2)
 
     def _get_amn_ttp(self, t, tp, iq_ibz):
-        Ammn_ttp = np.sum(self.h2peigvec_vck[iq_ibz, t, :, :, :] * np.conjugate(self.h2peigvec_vck[iq_ibz, tp, :, :, :]))
+        A_squared = np.abs(self.h2peigv_vck)**2
+        #w_qk = np.sum(A_squared, axis = (2,3))
+        ik = self.BSE_table[t][0]
+        iv = self.BSE_table[t][1] 
+        ic = self.BSE_table[t][2] 
+        #ikp = self.BSE_table[tp][0]
+        #ivp = self.BSE_table[tp][1] 
+        #icp = self.BSE_table[tp][2] 
+        ikmq = self.kmpgrid.kmq_grid_table[ik,iq_ibz][1]
+        Ammn_ttp = self.h2peigvec_vck[iq_ibz,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
+        #Ammn_ttp = np.sum(self.h2peigvec_vck[iq_ibz, t, :, :, :] * np.conjugate(self.h2peigvec_vck[iq_ibz, tp, :, :, :]))
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0], tprange = [0]):
