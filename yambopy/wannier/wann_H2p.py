@@ -838,18 +838,17 @@ class H2P():
                 ivp = iv
                 icp = icp
 
-            iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
-            #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
-            ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
-            ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
-            ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
-            term1 = np.conjugate(self.h2peigvec_vck[iqpb, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-            term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
+                iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
+                #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
+                ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
+                ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
+                ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
+                term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+                term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
-            term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
-            term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
-            Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
-
+                term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
+                term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
+                Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
         return Mssp_ttp
 
     
@@ -872,16 +871,39 @@ class H2P():
         self.Mssp = Mssp/(self.bse_nv**2*self.bse_nc**2)
 
     def _get_amn_ttp(self, t, tp, iq_ibz):
-        A_squared = np.abs(self.h2peigv_vck)**2
-        #w_qk = np.sum(A_squared, axis = (2,3))
-        ik = self.BSE_table[t][0]
-        iv = self.BSE_table[t][1] 
-        ic = self.BSE_table[t][2] 
-        #ikp = self.BSE_table[tp][0]
-        #ivp = self.BSE_table[tp][1] 
-        #icp = self.BSE_table[tp][2] 
-        ikmq = self.kmpgrid.kmq_grid_table[ik,iq_ibz][1]
-        Ammn_ttp = self.h2peigvec_vck[iq_ibz,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
+        '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
+        #Extract indices from BSE_table
+        if self.method == 'skip-diago':
+            indices = self.inverse_aux_t
+        else:
+            indices = np.arange(0,self.dimbse,1)
+        chunk_size=int(self.dimbse/100.0)
+        if (chunk_size < 1): chunk_size=self.dimbse
+        # Chunk the indices to manage memory usage
+        ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
+        iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
+        ic_chunks = chunkify(self.BSE_table[indices, 2], chunk_size)
+
+        Mssp_ttp = 0
+
+        for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks):
+            ik = np.array(ik)[:, np.newaxis]
+            iv = np.array(iv)[:, np.newaxis]
+            ic = np.array(ic)[:, np.newaxis]
+            for ivp, icp in zip(iv_chunks,ic_chunks):
+                ivp = iv
+                icp = icp
+
+                iqpb = self.qmpgrid.qpb_grid_table[iq_ibz, ib, 1] #points belong to qgrid
+                #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
+                ikmq = self.kminusq_table[ik, iq_ibz, 1] # points belong to k grids
+                ikplusq = self.kplusq_table[ik, iq_ibz, 1] # points belong to k grids
+                term1 = np.conjugate(self.h2peigvec_vck[iq_ibz, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+                term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ik]
+
+                term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ik, :, icp])
+                term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmq, :, ivp]), self.eigvec[ikmq, :, iv])
+                Ammn_ttp += np.sum(term1 * term2 * term3 * term4)
         #Ammn_ttp = np.sum(self.h2peigvec_vck[iq_ibz, t, :, :, :] * np.conjugate(self.h2peigvec_vck[iq_ibz, tp, :, :, :]))
         return Ammn_ttp
 
