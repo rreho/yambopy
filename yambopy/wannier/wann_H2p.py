@@ -835,8 +835,8 @@ class H2P():
             iv = np.array(iv)[:, np.newaxis]
             ic = np.array(ic)[:, np.newaxis]
             for ivp, icp in zip(iv_chunks,ic_chunks):
-                ivp = iv
-                icp = icp
+                #ivp = iv
+                #icp = icp
 
                 iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
                 #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
@@ -870,7 +870,7 @@ class H2P():
         
         self.Mssp = Mssp/(self.bse_nv**2*self.bse_nc**2)
 
-    def _get_amn_ttp(self, t, tp, iq_ibz):
+    def _get_amn_ttp(self, t, tp, iq):
         '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
         #Extract indices from BSE_table
         if self.method == 'skip-diago':
@@ -884,21 +884,21 @@ class H2P():
         iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
         ic_chunks = chunkify(self.BSE_table[indices, 2], chunk_size)
 
-        Mssp_ttp = 0
+        Ammn_ttp = 0
 
         for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks):
             ik = np.array(ik)[:, np.newaxis]
             iv = np.array(iv)[:, np.newaxis]
             ic = np.array(ic)[:, np.newaxis]
             for ivp, icp in zip(iv_chunks,ic_chunks):
-                ivp = iv
-                icp = icp
+                #ivp = iv
+                #icp = icp
 
-                iqpb = self.qmpgrid.qpb_grid_table[iq_ibz, ib, 1] #points belong to qgrid
+                #iqpb = self.qmpgrid.qpb_grid_table[iq_ibz, ib, 1] #points belong to qgrid
                 #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
-                ikmq = self.kminusq_table[ik, iq_ibz, 1] # points belong to k grids
-                ikplusq = self.kplusq_table[ik, iq_ibz, 1] # points belong to k grids
-                term1 = np.conjugate(self.h2peigvec_vck[iq_ibz, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+                ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
+                ikplusq = self.kplusq_table[ik, iq, 1] # points belong to k grids
+                term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
                 term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ik]
 
                 term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ik, :, icp])
@@ -909,12 +909,27 @@ class H2P():
 
     def get_exc_amn(self, trange = [0], tprange = [0]):
         Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
-        for it,t in enumerate(trange):
-            for itp, tp in enumerate(tprange):
-                for iq in range(self.qmpgrid.nkpoints):
-                    iq_ibz = self.qgrid_toibzk[iq]
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq)        
-        self.Amn = Amn
+        trange = np.array(trange)
+        tprange = np.array(tprange)
+
+        il, ilp, iq = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), indexing='ij')
+        print(f"eigvec count: {np.count_nonzero(self.eigvec)}")
+        print(f"h2peigvec_vck count: {np.count_nonzero(self.h2peigvec_vck)}")
+
+        vectorized_amn_ttp = np.vectorize(self._get_amn_ttp, signature='(),(),()->()')
+        # il ip: transition range
+        # iq is the q index in the qgrid
+        # kindices_table[iq] returns the index of the q-point in the k-grid
+        # ib is the index of the neighbourg in qgrid
+        Assp = vectorized_amn_ttp(il, ilp, iq )
+
+        self.Amn = Assp/(self.bse_nv**2*self.bse_nc**2)
+        #for it,t in enumerate(trange):
+        #    for itp, tp in enumerate(tprange):
+        #        for iq in range(self.qmpgrid.nkpoints):
+        #            iq_ibz = self.qgrid_toibzk[iq]
+        #            Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq)        
+        #self.Amn = Amn/(self.bse_nv**2*self.bse_nc**2)
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
 
