@@ -1,0 +1,23 @@
+name: Run minimal tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: local
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.12
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Run dummy test
+      run: |
+        pytest qurex-tests/test_dummy.py
