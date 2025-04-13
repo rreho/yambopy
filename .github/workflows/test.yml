@@ -18,6 +18,6 @@ jobs:
       run: |
         pip install .
 
-    - name: Run dummy test
+    - name: Run all qurex-test
       run: |
-        pytest qurex-tests/test_dummy.py
+        pytest qurex-tests/
