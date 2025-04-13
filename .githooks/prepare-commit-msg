@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Skip for merge commits
+if [[ "$2" == "merge" ]]; then
+  exit 0
+fi
+
+# Only modify if no message provided via -m or -F
+if [ -z "$2" ]; then
+  echo "🔹 Fill in your commit message:" >&2
+  read -p 'Why am I committing?        ' WHY
+  read -p 'What did I change?         ' WHAT
+  read -p 'What needs to be done next? ' NEXT
+
+  echo -e "Why:\n$WHY\n\nWhat:\n$WHAT\n\nNext:\n$NEXT" > "$1"
+fi
+
