@@ -1,0 +1,16 @@
+Note: The following floating-point exceptions are signalling: IEEE_INVALID_FLAG IEEE_DIVIDE_BY_ZERO
+
+JOB STATISTICS
+==============
+Job ID: 7262381
+Cluster: snellius
+User/Group: rireho/rireho
+State: RUNNING
+Nodes: 1
+Cores per node: 128
+CPU Utilized: 00:00:43
+CPU Efficiency: 0.35% of 03:22:40 core-walltime
+Job Wall-clock time: 00:01:35
+Memory Utilized: 160.37 MB
+Memory Efficiency: 0.07% of 224.00 GB
+WARNING: Efficiency statistics may be misleading for RUNNING jobs.
