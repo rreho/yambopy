@@ -12,6 +12,6 @@ if [ -z "$2" ]; then
   read -p 'What did I change?         ' WHAT
   read -p 'What needs to be done next? ' NEXT
 
-  echo -e "Why:\n$WHY\n\nWhat:\n$WHAT\n\nNext:\n$NEXT" > "$1"
+  echo -e "Why:$WHY\nWhat:$WHAT\nNext:\n$NEXT" > "$1"
 fi
 
