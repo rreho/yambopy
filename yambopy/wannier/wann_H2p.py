@@ -96,7 +96,7 @@ class H2P():
     '''
     def __init__(self, model, electronsdb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
                  ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, f_qn = None,\
-                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01):
+                 TD=False, run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, electronsdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -144,7 +144,6 @@ class H2P():
         self.BSE_table = self._get_BSE_table()
         self.ktype = ktype
         self.TD = TD #Tahm-Dancoff
-        self.TBos = TBos
         self.method = method
         self.run_parallel = run_parallel
         self.Mssp = None
@@ -654,7 +653,7 @@ class H2P():
                         *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikp, :, icp])          
         return K_ex
         
-    def get_eps(self, hlm, emin, emax, estep, eta):
+    def get_eps(self, hlm, emin, emax, estep, eta, method="Boltz", Tel=0.0, Tbos=300.0, sigma=0.1):
         '''
         Compute microscopic dielectric function 
         dipole_left/right = l/r_residuals.
@@ -664,6 +663,7 @@ class H2P():
         self.w = w.copy()
         F_kcv = np.zeros((self.dimbse,3,3), dtype=np.complex128)
         eps = np.zeros((len(w),3,3), dtype=np.complex128)
+        pl0 = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
             np.fill_diagonal(eps[i,:,:], 1.0)
         # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
@@ -727,34 +727,24 @@ class H2P():
             #         #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             weight_bse = np.zeros(self.ntransitions)+1
             if hasattr(self.model.mpgrid, 'red_kpoints_full'): # ibz case
-                # nk = self.nk  # number of IBZ k-points
-                # split = self.ntransitions // nk
 
-                # base = np.arange(nk * split).reshape(nk, split)
-                # reordered = base[self.model.mpgrid.kpoint_indices]
-
-                # ibz_to_bz = reordered.reshape(-1)
-                # F_kcv = self.F_kcv[ibz_to_bz]
                 weight_bse = (self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]])**(1/6)#*self.model.mpgrid.nkpoints
-                # F_kcv*=1/weight_bse[:,np.newaxis,np.newaxis]
-                # ediff = h2peigv*weight_bse[:, np.newaxis] - self.w[np.newaxis, :]
-                # ediff = h2peigv[ibz_to_bz][:, np.newaxis] - self.w[np.newaxis, :]
-            # else:
-            #     # self.cpot.lattice.expand_kpoints()
-            #     orig_weights = self.cpot.lattice.weights_ibz.copy()
-            #     orig_weights[:8]=1
-            #     orig_weights[[0,1,2,3,7,8,14,4,5,6,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35]]
-            #     weight_bse = orig_weights[self.BSE_table[:,0]]#*self.cpot.lattice.nkpoints
 
             vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 #* ibz_factor**2
             piVk = 8*np.pi/(vbz)
             eps = piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
             eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
+            
+            f_pl = TB_occupations(self.h2peigv[0],Tel = Tel, Tbos=Tbos, Eb=self.h2peigv[0][0], sigma=sigma)._get_fkn(method=method)
+            pl0 = piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
+            pl0 += 1j*piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
+            # pl0 = eps + f_pl * piVk* F_kcv*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        #  + 1j*piVk* F_kcv*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
             #self.pl = pl
             # self.w = w
             # self.eps_0 = eps_0
-        return w, eps
+        return w, eps, pl0
     
     def get_eps_yambo(self, hlm, emin, emax, estep, eta):
         '''
