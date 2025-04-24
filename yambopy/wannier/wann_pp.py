@@ -54,8 +54,12 @@ class ExcitonBands(H2P):
                 
         del eigc, eigcp, eigv, eigvp
         gc.collect()
+        cpot_array = None
+        if self.ctype == 'v2dk':
+            cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+        elif self.ctype == 'v2dt2':
+            cpot_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
         
-        cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
         K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
         del dotc, dotv
         gc.collect()
