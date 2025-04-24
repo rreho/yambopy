@@ -154,6 +154,7 @@ class H2P():
         if not hasattr(self,'f_kn'):
             self.f_kn = np.zeros((self.nk,self.nb),dtype=np.float64)
             self.f_kn[:,:self.nv] = 1.0
+            self.f_kn = TB_occupations(self.eigv,Tel=0.0, Tbos=0.0,fermie=self.model.fermie)._get_fkn(method='FD')
         else:
             self.f_kn = f_kn
         if not hasattr(self,'f_qn'):

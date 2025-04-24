@@ -3,7 +3,7 @@ from yambopy.wannier.wann_utils import fermi_dirac_T, fermi_dirac
 
 class TB_occupations():
     '''Class that handles occupations. The eigenvalues are assumed to be sorted'''
-    def __init__(self, eigv, Tel, Tbos, sigma=0.1, Eb=0, fermie=0.0):
+    def __init__(self, eigv, Tel=0.0, Tbos=0.0, sigma=0.1, Eb=0, fermie=0.0):
         self.eigv = eigv
         self.fermie = fermie
         self.Tel = Tel

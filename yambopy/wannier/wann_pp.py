@@ -4,10 +4,10 @@ from qepy.lattice import Path
 import inspect
 import matplotlib.pyplot as plt
 from yambopy.lattice import calculate_distances
-
+from yambopy.wannier.wann_occupations import TB_occupations
 
 class ExcitonBands(H2P):
-    def __init__(self, h2p: 'H2P', path_qpoints: 'Path'):
+    def __init__(self, h2p: 'H2P', path_qpoints: 'Path', method="Boltz", Tel=0.0, Tbos=300.0, sigma=0.1):
         # Get the __init__ argument names of the parent class (excluding 'self')
         if not isinstance(path_qpoints, Path):
             raise TypeError('Argument must be an instance of Path')
@@ -27,6 +27,10 @@ class ExcitonBands(H2P):
         self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)*ang2bohr # result in Bohr
         self.nq_double = self.nq_list
         self.H2P = self.buildH2P_qlist()
+        self.method = method
+        self.Tel = Tel
+        self.Tbos = Tbos
+        self.sigma = sigma
 
     def buildH2P_qlist(self):        
         H2P = np.zeros((self.nq_list, self.dimbse, self.dimbse), dtype=np.complex128)
@@ -36,6 +40,7 @@ class ExcitonBands(H2P):
         eigv_kmq, eigvec_kmq = self.model.get_eigenval_and_vec(kminusqlist_table.reshape(self.nk*self.nq_list,3))
         # compute the fermi occupations for k-q
         f_kmqn = self._get_occupations(eigv_kmq, self.model.fermie) #Fermi-dirac occupations in shape of eigv_kmq 
+        f_kmqn = TB_occupations(eigv_kmq,Tel = self.Tel, Tbos=self.Tbos, Eb=self.model.fermie, sigma=self.sigma, fermie=self.model.fermie)._get_fkn(method=self.method)
         eigv_kmq = np.array(eigv_kmq).reshape(self.nk, self.nq_list, self.nb)
         self.f_kmqn = f_kmqn.reshape(self.nk, self.nq_list, self.nb)    # these reshapes are not very nice
         eigvec_kmq = np.array(eigvec_kmq).reshape(self.nk, self.nq_list, self.nb, self.nb)
@@ -67,6 +72,7 @@ class ExcitonBands(H2P):
 
         K_diff = K_direct - K_Ex[:,np.newaxis,:]
         
+        #f (Ev,k) − f (E∆c,k+Q) with fermi-dirac distribution - method of choice.
         f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-self.f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))    #swap axes is just reshape to get shape q, nt, nt
         del K_Ex
         gc.collect()
