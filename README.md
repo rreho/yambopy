@@ -137,3 +137,10 @@ Acknowledgements
 - [MaX](https://www.max-centre.eu/): Materials at the eXascale EU center of excellence
 
 ![yambopy_logo](docs/logos/yambopy_square.png)
+
+
+# QuREX
+To use the same commit message as RR use:
+
+`git config core.hooksPath .githooks`
+

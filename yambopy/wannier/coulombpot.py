@@ -34,7 +34,6 @@ class CoulombPotentials:
         self.alpha = -0.0904756*10**3
 
     def v2dk(self, kpt1, kpt2):
-        pass
         #TO-DO implement alat2D
         #constants -> See paper in WantiBexos doc
         alpha1 = 1.76

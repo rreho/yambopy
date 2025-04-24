@@ -1,6 +1,7 @@
 from yambopy.lattice import red_car
 import numpy as np
 from scipy.spatial import cKDTree
+
 class KPointGenerator():
     def __init__(self):
         self.k = None
@@ -9,10 +10,19 @@ class KPointGenerator():
         self.red_kpoints = None
         self.car_kpoints = None
         self.k_tree = None
-
-    def generate(self):
-        """Abstract method to generate k-points."""
-        raise NotImplementedError("This method must be implemented in subclasses.")
+    
+    @staticmethod
+    def create_instance(type_, *args, **kwargs):
+        from yambopy.wannier.wann_mpgrid import symmetrized_mp_grid, tb_Monkhorst_Pack
+        from yambopy.wannier.wann_nnkpgrid import NNKP_Grids
+        if type_ == "NNKP_Grids":
+            return NNKP_Grids(*args, **kwargs)
+        elif type_ == "symmetrized_mp_grid":
+            return symmetrized_mp_grid(*args, **kwargs)
+        elif type_ == "tb_Monkhorst_Pack":
+            return tb_Monkhorst_Pack(*args, **kwargs)        
+        else:
+            return KPointGenerator()  # Default to A if type is unknown
 
     def validate(self):
         """Validate the generated k-points."""
@@ -24,25 +34,27 @@ class KPointGenerator():
         """Export k-points to a file."""
         np.savetxt(filename, self.k, header="k-points")
 
-    def fold_into_bz_Gs(self, k_points, bz_range=(-0.5, 0.5), reciprocal_vectors=None):
+    def fold_into_bz_Gs(self,k_points, bz_range=(-0.5, 0.5), reciprocal_vectors= None, include_upper_bound=True):
         """
-        Fold k-points into the first Brillouin Zone and determine the reciprocal lattice vectors G needed.
+        Fold k-points into the first Brillouin Zone (BZ) and determine the reciprocal lattice vectors G.
 
         Parameters:
         - k_points: Array of k-points in k-space (shape: (..., 3)).
-        - bz_range: Tuple indicating the range of the BZ, default is (-0.5, 0.5) for each direction.
+        - bz_range: Tuple indicating the range of the BZ, default is (-0.5, 0.5).
         - reciprocal_vectors: A list or matrix of reciprocal lattice vectors defining the BZ.
-
+        - include_upper_bound: Boolean flag to control whether bz_range follows (-0.5, 0.5] (True) or [-0.5, 0.5) (False).
+        Default is the one S.Bos used after his changes in the IBZ.
         Returns:
-        - folded_k_points: The folded k-points within the BZ (shape: same as k_points).
-        - G_vectors: The reciprocal lattice vectors that fold the k-points into the BZ (shape: same as k_points).
+        - folded_k_points: The folded k-points within the BZ (same shape as k_points).
+        - G_vectors: The reciprocal lattice vectors that fold the k-points into the BZ (same shape as k_points).
         """
         k_points = np.array(k_points)  # Ensure input is an array
 
-        # Determine the G-vector multipliers for folding
-        G_multiplier = np.floor((k_points - bz_range[0]) / (bz_range[1] - bz_range[0]))
+        # Compute G multipliers
+        G_multiplier = np.floor((k_points-bz_range[0])/ (bz_range[1] - bz_range[0]))
         
-        # Calculate the G_vectors
+        #G_multiplier = np.floor((k_points - bz_range[0]) / (bz_range[1] - bz_range[0]))
+        # Compute G_vectors
         if reciprocal_vectors is not None:
             reciprocal_vectors = np.array(reciprocal_vectors)  # Ensure reciprocal_vectors is an array
             G_vectors = np.tensordot(G_multiplier, reciprocal_vectors, axes=([1], [0]))
@@ -50,62 +62,31 @@ class KPointGenerator():
             # Assume a cubic lattice with unit cell length of 1
             G_vectors = G_multiplier * (bz_range[1] - bz_range[0])
 
-        # Fold the k-points into the BZ
+        # Fold k-points into the BZ
         folded_k_points = k_points - G_vectors
-        # Correct for points exactly on the upper bound of the BZ
-        mask_upper_bound = (folded_k_points == bz_range[0]) & (G_vectors >= 1.0)
-        folded_k_points[mask_upper_bound] += (bz_range[1] - bz_range[0])
-        G_vectors[mask_upper_bound] -= (bz_range[1] - bz_range[0])
-        # Negate G_vectors
-        G_vectors = -G_vectors
-        # Handle points at the upper bound of the BZ
-        mask_at_upper_bound = (folded_k_points == bz_range[1])
-        folded_k_points[mask_at_upper_bound] -= (bz_range[1] - bz_range[0])
-        G_vectors[mask_at_upper_bound] = 0
 
-        return folded_k_points, G_vectors
+        # Handle boundary conditions based on `include_upper_bound`
+        if include_upper_bound:
+            # Map -0.5 to +0.5 while keeping +0.5 unchanged
+            mask_lower_bound = np.isclose(folded_k_points, bz_range[0], atol=1e-10)
+            folded_k_points[mask_lower_bound] = bz_range[1]  # -0.5 → +0.5
+            G_vectors[mask_lower_bound] -= (bz_range[1] - bz_range[0])  # Adjust G_vectors
 
-
-
-    def fold_into_ibz_Gs_2(self, k_points, bz_range=(-0.5, 0.5), reciprocal_vectors=None):
-        """
-        Fold k-points into the first Brillouin Zone (BZ) within (-0.5, 0.5] and determine the reciprocal lattice vectors G.
-
-        Parameters:
-        - k_points: Array of k-points in k-space (shape: (..., 3)).
-        - bz_range: Tuple indicating the range of the BZ, default is (-0.5, 0.5] for each direction.
-        - reciprocal_vectors: A list or matrix of reciprocal lattice vectors defining the BZ.
-
-        Returns:
-        - folded_k_points: The folded k-points within the BZ (shape: same as k_points).
-        - G_vectors: The reciprocal lattice vectors that fold the k-points into the BZ (shape: same as k_points).
-        """
-        k_points = np.array(k_points)  # Ensure input is an array
-
-        # Determine the G-vector multipliers for folding
-        G_multiplier = np.floor((k_points - bz_range[0]) / (bz_range[1] - bz_range[0]))
-
-        # Calculate the G_vectors
-        if reciprocal_vectors is not None:
-            reciprocal_vectors = np.array(reciprocal_vectors)  # Ensure reciprocal_vectors is an array
-            G_vectors = np.tensordot(G_multiplier, reciprocal_vectors, axes=([1], [0]))
+            # Negate G_vectors for consistency
+            G_vectors = -G_vectors            
         else:
-            # Assume a cubic lattice with unit cell length of 1
-            G_vectors = G_multiplier * (bz_range[1] - bz_range[0])
-
-        # Fold the k-points into the BZ
-        folded_k_points = k_points - G_vectors
-
-        # Map -0.5 to +0.5 while keeping +0.5 unchanged
-        mask_lower_bound = np.isclose(folded_k_points, bz_range[0], atol=1e-10)
-        folded_k_points[mask_lower_bound] = bz_range[1]  # Map -0.5 → +0.5
-        G_vectors[mask_lower_bound] -= (bz_range[1] - bz_range[0])  # Adjust G vectors accordingly
-
-        # Negate G_vectors for consistency
-        G_vectors = -G_vectors
+            # Treat upper bound as exclusive: if folded_k_points == bz_range[1], shift it back to bz_range[0]
+            mask_upper_bound = (folded_k_points == bz_range[0]) & (G_vectors >= 1.0)
+            folded_k_points[mask_upper_bound] += (bz_range[1] - bz_range[0])
+            G_vectors[mask_upper_bound] -= (bz_range[1] - bz_range[0])
+            # Negate G_vectors
+            G_vectors = -G_vectors
+            # Handle points at the upper bound of the BZ
+            mask_at_upper_bound = (folded_k_points == bz_range[1])
+            folded_k_points[mask_at_upper_bound] -= (bz_range[1] - bz_range[0])
+            G_vectors[mask_at_upper_bound] = 0
 
         return folded_k_points, G_vectors
-
 
     def find_closest_kpoint(self, points):
 
@@ -178,13 +159,16 @@ class KPointGenerator():
         qplaquette_grid = np.zeros((nps, 4), dtype=int)
         for iq, q in enumerate(self.k):     # needs improving with array casting
             if (q[dir]==0.0):
-                tmp_qp1, tmp_qp1Gvec = self.fold_into_bz_Gs(q + dq1*dir1)
-                tmp_qp1p2, tmp_qp1p2Gvec = self.fold_into_bz_Gs(q + dq1*dir1+ dq2*dir2)
-                tmp_qp2, tmp_qp2Gvec = self.fold_into_bz_Gs(q + dq2*dir2)  
-                idxqp1 = self.find_closest_kpoint(tmp_qp1)
-                idxqp1p2 = self.find_closest_kpoint(tmp_qp1p2)
-                idxqp2 = self.find_closest_kpoint(tmp_qp2)
+                tmp_qp1, tmp_qp1Gvec = self.fold_into_bz_Gs(q + dq1*dir1,include_upper_bound=False)
+                tmp_qp1p2, tmp_qp1p2Gvec = self.fold_into_bz_Gs(q + dq1*dir1+ dq2*dir2,include_upper_bound=False)
+                tmp_qp2, tmp_qp2Gvec = self.fold_into_bz_Gs(q + dq2*dir2,include_upper_bound=False)  
+                idxqp1 = self.find_closest_kpoint(tmp_qp1,include_upper_bound=False)
+                idxqp1p2 = self.find_closest_kpoint(tmp_qp1p2,include_upper_bound=False)
+                idxqp2 = self.find_closest_kpoint(tmp_qp2,include_upper_bound=False)
                 qplaquette_grid[counter] = [iq, idxqp1, idxqp1p2, idxqp2]
                 counter +=1            
 
         self.qplaquette_grid = qplaquette_grid
+
+    def __str__(self):
+        return "Instance of KPointGenerator"   

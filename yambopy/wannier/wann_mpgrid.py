@@ -18,6 +18,8 @@ class symmetrized_mp_grid(KPointGenerator):
         self.rlat = self.latdb.rlat*2*np.pi*ang2bohr
         self.shift = shift
         self.cell = (latdb.lat, latdb.red_atomic_positions, latdb.atomic_numbers)
+        self.generate()
+
     def generate(self):
         """
         Generate a monkhorst mesh symmetriced
@@ -26,7 +28,15 @@ class symmetrized_mp_grid(KPointGenerator):
         point_map, kpoints_mesh = spglib.get_ir_reciprocal_mesh(self.grid_shape,self.cell)
         self.red_kpoints_full = kpoints_mesh/self.grid_shape
         red_kpoints_ibz, sort_indices = np.unique(self.red_kpoints_full[point_map], axis=0, return_index=True)
+
         red_kpoints_ibz = red_kpoints_ibz[np.argsort(sort_indices)]
+        sort_indices = sort_indices[np.argsort(sort_indices)]
+        mapping = {val: idx for idx, val in enumerate(sort_indices)}
+        
+        # Vectorized remapping
+        self.kpoint_indices = np.vectorize(mapping.get)(point_map)
+        _, counts = np.unique(self.kpoint_indices, return_counts=True)
+        self.kpoint_weights = counts/len(self.red_kpoints_full)
         # red_kpoints_ibz[:, [0, 1]] = red_kpoints_ibz[:, [1, 0]]     #swap the x and y coordinates
         self.k = red_kpoints_ibz
         self.red_kpoints = red_kpoints_ibz
@@ -34,6 +44,7 @@ class symmetrized_mp_grid(KPointGenerator):
         self.nkpoints = len(self.k)
         self.k_tree = cKDTree(self.k)   # in ibz
         self.point_map = point_map
+        self.sort_indices = sort_indices
         self.kpoints_mesh = kpoints_mesh
         self.k_tree_full = cKDTree(self.red_kpoints_full)
 
@@ -58,7 +69,7 @@ class symmetrized_mp_grid(KPointGenerator):
             kq_diff = -k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kmq_folded, Gvec = self.fold_into_ibz_Gs_2(kq_diff.reshape(-1, 3),bz_range=(-0.5,0.5))  # Flatten for batch processing
+        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(-0.5,0.5))  # Flatten for batch processing
         kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
@@ -92,7 +103,7 @@ class symmetrized_mp_grid(KPointGenerator):
         kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kpq_folded, Gvec = self.fold_into_ibz_Gs_2(kq_add.reshape(-1, 3),bz_range=(-0.5,0.5))  # Flatten for batch processing
+        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3),bz_range=(-0.5,0.5))  # Flatten for batch processing
 
         kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
@@ -124,7 +135,7 @@ class symmetrized_mp_grid(KPointGenerator):
 
         distance, closest_indices = self.k_tree_full.query(points, k=1) # closest in the full bz
 
-        _, closest_indices_ibz = self.k_tree.query(self.red_kpoints_full[self.point_map[closest_indices]], k=1)
+        _, closest_indices_ibz = self.k_tree.query(self.red_kpoints_full[self.point_map[closest_indices]], k=1)#!
 
 
         # Return the appropriate type
@@ -182,7 +193,7 @@ class tb_Monkhorst_Pack(KPointGenerator):
             kq_diff = -k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing
+        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(0.0,1.0),include_upper_bound=False)  # Flatten for batch processing
         kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
@@ -221,7 +232,7 @@ class tb_Monkhorst_Pack(KPointGenerator):
             kq_diff = k_grid - q_grid+dq  # Shape (nkpoints, nqpoints, 3)
 
             # Fold into the Brillouin Zone and get G-vectors
-            kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing
+            kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(0.0,1.0),include_upper_bound=False)  # Flatten for batch processing
             kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)
             Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
@@ -258,7 +269,7 @@ class tb_Monkhorst_Pack(KPointGenerator):
         kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing
+        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3),bz_range=(0.0,1.0),include_upper_bound=False)  # Flatten for batch processing
         kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
@@ -295,7 +306,7 @@ class tb_Monkhorst_Pack(KPointGenerator):
         qpb_grid_table = np.zeros((qmpgrid.nkpoints, qmpgrid.nnkpts, 5), dtype = int)
         for iq, q in enumerate(qmpgrid.k):
             for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
-                tmp_qpb, tmp_Gvec = qmpgrid.fold_into_bz_Gs(q+b)
+                tmp_qpb, tmp_Gvec = qmpgrid.fold_into_bz_Gs(q+b,include_upper_bound=False)
                 idxqpb = self.find_closest_kpoint(tmp_qpb)
                 qpb_grid[iq, ib] = tmp_qpb
                 # here it should be tmp_Gvec, but with yambo grid I have inconsistencies because points are at 0.75
@@ -315,7 +326,7 @@ class tb_Monkhorst_Pack(KPointGenerator):
         k_expanded = self.k[:, np.newaxis, :]  # Shape (nkpoints, 1, 3)
         combined_kb = k_expanded + b_grid  # Shape (nkpoints, nnkpts, 3)
         # Fold into the BZ for all k + b combinations
-        folded_kb, Gvec = self.fold_into_bz_Gs(combined_kb.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten first two dims
+        folded_kb, Gvec = self.fold_into_bz_Gs(combined_kb.reshape(-1, 3),bz_range=(0.0,1.0),include_upper_bound=False)  # Flatten first two dims
         folded_kb = folded_kb.reshape(self.nkpoints, self.nnkpts, 3)
         Gvec = Gvec.reshape(self.nkpoints, self.nnkpts, 3)
         # Find closest kpoints
@@ -356,7 +367,7 @@ class tb_Monkhorst_Pack(KPointGenerator):
         )  # Final Shape (nkpoints, nqpoints, nnkpts, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kqmbover2_folded, Gvec = self.fold_into_bz_Gs(kqmbover2.reshape(-1, 3),bz_range=(0.0,1.0))  # Flatten for batch processing
+        kqmbover2_folded, Gvec = self.fold_into_bz_Gs(kqmbover2.reshape(-1, 3),bz_range=(0.0,1.0),include_upper_bound=False)  # Flatten for batch processing
         kqmbover2_folded = kqmbover2_folded.reshape(nkpoints, nqpoints, nnkpts, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, nnkpts, 3)
 
@@ -374,3 +385,6 @@ class tb_Monkhorst_Pack(KPointGenerator):
             ],
             axis=-1
         ).astype(int)  # Shape (nkpoints, nqpoints, nnkpts, 5)
+
+    def __str__(self):
+        return "Instance of symmetrized_mp_grid"   
