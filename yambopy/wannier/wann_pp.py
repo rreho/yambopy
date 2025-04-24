@@ -35,9 +35,9 @@ class ExcitonBands(H2P):
         kminusqlist_table = self.kmpgrid.k[:,None,:] - self.red_kpoints[None,:,:]
         eigv_kmq, eigvec_kmq = self.model.get_eigenval_and_vec(kminusqlist_table.reshape(self.nk*self.nq_list,3))
         # compute the fermi occupations for k-q
-        f_kmqn = self._get_occupations(self.nq_list, self.nb, eigv_kmq, self.model.fermie)
+        f_kmqn = self._get_occupations(eigv_kmq, self.model.fermie) #Fermi-dirac occupations in shape of eigv_kmq 
         eigv_kmq = np.array(eigv_kmq).reshape(self.nk, self.nq_list, self.nb)
-        self.f_kmqn = f_kmqn.reshape(self.nk, self.nq_list, self.nb)
+        self.f_kmqn = f_kmqn.reshape(self.nk, self.nq_list, self.nb)    # these reshapes are not very nice
         eigvec_kmq = np.array(eigvec_kmq).reshape(self.nk, self.nq_list, self.nb, self.nb)
         eigv_k = self.eigv
         eigvec_k = self.eigvec
@@ -59,46 +59,17 @@ class ExcitonBands(H2P):
         K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
         del dotc, dotv
         gc.collect()
-        K_Ex = cpot_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+        K_Ex = cpot_array[0][self.BSE_table[:,0]] * dotc2 * dotv2   # is the exchange always from gamma to q?
 
         K_diff = K_direct - K_Ex[:,np.newaxis,:]
-        f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
-        # f_kmqn = self.f_qn.tile().reshape(self.nk, self.nq_double, self.nb)
-        # f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]]
-        # f_diff -=f_kmqn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
-
-        f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
+        
+        f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-self.f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))    #swap axes is just reshape to get shape q, nt, nt
         del K_Ex
         gc.collect()
 
         # eigv_diff_ttp = eigv_diff
-        H2P = f_diff * K_diff
-        # diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff_ttp)  # when t ==tp
-        # H2P += diag
-        # eigc1 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis, :]   # conduction bands
-        # eigc2 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,:,np.newaxis]   # conduction bands
-        # eigv1 = eigvec_kmq[self.BSE_table[:,0], :, :, self.BSE_table[:,1]][:, :, np.newaxis,  : ]  # Valence bands
-        # eigv2 = eigvec_kmq[self.BSE_table[:,0], :, :, self.BSE_table[:,1]][:, :, :, np.newaxis]  # Valence bands
-        # dotc = np.einsum('ijk, lkj -> il ',np.conjugate(eigc1), eigc2)
-        # dotv = np.einsum('ijpl, mjlp -> jim ',np.conjugate(eigv1), eigv2)
-        # dotc2 = np.einsum('ijk,lmkj->mil',np.conjugate(eigc1), eigv2)
-
-        # dotv2 = np.einsum('ijkl,mlk->jim',np.conjugate(eigv1), eigc2)
-        # v2dt2_array_ex = self.cpot.v2dk(self.car_kpoints,np.array([[0.0,0.0,0.0]]))
-        # v2dt2_array_d  = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-        # #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-        # #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+        H2P = f_diff * K_diff    # For the correct occupations, not just at gamma we have to take neighbouring occupations etc.
         
-        # f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-self.f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
-        # v2dt2_array_d = v2dt2_array_d[self.BSE_table[:,0],:][:, self.BSE_table[:,0]]
-
-        # K_d = v2dt2_array_d*dotc*dotv
-        # ## Ex term
-        # K_ex = np.einsum('ab, acd -> acd', v2dt2_array_ex, dotc2*dotv2)
-        # K_d[:, range(K_d.shape[1]), range(K_d.shape[2])] = 0.0    #replaces the line where Kernel is 0 if t=tp
-        # K_ex[:, range(K_ex.shape[1]), range(K_ex.shape[2])] = 0.0 #replaces the line where Kernel is 0 if t=tp
-
-        # H2P = f_diff*(K_d - K_ex)
         eigv_diff = (eigv_k[:,None, self.BSE_table[:,2]]-eigv_kmq[:,:,self.BSE_table[:,1]])[self.BSE_table[:,0],:,:].swapaxes(1,0)
         diag = np.einsum('lm, klm -> klm', np.eye(self.dimbse), eigv_diff) # when t ==tp
         H2P += diag
@@ -106,8 +77,7 @@ class ExcitonBands(H2P):
 
         return H2P
 
-    def _get_occupations(self, nk, nb, eigv, fermie):
-        occupations = np.zeros((nk, nb))
+    def _get_occupations(self, eigv, fermie):
         occupations = fermi_dirac(eigv,fermie)
         return np.real(occupations)
     
