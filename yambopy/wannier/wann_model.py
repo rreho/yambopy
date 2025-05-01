@@ -16,6 +16,9 @@ from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T, sort_e
 from yambopy.wannier.wann_dipoles import TB_dipoles
 import matplotlib.pyplot as plt
 import scipy
+import copy
+from yambopy.wannier.wann_utils import ANG2BOHR
+
 class TBMODEL(tbmodels.Model):
     """
     Class that inherits from tbmodels.Model for TB-model Hamiltonians.
@@ -121,7 +124,16 @@ class TBMODEL(tbmodels.Model):
             mpgrid: The Monkhorst-Pack grid.
         """        
         cls.mpgrid = mpgrid
-    
+
+    def set_latdb(self, latdb):
+        """
+        Set the YamboLatticeDB.
+
+        Parameters:
+            mpgrid: The Monkhorst-Pack grid.
+        """
+        self.latdb = copy.deepcopy(latdb)
+        self.latdb.lat = self.uc*ANG2BOHR
     def solve_ham(self, k: ty.Union[ty.Sequence[float], ty.Sequence[ty.Sequence[float]]], convention: int = 2):
         """
         Solve the Hamiltonian.
@@ -155,13 +167,13 @@ class TBMODEL(tbmodels.Model):
         t1 = time()
         print(f'Diagonalization took {t1-t0:.3f} sec')
 
-    def solve_ham_from_hr(self, latdb, hr, fermie):
+    def solve_ham_from_hr(self, hr, fermie):
         # k in reduced coordinates
-        self.latdb = latdb
+        #self.latdb = latdb
         nkpt = self.mpgrid.nkpoints
         H_k = np.zeros((nkpt, hr.num_wann, hr.num_wann), dtype=np.complex128)
         for i in range(0,nkpt):
-            H_k[i] = self._get_h_k(self.mpgrid.k[i], latdb.lat, hr, fermie, from_hr=True)
+            H_k[i] = self._get_h_k(self.mpgrid.k[i], hr, from_hr=True)
         
         self.hr = hr
         self.H_k = H_k
@@ -198,24 +210,22 @@ class TBMODEL(tbmodels.Model):
         t1 = time()
         print(f'Diagonalization took {t1-t0:.3f} s')
 
-    def get_pos_from_ham(self, lat, hr, from_hr = True):
+    def get_pos_from_ham(self, hr, from_hr = True):
         'get positions from Hamiltonian, first the indices and then reduced coordinates of hoppings'
         # get tuple of irpos
         if (not from_hr):
             self.irpos = np.array(list(self.hop.keys())) 
             self.nrpos = len(self.irpos)
-            self.lat = lat
             # pos[i,3] position of i unit cells. Store only the upper triangular matrix
             self.pos = self.irpos
             return self.pos
         else:
-            self.lat = lat
             pos = hr.hop
             self.nrpos = hr.nrpts
             self.pos = pos
             return pos
 
-    def get_hlm(self ,lat, hr, from_hr=True):
+    def get_hlm(self , hr, from_hr=True):
         ''' computes light mater interaction hamiltonian for grid of points
         k is one k-point in reduced coordinates
         hrx = P_\alpha = dH(k)\dk_\alpha = \sum_{R=1}^N e^{ikR}iR_\alpha H_{R}
@@ -225,11 +235,11 @@ class TBMODEL(tbmodels.Model):
         hlm = np.zeros((self.mpgrid.nkpoints,hr.num_wann, hr.num_wann,3), dtype=np.complex128)       
   
         for i,k in enumerate(self.mpgrid.red_kpoints):
-            hlm[i] = self._get_hlm_k(k,lat,hr,from_hr=True)          
+            hlm[i] = self._get_hlm_k(k,hr,from_hr=from_hr)          
 
         self.hlm = hlm
 
-    def _get_hlm_k(self, k, lat, hr, from_hr=True):
+    def _get_hlm_k(self, k, hr, from_hr=True):
         ''' computes light mater interaction hamiltonian at k
         k is one k-point in reduced coordinates
         hrx = P_\alpha = dH(k)\dk_\alpha = \sum_{R=1}^N e^{ikR}iR_\alpha H_{R}
@@ -239,9 +249,9 @@ class TBMODEL(tbmodels.Model):
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
         if (not from_hr):
-            pos = self.get_pos_from_ham(lat, hr, from_hr)
+            pos = self.get_pos_from_ham(hr, from_hr)
         else:
-            pos = self.get_pos_from_ham(lat, hr, from_hr=True)
+            pos = self.get_pos_from_ham(hr, from_hr=True)
             irpos = hr.hop
             self.pos = pos
             self.irpos = irpos
@@ -275,7 +285,7 @@ class TBMODEL(tbmodels.Model):
         return hlm_k
 
 
-    def _get_h_k(self, k, lat, hr, fermie, from_hr=True):
+    def _get_h_k(self, k, hr, from_hr=True):
         ''' computes hamiltonian at k from real space hamiltonian
         k is one k-point in reduced coordinates
         '''
@@ -283,9 +293,9 @@ class TBMODEL(tbmodels.Model):
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
         if (not from_hr):
-            pos = self.get_pos_from_ham(lat, hr, from_hr)
+            pos = self.get_pos_from_ham(hr, from_hr)
         else:
-            pos = self.get_pos_from_ham(lat=lat,hr=hr, from_hr=True)
+            pos = self.get_pos_from_ham(hr=hr, from_hr=True)
             irpos = hr.hop
             self.irpos = irpos
         
@@ -302,7 +312,7 @@ class TBMODEL(tbmodels.Model):
         hk = hk #+ fermie
         return hk
 
-    def _get_h_R(self, lat, hr, fermie, from_hr=True):
+    def _get_h_R(self, lat, hr, from_hr=True):
         ''' get hamiltonian at R from real space hamiltonian
         R is one lattice vector in reduced coordinates
         '''
@@ -320,7 +330,7 @@ class TBMODEL(tbmodels.Model):
         return hr_mn_p    
     
     def decay_R(self, lat, hr ,fermie, from_hr = True):
-        hr_mn_p = self._get_h_R(lat, hr, fermie, from_hr)
+        hr_mn_p = self._get_h_R(lat, hr, from_hr)
         #calculate distances
         max_hr_p = np.zeros(hr.nrpts, dtype= np.float64)
         R_dist = np.zeros(hr.nrpts, dtype= np.float64)
@@ -352,7 +362,7 @@ class TBMODEL(tbmodels.Model):
         """
         H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
         for i in range(0, k.shape[0]):
-            H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
+            H_k[i] = self._get_h_k(k[i], self.hr, from_hr)
         return np.array([scipy.linalg.eigvalsh(ham) for ham in H_k])
 
     def get_eigenval_and_vec(self, k, from_hr=True):
@@ -387,7 +397,7 @@ class TBMODEL(tbmodels.Model):
         # Initialize the Hamiltonian for all k-points
         H_k = np.zeros((k.shape[0], self.nb, self.nb), dtype=np.complex128)
         for i in range(k.shape[0]):
-            H_k[i] = self._get_h_k(k[i], self.latdb.lat, self.hr, self.fermie, from_hr)
+            H_k[i] = self._get_h_k(k[i], self.hr, from_hr)
 
         # Compute eigenvalues and eigenvectors for each k-point
         eigenvalues = np.zeros((k.shape[0], self.nb), dtype=np.float64)
