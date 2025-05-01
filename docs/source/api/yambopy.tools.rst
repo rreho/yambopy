@@ -28,6 +28,14 @@ yambopy.tools.jsonencoder module
    :undoc-members:
    :show-inheritance:
 
+yambopy.tools.skw module
+------------------------
+
+.. automodule:: yambopy.tools.skw
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 yambopy.tools.string module
 ---------------------------
 

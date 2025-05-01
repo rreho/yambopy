@@ -20,6 +20,7 @@ Subpackages
    yambopy.tests
    yambopy.tools
    yambopy.wannier
+
 Submodules
 ----------
 
@@ -27,6 +28,14 @@ yambopy.analyse module
 ----------------------
 
 .. automodule:: yambopy.analyse
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+yambopy.kpoints module
+----------------------
+
+.. automodule:: yambopy.kpoints
    :members:
    :undoc-members:
    :show-inheritance:
@@ -43,6 +52,14 @@ yambopy.units module
 --------------------
 
 .. automodule:: yambopy.units
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+yambopy.xsffilepp module
+------------------------
+
+.. automodule:: yambopy.xsffilepp
    :members:
    :undoc-members:
    :show-inheritance:

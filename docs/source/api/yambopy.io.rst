@@ -52,6 +52,14 @@ yambopy.io.outputfile module
    :undoc-members:
    :show-inheritance:
 
+yambopy.io.xsffile module
+-------------------------
+
+.. automodule:: yambopy.io.xsffile
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 yambopy.io.yambofile module
 ---------------------------
 

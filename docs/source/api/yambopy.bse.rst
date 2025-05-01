@@ -28,6 +28,14 @@ yambopy.bse.bse\_dispersion module
    :undoc-members:
    :show-inheritance:
 
+yambopy.bse.excitonradiativelifetimes module
+--------------------------------------------
+
+.. automodule:: yambopy.bse.excitonradiativelifetimes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 yambopy.bse.excitonweight module
 --------------------------------
 

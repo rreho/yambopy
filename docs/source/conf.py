@@ -19,11 +19,6 @@ release = '3.0.0'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = []
-
-templates_path = ['_templates']
-exclude_patterns = ['build', 'Thumbs.db', '.DS_Store']
-
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
@@ -32,7 +27,11 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
+    'sphinx.ext.napoleon',  # Add napoleon to support Google style docstrings
 ]
+
+templates_path = ['_templates']
+exclude_patterns = ['build', 'Thumbs.db', '.DS_Store']
 
 pygments_style = 'sphinx'
 
@@ -42,3 +41,18 @@ pygments_style = 'sphinx'
 html_theme = 'sphinx_rtd_theme'
 html_sidebars = { '**': ['globaltoc.html','relations.html', 'sourcelink.html', 'searchbox.html'] }
 #html_static_path = ['_static']
+
+# -- Autodoc options ---------------------------------------------------------
+autodoc_default_options = {
+    'members': True,
+    'member-order': 'bysource',  # Order by source to improve visualization
+    'undoc-members': True,
+    'show-inheritance': True,
+}
+
+autosummary_generate = True
+# -- Napolean options --------------------------------------------------------
+napoleon_google_docstring = True
+napoleon_numpy_docstring = True
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True

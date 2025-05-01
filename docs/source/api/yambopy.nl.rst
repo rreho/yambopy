@@ -36,6 +36,14 @@ yambopy.nl.harmonic\_analysis module
    :undoc-members:
    :show-inheritance:
 
+yambopy.nl.hhg\_tools module
+----------------------------
+
+.. automodule:: yambopy.nl.hhg_tools
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 yambopy.nl.linear\_optics module
 --------------------------------
 

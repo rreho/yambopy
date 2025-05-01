@@ -124,14 +124,6 @@ yambopy.dbs.rtdb module
    :undoc-members:
    :show-inheritance:
 
-yambopy.dbs.savedb module
--------------------------
-
-.. automodule:: yambopy.dbs.savedb
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 yambopy.dbs.wfdb module
 -----------------------
 

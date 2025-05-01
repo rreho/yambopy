@@ -12,6 +12,14 @@ yambopy.common.calculation\_manager module
    :undoc-members:
    :show-inheritance:
 
+yambopy.common.fft module
+-------------------------
+
+.. automodule:: yambopy.common.fft
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 yambopy.common.save\_generation module
 --------------------------------------
 

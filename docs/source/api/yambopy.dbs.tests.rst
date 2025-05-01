@@ -36,14 +36,6 @@ yambopy.dbs.tests.test\_qpdb module
    :undoc-members:
    :show-inheritance:
 
-yambopy.dbs.tests.test\_savedb module
--------------------------------------
-
-.. automodule:: yambopy.dbs.tests.test_savedb
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Module contents
 ---------------
 

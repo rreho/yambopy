@@ -5,4 +5,3 @@ yambopy
    :maxdepth: 4
 
    yambopy
-   wannier
