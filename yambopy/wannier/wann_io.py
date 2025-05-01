@@ -332,3 +332,49 @@ class NNKP():
 
         t2 = time()
         print("Time for NNKP.__init__() : {}".format(t2 - t0))
+
+
+class WIN():
+    def __init__(self, seedname):
+        t0 = time()
+        f_win = open(seedname + ".win", "r")
+        atoms = []
+        k_points = []
+        symbols = []
+        current_block = None
+
+        lines = f_win.readlines()
+        for line in lines:
+            line = line.strip()
+            if line.startswith('begin'):
+                current_block = line.split()[1]
+            elif line.startswith('end'):
+                current_block = None
+            elif line and not line.startswith('!'):  # Skip empty lines and comments
+                if current_block == 'atoms_frac':
+                    # Split line and convert coordinates to float
+                    parts = line.split()
+                    if len(parts) == 4:  # Ensure we have symbol and 3 coordinates
+                        symbols.append(parts[0])
+                        coords = [float(x) for x in parts[1:4]]
+                        atoms.append(coords)
+                elif current_block == 'kpoints':
+                    # Convert k-point coordinates to float
+                    coords = [float(x) for x in line.split()]
+                    if len(coords) == 4:  # Ensure we have 3 coordinates
+                        k_points.append(coords[:3])
+
+        f_win.close()
+
+        self.red_atomic_positions = np.array(atoms)
+        self.k_points = np.array(k_points)
+        self.symbols = np.array(symbols)
+        
+        t1 = time()
+        print(f"Time for WIN.__init__() : {t1 - t0}")
+
+    def read_positions(self):
+        from ase.data import atomic_numbers
+
+        self.atomic_numbers = np.array([atomic_numbers[symbol] for  symbol in self.symbols])
+        return self.red_atomic_positions, self.atomic_numbers

@@ -1,0 +1,589 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Exciton-Phonon &#8212; QuREX Documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=a3416100" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-thebe.css?v=4fa983c6" />
+    <link rel="stylesheet" type="text/css" href="../_static/proof.css?v=b4b7a797" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script async="async" src="../_static/sphinx-thebe.js?v=c100c467"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'workflows/exciton_phonon';</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search this book..."
+         aria-label="Search this book..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../intro.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">QuREX Documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="../intro.html">
+                    QuREX Theoretical Formalism
+                </a>
+            </li>
+        </ul>
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Theory</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../content/theory/theoretical_background.html">Theoretical Background</a></li>
+
+
+
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Software</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../content/software/software.html">Software</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../content/software/yambo/yambo.html">Yambo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../content/software/yambo/yambo_input_flags.html">Yambo Input variables</a></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/workflows/exciton_phonon.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Exciton-Phonon</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Exciton-Phonon</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-0-dft-ground-state-calculation-using-pwx">Step 0: DFT ground state calculation using pwx</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-dfpt-calculation-using-ph-x">Step 1: DFPT calculation using ph.x</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-dvscf-calculation-using-letzelph-yambopy">Step 2: DVSCF calculation using Letzelph-yambopy</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-gw-bse-calculation-using-yambo">Step 3: GW-BSE calculation using Yambo</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-4-exciton-phonon-calculation-using-yambopy">Step 4: Exciton-Phonon calculation using yambopy</a></li>
+</ul>
+</li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>
+</ul>
+
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="exciton-phonon">
+<h1>Exciton-Phonon<a class="headerlink" href="#exciton-phonon" title="Link to this heading">#</a></h1>
+<p>Exciton-phonon coupling refers to the interaction between excitons (bound states of an electron and a hole) and phonons (quanta of lattice vibrations) in a material. This coupling can significantly affect the optical and electronic properties of the material. When an exciton interacts with phonons, it can scatter, leading to changes in its energy and momentum. This process is crucial for understanding phenomena such as thermalization, relaxation, and recombination of excitons in semiconductors and other materials.
+This workflow is split up into several sections:</p>
+<ol class="arabic simple" start="0">
+<li><p><a class="reference internal" href="#step-0-dft-ground-state-calculation-using-pwx"><span class="xref myst">DFT</span></a>
+Calculate ground state wavefunctions of the system using Quantum Espresso <code class="docutils literal notranslate"><span class="pre">pw.x</span></code>.</p></li>
+<li><p><a class="reference internal" href="#step-1-dfpt-calculation-using-phx"><span class="xref myst">DFPT</span></a>
+Calculate the phonons and <span class="math notranslate nohighlight">\(\Delta V_{scf}\)</span> for the electron-phonon matrix elements using Quantum Espresso <code class="docutils literal notranslate"><span class="pre">ph.x</span></code>.</p></li>
+<li><p><a class="reference internal" href="#step-2-dvscf-calculation-using-letzelph-yambopy"><span class="xref myst">ELPH</span></a>
+Compute the electron-phonon matrix elements <span class="math notranslate nohighlight">\(g_{kkp}\)</span> using the <a class="reference external" href="https://github.com/muralidhar-nalabothula/LetzElPhC/">LetzElPhC code</a>.</p></li>
+<li><p><a class="reference internal" href="#step-3-gw-bse-calculation-using-yambo"><span class="xref myst">GW-BSE</span></a>
+Compute BSE kernel and diagonalize on top of GW calculation, using the Yambo code to get the exciton wavefunctions.</p></li>
+<li><p><a class="reference internal" href="#step-4-exciton-phonon-calculation-using-yambopy"><span class="xref myst">EXC-PH</span></a>
+Combine all of the above to compute the exciton-phonon matrix elements that are used to compute photoluminesensce spectrum with python <a class="reference external" href="https://github.com/muralidhar-nalabothula/PhdScripts/">scripts</a>.</p></li>
+</ol>
+<p>We will go through these steps with a simple system of hBN monolayer that can be readily run with relatively small computational cost. Step 1 of calculating the phonons takes some time, but one can parallelize and calculate at the same time the GW-BSE kernel at step 3.
+For more detailed information on exciton-phonon coupling and its effects on luminescence in hexagonal boron nitride, you can refer to the paper: <span id="id1">[<a class="reference internal" href="#id108" title="Pierre Lechifflart, Fulvio Paleari, Davide Sangalli, and Claudio Attaccalite. First-principles study of luminescence in hexagonal boron nitride single layer: exciton-phonon coupling and the role of substrate. Phys. Rev. Mater., 7:024006, Feb 2023. URL: https://link.aps.org/doi/10.1103/PhysRevMaterials.7.024006, doi:10.1103/PhysRevMaterials.7.024006.">Lechifflart <em>et al.</em>, 2023</a>]</span>.</p>
+<section id="step-0-dft-ground-state-calculation-using-pwx">
+<h2>Step 0: DFT ground state calculation using pwx<a class="headerlink" href="#step-0-dft-ground-state-calculation-using-pwx" title="Link to this heading">#</a></h2>
+<p>Details about the DFT ground state calculation using pw.x.
+<code class="docutils literal notranslate"><span class="pre">force_symmorphic=.true.</span></code>
+The DFT ground state calculations serve 2 purposes, to acquire the starting wave functions for the calculations of the phonons, but also to acquire the Kohn-Sham energies that are used for the MBT calculations to get the exciton wavefunctions.</p>
+</section>
+<section id="step-1-dfpt-calculation-using-ph-x">
+<h2>Step 1: DFPT calculation using ph.x<a class="headerlink" href="#step-1-dfpt-calculation-using-ph-x" title="Link to this heading">#</a></h2>
+<p>Details about the DFPT calculation using ph.x.</p>
+</section>
+<section id="step-2-dvscf-calculation-using-letzelph-yambopy">
+<h2>Step 2: DVSCF calculation using Letzelph-yambopy<a class="headerlink" href="#step-2-dvscf-calculation-using-letzelph-yambopy" title="Link to this heading">#</a></h2>
+<p>Details about the DVSCF calculation using LetzElPhC-yambopy.
+For documentation on how to compile and run the LetzELPhC code using yambopy have a look at the <a class="reference internal" href="#../../external_files/LetzElPhC_documentation.pdf"><span class="xref myst">LetzElPhC documentation</span></a>.
+We run <code class="docutils literal notranslate"><span class="pre">yambopy</span> <span class="pre">l2y</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">yambopy</span> <span class="n">l2y</span> <span class="o">-</span><span class="n">ph</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">of</span><span class="o">/</span><span class="n">ph_input</span><span class="o">.</span><span class="ow">in</span> <span class="o">-</span><span class="n">b</span> <span class="n">n_i</span> <span class="n">n_f</span> <span class="o">-</span><span class="n">par</span> <span class="n">n_qpools</span> <span class="n">n_kpools</span> <span class="o">-</span><span class="n">lelphc</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">lelphc_exe</span> <span class="o">-</span><span class="n">D</span>
+</pre></div>
+</div>
+<p>Keep the <code class="docutils literal notranslate"><span class="pre">-D</span></code> flag to make sure we keep the required <code class="docutils literal notranslate"><span class="pre">ndb.elph</span></code> and <code class="docutils literal notranslate"><span class="pre">ndb.Dmat</span></code> which are the electron-phonon matrix elements, and the Dynamical matrices respectively.</p>
+<p>We should now have the electron-phonon database <code class="docutils literal notranslate"><span class="pre">ndb.elph</span></code>.</p>
+</section>
+<section id="step-3-gw-bse-calculation-using-yambo">
+<h2>Step 3: GW-BSE calculation using Yambo<a class="headerlink" href="#step-3-gw-bse-calculation-using-yambo" title="Link to this heading">#</a></h2>
+<p>Details about the GW-BSE calculation using Yambo.
+Construct the BSE kernel and diagonalize to get the exciton wavefunctions.
+Make sure to turn on the flag: <code class="docutils literal notranslate"><span class="pre">WRbsWF</span></code> to write the exciton wavefunctions, which is commented out by default.
+For the theoretical background on this section please look at <a class="reference internal" href="#../theory/GW"><span class="xref myst">GW</span></a> and <a class="reference internal" href="#../theory/bse_equation"><span class="xref myst">BSE</span></a>.</p>
+</section>
+<section id="step-4-exciton-phonon-calculation-using-yambopy">
+<h2>Step 4: Exciton-Phonon calculation using yambopy<a class="headerlink" href="#step-4-exciton-phonon-calculation-using-yambopy" title="Link to this heading">#</a></h2>
+<p>Details about the Exciton-Phonon calculation using yambopy.
+For this step we use these <a class="reference external" href="https://github.com/muralidhar-nalabothula/PhdScripts/">scripts</a> to calculate the exciton-phonon matrix elements but also to calculate the photoluminescense spectrum of the material. The script we will be using is called <code class="docutils literal notranslate"><span class="pre">ex_ph_program.py</span></code>.</p>
+<p>It takes a few basic inputs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">-</span> <span class="n">calc_folder</span><span class="p">:</span> <span class="o">/</span><span class="n">Path</span><span class="o">/</span> <span class="c1">#where the calculations took place.</span>
+<span class="o">-</span> <span class="n">SAVE_dir</span><span class="p">:</span> <span class="n">calc_folder</span> <span class="o">+</span> <span class="s1">&#39;/path/to/SAVE&#39;</span>
+<span class="o">-</span> <span class="n">BSE_dir</span><span class="p">:</span> <span class="n">calc_folder</span> <span class="o">+</span> <span class="s1">&#39;/path/of/job/bse/&#39;</span>
+<span class="o">-</span> <span class="n">elph_file</span><span class="p">:</span> <span class="n">calc_folder</span> <span class="o">+</span> <span class="s1">&#39;/path/to/ndb.elph&#39;</span>
+<span class="o">-</span> <span class="n">Dmat_file</span><span class="p">:</span> <span class="n">calc_folder</span> <span class="o">+</span> <span class="s1">&#39;/path/to/ndb.Dmats&#39;</span>
+<span class="o">-</span> <span class="n">nstates</span><span class="p">:</span> <span class="mi">19</span><span class="o">*</span><span class="mi">4</span>             <span class="c1"># Number of states to include in the PL, `nq * ntransitions` (e.g., 19*4)</span>
+<span class="o">-</span> <span class="n">lumin</span><span class="p">:</span> <span class="kc">True</span>               <span class="c1"># Compute luminescence if set to `True`</span>
+<span class="o">-</span> <span class="n">Exph</span><span class="p">:</span> <span class="kc">True</span> 
+<span class="o">-</span> <span class="n">Temp</span><span class="p">:</span> <span class="mi">20</span>                  <span class="c1"># Temperature used in luminescence (in Kelvin, e.g., 20)</span>
+<span class="o">-</span> <span class="n">ome_range</span><span class="p">:[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">1000</span><span class="p">]</span>    <span class="c1"># Range for omega in the format `(min, max, numpoints)` (in eV, e.g., [1, 8, 1000])</span>
+<span class="o">-</span> <span class="n">broading</span><span class="p">:</span> <span class="mf">0.005</span>           <span class="c1"># Broadening (in eV, e.g., 0.005)</span>
+<span class="o">-</span> <span class="n">npol</span><span class="p">:</span> <span class="mi">2</span>                   <span class="c1"># Polarization, set to 2 for 2D materials</span>
+</pre></div>
+</div>
+<p>Run the python script.</p>
+<p>Now you obtain <code class="docutils literal notranslate"><span class="pre">Ex-ph.npy</span></code> and <code class="docutils literal notranslate"><span class="pre">luminescence_intensities.dat</span></code>. Which we can plot:
+<img alt="Photoluminescence Spectrum of 2D hBN" src="../_images/2D_hBN_PL.png" /></p>
+</section>
+</section>
+<section class="tex2jax_ignore mathjax_ignore" id="references">
+<h1>References<a class="headerlink" href="#references" title="Link to this heading">#</a></h1>
+<div class="docutils container" id="id2">
+<div role="list" class="citation-list">
+<div class="citation" id="id107" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Blo62<span class="fn-bracket">]</span></span>
+<p>EI Blount. Formalisms of band theory. In <em>Solid state physics</em>, volume 13, pages 305–373. Elsevier, 1962.</p>
+</div>
+<div class="citation" id="id43" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>DSQ23<span class="fn-bracket">]</span></span>
+<p>Alexandre C Dias, Julian FRV Silveira, and Fanyao Qu. Wantibexos: a wannier based tight binding code for electronic band structure, excitonic and optoelectronic properties of solids. <em>Computer Physics Communications</em>, 285:108636, 2023.</p>
+</div>
+<div class="citation" id="id71" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>GAB+17<span class="fn-bracket">]</span></span>
+<p>Paolo Giannozzi, Oliviero Andreussi, Thomas Brumme, Oana Bunau, M Buongiorno Nardelli, Matteo Calandra, Roberto Car, Carlo Cavazzoni, Davide Ceresoli, Matteo Cococcioni, and others. Advanced capabilities for materials modelling with quantum espresso. <em>Journal of physics: Condensed matter</em>, 29(46):465901, 2017.</p>
+</div>
+<div class="citation" id="id9" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>GBB+09<span class="fn-bracket">]</span></span>
+<p>Paolo Giannozzi, Stefano Baroni, Nicola Bonini, Matteo Calandra, Roberto Car, Carlo Cavazzoni, Davide Ceresoli, Guido L Chiarotti, Matteo Cococcioni, Ismaila Dabo, and others. Quantum espresso: a modular and open-source software project for quantum simulations of materials. <em>Journal of physics: Condensed matter</em>, 21(39):395502, 2009.</p>
+</div>
+<div class="citation" id="id103" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>HQdJN23<span class="fn-bracket">]</span></span>
+<p>Jonah B Haber, Diana Y Qiu, Felipe H da Jornada, and Jeffrey B Neaton. Maximally localized exciton wannier functions for solids. <em>Physical Review B</em>, 108(12):125118, 2023.</p>
+</div>
+<div class="citation" id="id61" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>KS65<span class="fn-bracket">]</span></span>
+<p>Walter Kohn and Lu Jeu Sham. Self-consistent equations including exchange and correlation effects. <em>Physical review</em>, 140(4A):A1133, 1965.</p>
+</div>
+<div class="citation" id="id108" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">LPSA23</a><span class="fn-bracket">]</span></span>
+<p>Pierre Lechifflart, Fulvio Paleari, Davide Sangalli, and Claudio Attaccalite. First-principles study of luminescence in hexagonal boron nitride single layer: exciton-phonon coupling and the role of substrate. <em>Phys. Rev. Mater.</em>, 7:024006, Feb 2023. URL: <a class="reference external" href="https://link.aps.org/doi/10.1103/PhysRevMaterials.7.024006">https://link.aps.org/doi/10.1103/PhysRevMaterials.7.024006</a>, <a class="reference external" href="https://doi.org/10.1103/PhysRevMaterials.7.024006">doi:10.1103/PhysRevMaterials.7.024006</a>.</p>
+</div>
+<div class="citation" id="id32" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>MHGruningV09<span class="fn-bracket">]</span></span>
+<p>Andrea Marini, Conor Hogan, Myrta Grüning, and Daniele Varsano. Yambo: an ab initio tool for excited state calculations. <em>Computer Physics Communications</em>, 180(8):1392–1403, 2009.</p>
+</div>
+<div class="citation" id="id42" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>MMY+12<span class="fn-bracket">]</span></span>
+<p>Nicola Marzari, Arash A Mostofi, Jonathan R Yates, Ivo Souza, and David Vanderbilt. Maximally localized wannier functions: theory and applications. <em>Reviews of Modern Physics</em>, 84(4):1419, 2012.</p>
+</div>
+<div class="citation" id="id104" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>MYL+08<span class="fn-bracket">]</span></span>
+<p>Arash A Mostofi, Jonathan R Yates, Young-Su Lee, Ivo Souza, David Vanderbilt, and Nicola Marzari. Wannier90: a tool for obtaining maximally-localised wannier functions. <em>Computer physics communications</em>, 178(9):685–699, 2008.</p>
+</div>
+<div class="citation" id="id29" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>ORR02<span class="fn-bracket">]</span></span>
+<p>Giovanni Onida, Lucia Reining, and Angel Rubio. Electronic excitations: density-functional versus many-body green’s-function approaches. <em>Reviews of modern physics</em>, 74(2):601, 2002.</p>
+</div>
+<div class="citation" id="id6" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>SFM+19<span class="fn-bracket">]</span></span>
+<p>Davide Sangalli, Andrea Ferretti, Henrique Miranda, Claudio Attaccalite, Ivan Marri, Elena Cannuccia, P Melo, Margherita Marsili, Fulvio Paleari, Antimo Marrazzo, and others. Many-body perturbation theory calculations using the yambo code. <em>Journal of Physics: Condensed Matter</em>, 31(32):325902, 2019.</p>
+</div>
+<div class="citation" id="id105" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>YWVS07<span class="fn-bracket">]</span></span>
+<p>Jonathan R Yates, Xinjie Wang, David Vanderbilt, and Ivo Souza. Spectral and fermi surface properties from wannier interpolation. <em>Physical Review B—Condensed Matter and Materials Physics</em>, 75(19):195121, 2007.</p>
+</div>
+</div>
+</div>
+</section>
+
+    <script type="text/x-thebe-config">
+    {
+        requestKernel: true,
+        binderOptions: {
+            repo: "binder-examples/jupyter-stacks-datascience",
+            ref: "master",
+        },
+        codeMirrorConfig: {
+            theme: "abcdef",
+            mode: "python"
+        },
+        kernelOptions: {
+            name: "python3",
+            path: "./workflows"
+        },
+        predefinedOutput: true
+    }
+    </script>
+    <script>kernelName = 'python3'</script>
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Exciton-Phonon</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-0-dft-ground-state-calculation-using-pwx">Step 0: DFT ground state calculation using pwx</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-dfpt-calculation-using-ph-x">Step 1: DFPT calculation using ph.x</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-dvscf-calculation-using-letzelph-yambopy">Step 2: DVSCF calculation using Letzelph-yambopy</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-gw-bse-calculation-using-yambo">Step 3: GW-BSE calculation using Yambo</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-4-exciton-phonon-calculation-using-yambopy">Step 4: Exciton-Phonon calculation using yambopy</a></li>
+</ul>
+</li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>
+</ul>
+
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Riccardo Reho
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2023.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
