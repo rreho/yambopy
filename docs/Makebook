@@ -1,2 +1,3 @@
+sphinx-apidoc -o source/api ../yambopy --force
 sphinx-build source/ build/
 jupyter-book build QuREX-book/
