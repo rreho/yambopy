@@ -65,6 +65,8 @@ class ExcitonBands(H2P):
             cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
         elif self.ctype == 'v2dt2':
             cpot_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+        elif self.ctype == 'v2drk':
+            cpot_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
         
         K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
         del dotc, dotv
@@ -138,7 +140,7 @@ class ExcitonBands(H2P):
         # sm = plt.cm.ScalarMappable(cmap=colormap, norm=plt.Normalize(vmin=0, vmax=1))
         # cbar = fig.colorbar(sm, ax=ax, orientation='vertical')
         # cbar.set_label('Exciton weight')
-        return fig, ax
+        return ax
 
     def plot_debug_excbands(self,h2p,ax=None,tolerance=1e-2
 , **kwargs):
