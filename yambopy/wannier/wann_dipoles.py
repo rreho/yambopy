@@ -37,7 +37,8 @@ class TB_dipoles():
         self.eigvecc_t = eigvecc_t
         self.eigvecv_t = eigvecv_t
         if self.hlm[0][0][0][0] ==0:
-            raise ValueError
+            print(f"WARNING: hlm zero: {self.hlm[0][0][0][0]}")
+
         else:
             print(f"hlm not zero: {self.hlm[0][0][0][0]}")
         self.method = method
