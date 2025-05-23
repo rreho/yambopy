@@ -5,7 +5,6 @@ API documentation
 :Release: |version|
 :Date: |today|
 
-
 .. currentmodule:: yambopy
 
 This reference manual describes in detail how the modules, classes

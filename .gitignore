@@ -4,4 +4,4 @@ build
 dist
 .DS_store
 save_flow
-docs/QuRE-book/_build/
+docs/QuREX-book/_build/*/*/*
