@@ -805,7 +805,7 @@ class H2P():
     #                             np.vdot(self.eigvec[ik,:, ic], self.eigvec[ikpbover2,:, icp])*np.vdot(self.eigvec[ikmqmbover2,:,ivp], self.eigvec[ikmq,:,iv]) 
     #     return Mssp_ttp
     def _get_exc_overlap_ttp(self, t, tp, iq, ib):
-        '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
+        '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{SpQ+B}_{cpvpk+B/2} \times <u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
         #Extract indices from BSE_table
         if self.method == 'skip-diago':
             indices = self.inverse_aux_t
@@ -820,11 +820,11 @@ class H2P():
 
         Mssp_ttp = 0
 
-        for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks):
+        for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks): #\sum_{cvk}
             ik = np.array(ik)[:, np.newaxis]
             iv = np.array(iv)[:, np.newaxis]
             ic = np.array(ic)[:, np.newaxis]
-            for ivp, icp in zip(iv_chunks,ic_chunks):
+            for ivp, icp in zip(iv_chunks,ic_chunks):   #\sum_{cpvp}
                 #ivp = iv
                 #icp = icp
 
@@ -833,10 +833,13 @@ class H2P():
                 ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
                 ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
                 ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
+                #A^{*SQ}_{cvk}
                 term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+                #A^{SpQ+B}_{cpvpk+B/2}
                 term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
-
+                #<u_{ck}|u_{cpk+B/2}>_{uc}
                 term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
+                #<u_{vpk-Q-B/2}|u_{vk-Q}>_{uc}
                 term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
                 Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
         return Mssp_ttp
@@ -844,21 +847,22 @@ class H2P():
     
 
     def get_exc_overlap(self, trange=[0], tprange=[0]):
-        trange = np.array(trange)
-        tprange = np.array(tprange)
+        '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk} A^{SpQ+B}_{cpvpk+B/2} \times <u_{ck}|u_{cpk+B/2}>_{uc}<u_{vpk-Q-B/2}|u_{vk-Q}>_{uc}'''
+        trange = np.array(trange)   # transition S range 
+        tprange = np.array(tprange) # transition Sprime range
 
-        il, ilp, iq, ib = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), np.arange(self.qmpgrid.nnkpts), indexing='ij')
+        it, itp, iq, ib = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), np.arange(self.qmpgrid.nnkpts), indexing='ij')
         print(f"eigvec count: {np.count_nonzero(self.eigvec)}")
         print(f"h2peigvec_vck count: {np.count_nonzero(self.h2peigvec_vck)}")
 
         vectorized_overlap_ttp = np.vectorize(self._get_exc_overlap_ttp, signature='(),(),(),()->()')
-        # il ip: transition range
+        # it itp: transition range
         # iq is the q index in the qgrid
         # kindices_table[iq] returns the index of the q-point in the k-grid
-        # ib is the index of the neighbourg in qgrid
-        Mssp = vectorized_overlap_ttp(il, ilp, iq, ib) 
+        # ib is the index of the neighbour in qgrid
+        Mssp = vectorized_overlap_ttp(it, itp, iq, ib) 
         
-        self.Mssp = Mssp/(self.bse_nv**2*self.bse_nc**2)
+        self.Mssp = Mssp/(self.bse_nv**2*self.bse_nc**2)        # under review
 
     def _get_amn_ttp(self, t, tp, iq):
         '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
