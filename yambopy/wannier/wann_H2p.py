@@ -130,7 +130,7 @@ class H2P():
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
         except ValueError:
             print('Warning! Q=0 index not found')
-        self.dimbse = self.bse_nv*self.bse_nc*self.nk
+        self.dimbse = self.bse_nv*self.bse_nc*self.nq
         if electronsdb_path:
             self.electronsdb_path = electronsdb_path
             self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
@@ -307,14 +307,14 @@ class H2P():
         if self.skip_diago:
             H2P = None
             full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
-            self.qgrid_toibzk = self.electronsdb.kpoints_indexes[self.kindices_table[:]]
-            self.ibzk_toqgrid={v: i for i, v in enumerate(self.qgrid_toibzk)}
+            # self.qgrid_toibzk = self.electronsdb.kpoints_indexes[self.kindices_table[:]]
+            # self.ibzk_toqgrid={v: i for i, v in enumerate(self.qgrid_toibzk)}
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
                 file_suffix = 'ndb.BS_diago_Q1'
             else:
                 H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
-                file_suffix = [f'ndb.BS_diago_Q{self.qgrid_toibzk[iq] + 1}' for iq in range(self.nq_double)]
+                file_suffix = [f'ndb.BS_diago_Q{self.latdb.kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
 
             exciton_db_files = [f'{self.excitons_path}/{suffix}' for suffix in np.atleast_1d(file_suffix)]
             h2peigv_vck = np.zeros((self.nq_double, self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
@@ -325,7 +325,7 @@ class H2P():
 
             for idx, exc_db_file in enumerate(exciton_db_files):
                 yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
-                aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
+                aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))  # c,v,k
                 # Create an array to store the inverse mapping
                 inverse_aux_t = np.empty_like(aux_t)
                 # Populate the inverse mapping
@@ -344,7 +344,7 @@ class H2P():
 
                 # Broadcasting and advanced indexing
                 inverse_aux_t_slepc = inverse_aux_t[:self.dimslepc]
-                h2peigv[idx, :] = tmph2peigv[:]
+                h2peigv[idx, :] = tmph2peigv
                 h2peigvec[idx, :, :] = tmph2peigvec[:self.dimslepc, :]
 
                 ik_t = ik[:self.dimslepc]
@@ -865,7 +865,7 @@ class H2P():
         self.Mssp = Mssp/(self.bse_nv**2*self.bse_nc**2)        # under review
 
     def _get_amn_ttp(self, t, tp, iq):
-        '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
+        '''Calculate A_SSp(Q) = \sum_{ccpvvpk}A^{*SQ}_{cvk}<u_{ck}|u_{cpk}>'''
         #Extract indices from BSE_table
         if self.method == 'skip-diago':
             indices = self.inverse_aux_t
@@ -888,42 +888,32 @@ class H2P():
                 #ivp = iv
                 #icp = icp
 
-                #iqpb = self.qmpgrid.qpb_grid_table[iq_ibz, ib, 1] #points belong to qgrid
+                # iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
                 #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
                 ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
                 ikplusq = self.kplusq_table[ik, iq, 1] # points belong to k grids
                 term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-                term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ik]
+                term2 = self.h2peigvec_vck[iq, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ik]
 
                 term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ik, :, icp])
                 term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmq, :, ivp]), self.eigvec[ikmq, :, iv])
-                Ammn_ttp += np.sum(term1 * term2 * term3 * term4)
+                Ammn_ttp += np.sum(term1 * term2  * term3 * term4 )
         #Ammn_ttp = np.sum(self.h2peigvec_vck[iq_ibz, t, :, :, :] * np.conjugate(self.h2peigvec_vck[iq_ibz, tp, :, :, :]))
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0], tprange = [0]):
+        """Take the identiry projection of the excitons and store it in Amn"""
         Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
         trange = np.array(trange)
         tprange = np.array(tprange)
+        for iq in range(self.qmpgrid.nkpoints):
+            for m in range(min(len(trange), len(tprange))):
+                Amn[m, m, iq] = 1.0 + 0.0j  # Identity projection
 
-        il, ilp, iq = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), indexing='ij')
+        self.Amn = Amn
         print(f"eigvec count: {np.count_nonzero(self.eigvec)}")
         print(f"h2peigvec_vck count: {np.count_nonzero(self.h2peigvec_vck)}")
 
-        vectorized_amn_ttp = np.vectorize(self._get_amn_ttp, signature='(),(),()->()')
-        # il ip: transition range
-        # iq is the q index in the qgrid
-        # kindices_table[iq] returns the index of the q-point in the k-grid
-        # ib is the index of the neighbourg in qgrid
-        Assp = vectorized_amn_ttp(il, ilp, iq )
-
-        self.Amn = Assp/(self.bse_nv**2*self.bse_nc**2)
-        #for it,t in enumerate(trange):
-        #    for itp, tp in enumerate(tprange):
-        #        for iq in range(self.qmpgrid.nkpoints):
-        #            iq_ibz = self.qgrid_toibzk[iq]
-        #            Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq)        
-        #self.Amn = Amn/(self.bse_nv**2*self.bse_nc**2)
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
 
