@@ -5,10 +5,9 @@ from yambopy.wannier.wann_io import NNKP
 from yambopy.units import ang2bohr
 from scipy.spatial import cKDTree
 class NNKP_Grids(KPointGenerator):
-    def __init__(self, seedname,latdb, yambo_grid=False):
+    def __init__(self, seedname,latdb):
         self.nnkp_grid = NNKP(seedname)
         self.latdb = latdb
-        self.yambo_grid = yambo_grid
         self.generate()
 
     def __getattr__(self, name):
@@ -19,10 +18,7 @@ class NNKP_Grids(KPointGenerator):
     
     def generate(self):
         """Generate k-grid from NNKP file."""
-        if(self.yambo_grid):
-            self.k = np.array([self.fold_into_bz(k) for ik,k in enumerate(self.nnkp_grid.k)])    
-        else:
-            self.k = self.nnkp_grid.k
+        self.k = self.nnkp_grid.k
         self.lat = self.latdb.lat
         self.rlat = self.latdb.rlat*2*np.pi
         self.car_kpoints = red_car(self.k, self.rlat)*ang2bohr # result in Bohr
@@ -31,15 +27,15 @@ class NNKP_Grids(KPointGenerator):
         self.weights = 1/self.nkpoints
         self.k_tree = cKDTree(self.k)
 
-    def get_kmq_grid(self,qmpgrid, sign = "+"):
+    def get_kmq_grid(self,qgrid, sign = "+"):
         # if not isinstance(qmpgrid, NNKP_Grids):
         #     raise TypeError('Argument must be an instance of NNKP_Grids')
         #here I need to use the k-q grid and then apply -b/2
         # Prepare dimensions
-        if sign not in ["+", "-"]:
-            raise ValueError("Invalid sign option. Choose either '+' for a-b or '-' for b-a")
 
-        nkpoints = self.nkpoints
+        self.kmq_grid = self.k[:,None,:] - qgrid[None,:,:]
+        
+
         nqpoints = qmpgrid.nkpoints
      
         # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
@@ -112,50 +108,23 @@ class NNKP_Grids(KPointGenerator):
         '''
         For each q belonging to the Qgrid return Q+B and a table with indices
         containing the q index the q+b folded into the BZ and the G-vectors
+
+        The nnkpgrid is exactly the same as the k+b grid. So this is used.
         '''
         if not isinstance(qmpgrid, NNKP_Grids):
             raise TypeError('Argument must be an instance of NNKP_Grids')
-        
-        # here I should work only with qmpgrid and its qmpgrid.b_grid
-        qpb_grid = np.zeros((qmpgrid.nkpoints, qmpgrid.nnkpts, 3))
-        qpb_grid_table = np.zeros((qmpgrid.nkpoints, qmpgrid.nnkpts, 5), dtype = int)
-        for iq, q in enumerate(qmpgrid.k):
-            for ib, b in enumerate(qmpgrid.b_grid[qmpgrid.nnkpts*iq:qmpgrid.nnkpts*(iq+1)]):
-                tmp_qpb, tmp_Gvec = qmpgrid.fold_into_bz_Gs(q+b,include_upper_bound=True)
-                idxqpb = self.find_closest_kpoint(tmp_qpb)
-                qpb_grid[iq, ib] = tmp_qpb
-                # here it should be tmp_Gvec, but with yambo grid I have inconsistencies because points are at 0.75
-                qpb_grid_table[iq,ib] = [iq, idxqpb, int(qmpgrid.iG[ib+qmpgrid.nnkpts*iq,0]), int(qmpgrid.iG[ib+qmpgrid.nnkpts*iq,1]), int(qmpgrid.iG[ib+qmpgrid.nnkpts*iq,2])]
-        
-        self.qpb_grid = qpb_grid
-        self.qpb_grid_table = qpb_grid_table
 
-    def get_kpbover2_grid(self, qmpgrid: 'NNKP_Grids'):
-        if not isinstance(qmpgrid, NNKP_Grids):
+        self.qpb_grid_table = qmpgrid.nnkp.copy()
+        self.qpb_grid = self.k[self.qpb_grid_table[:,:,1]]  # Tested and True
+
+    def get_kpbover2_grid(self, kmpgrid: 'NNKP_Grids'):
+        '''
+        See get_qpb_grid. Now we have small b = B/2. But in our kmpgrid from the .nnkp file the b is just the b.
+        '''
+        if not isinstance(kmpgrid, NNKP_Grids):
             raise TypeError('Argument must be an instance of NNKP_Grids')
-
-        # Reshape b_grid for vectorized addition
-        b_grid = self.b_grid.reshape(self.nkpoints, self.nnkpts, 3)  # Shape (nkpoints, nnkpts, 3)
-
-        # Add k and b_grid with broadcasting
-        k_expanded = self.k[:, np.newaxis, :]  # Shape (nkpoints, 1, 3)
-        combined_kb = k_expanded + b_grid  # Shape (nkpoints, nnkpts, 3)
-        # Fold into the BZ for all k + b combinations
-        folded_kb, Gvec = self.fold_into_bz_Gs(combined_kb.reshape(-1, 3),include_upper_bound=True)  # Flatten first two dims
-        folded_kb = folded_kb.reshape(self.nkpoints, self.nnkpts, 3)
-        Gvec = Gvec.reshape(self.nkpoints, self.nnkpts, 3)
-        # Find closest kpoints
-        idxkpbover2 = self.find_closest_kpoint(folded_kb.reshape(-1, 3)).reshape(self.nkpoints, self.nnkpts)
-        # # Construct results
-
-        self.kpbover2_grid = folded_kb
-        self.kpbover2_grid_table = np.stack([
-            np.repeat(np.arange(self.nkpoints)[:, np.newaxis], self.nnkpts, axis=1),  # ik
-            idxkpbover2,  # Closest kpoint indices
-            Gvec[..., 0].astype(int),  # Gx
-            Gvec[..., 1].astype(int),  # Gy
-            Gvec[..., 2].astype(int)   # Gz
-        ], axis=-1)  # Shape (nkpoints, nnkpts, 5)
+        self.kpbover2_grid_table = kmpgrid.nnkp.copy()
+        self.kpbover2_grid = self.k[self.kpbover2_grid_table[:,:,1]]  # Tested and True
 
 
     def get_kmqmbover2_grid(self, qmpgrid: 'NNKP_Grids'):       # need to improve this one

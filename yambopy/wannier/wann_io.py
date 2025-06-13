@@ -329,7 +329,8 @@ class NNKP():
             b_grid.append(tmpb)
 
         self.b_grid = np.array(b_grid)
-
+        self.nnkp = np.int64(self.data.reshape((self.nkpoints, self.nnkpts, 5)))
+        self.nnkp[:,:,:2] -= 1  # Convert to zero-based indexing
         t2 = time()
         print("Time for NNKP.__init__() : {}".format(t2 - t0))
 
