@@ -309,10 +309,16 @@ class H2P():
             full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
             # self.qgrid_toibzk = self.electronsdb.kpoints_indexes[self.kindices_table[:]]
             # self.ibzk_toqgrid={v: i for i, v in enumerate(self.qgrid_toibzk)}
+
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
                 file_suffix = 'ndb.BS_diago_Q1'
+            elif self.nq_double == self.nq:
+                print("Using the Full Brillouin zone.")
+                H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
+                file_suffix = [f'ndb.BS_diago_Q{iq + 1}' for iq in range(self.nq_double)]
             else:
+                print("Rotating (inproperly the exciton wavefunction.")
                 H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
                 file_suffix = [f'ndb.BS_diago_Q{self.latdb.kpoints_indexes[iq] + 1}' for iq in range(self.nq_double)]
 
@@ -819,41 +825,82 @@ class H2P():
         ic_chunks = chunkify(self.BSE_table[indices, 2], chunk_size)
 
         Mssp_ttp = 0
+        if self.alpha == 1:
+            for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks): #\sum_{cvk}
+                ik = np.array(ik)[:, np.newaxis]
+                iv = np.array(iv)[:, np.newaxis]
+                ic = np.array(ic)[:, np.newaxis]
+                for ivp, icp in zip(iv_chunks,ic_chunks): 
+                    iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1]
+                    ikpb = self.kmpgrid.kpb_grid_table[ik,ib,1]
+                    ikmq = self.kmpgrid.kmq_grid_table[ik,ib,1]
+                    
+                    term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+                    term2 = self.h2peigvec_vck[iqpb, t, self.bse_nv - self.nv + iv, ic - self.nv, ikpb]
+                    term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpb, :, icp])
+                    term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmq, :, ivp]), self.eigvec[ikmq, :, iv])
 
-        for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks): #\sum_{cvk}
-            ik = np.array(ik)[:, np.newaxis]
-            iv = np.array(iv)[:, np.newaxis]
-            ic = np.array(ic)[:, np.newaxis]
-            for ivp, icp in zip(iv_chunks,ic_chunks):   #\sum_{cpvp}
-                #ivp = iv
-                #icp = icp
 
-                iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
-                #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
-                ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
-                ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
-                ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
-                #A^{*SQ}_{cvk}
-                term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-                #A^{SpQ+B}_{cpvpk+B/2}
-                term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
-                #<u_{ck}|u_{cpk+B/2}>_{uc}
-                term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
-                #<u_{vpk-Q-B/2}|u_{vk-Q}>_{uc}
-                term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
-                Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
+                    Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
+
+        else:
+
+            for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks): #\sum_{cvk}
+                ik = np.array(ik)[:, np.newaxis]
+                iv = np.array(iv)[:, np.newaxis]
+                ic = np.array(ic)[:, np.newaxis]
+                for ivp, icp in zip(iv_chunks,ic_chunks):   #\sum_{cpvp}
+                    #ivp = iv
+                    #icp = icp
+
+                    iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
+                    #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
+                    ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
+                    ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
+                    ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
+                    #A^{*SQ}_{cvk}
+                    term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+                    #A^{SpQ+B}_{cpvpk+B/2}
+                    term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
+                    #<u_{ck}|u_{cpk+B/2}>_{uc}
+                    term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
+                    #<u_{vpk-Q-B/2}|u_{vk-Q}>_{uc}
+                    term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
+                    Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
         return Mssp_ttp
 
-    
+
+    def fix_phase_all(self,h2peigvec_vck):
+        """
+        Fix the global phase of each exciton wavefunction (NQ, NS, nv, nc, nk)
+        so that the first non-zero entry of each is real and positive.
+        """
+        A = h2peigvec_vck.reshape(h2peigvec_vck.shape[0], h2peigvec_vck.shape[1], -1)  # (NQ, NS, Ntrans)
+        ref = A[:, :, 0]  # Take the first transition as reference
+
+        # If reference happens to be zero, fallback to max element per (NQ, NS)
+        ref_is_zero = np.abs(ref) < 1e-12
+        fallback_indices = np.argmax(np.abs(A), axis=2)
+        fallback_ref = np.take_along_axis(A, fallback_indices[:, :, None], axis=2)[:, :, 0]
+        actual_ref = np.where(ref_is_zero, fallback_ref, ref)
+
+        phase = actual_ref / np.abs(actual_ref)
+        A_fixed = A * np.conj(phase[:, :, None])  # Apply phase correction
+        print("Warning: Global phase of H2peigvec_vck is fixed.")
+        return A_fixed.reshape(h2peigvec_vck.shape)
 
     def get_exc_overlap(self, trange=[0], tprange=[0]):
         '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk} A^{SpQ+B}_{cpvpk+B/2} \times <u_{ck}|u_{cpk+B/2}>_{uc}<u_{vpk-Q-B/2}|u_{vk-Q}>_{uc}'''
+        '''\begin{aligned} M_{SS'}^{\alpha,\beta} = 
+\sum_{cvc'v'k} A^{SQ\star}_{cvk}A^{S'Q+B}_{c'v'k+\alpha B} \bra{u_{ck}}\ket{u_{c'k+\alpha B}} \bra{u_{v'k-Q-\beta B}}\ket{u_{vk-Q}} \end{aligned}'''
         trange = np.array(trange)   # transition S range 
         tprange = np.array(tprange) # transition Sprime range
 
         it, itp, iq, ib = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), np.arange(self.qmpgrid.nnkpts), indexing='ij')
-        print(f"eigvec count: {np.count_nonzero(self.eigvec)}")
-        print(f"h2peigvec_vck count: {np.count_nonzero(self.h2peigvec_vck)}")
+        print(f"h2peigvec_vck count zeros: {self.h2peigvec_vck.size - np.count_nonzero(self.h2peigvec_vck)}")
+
+        self.h2peigvec_vck = self.fix_phase_all(self.h2peigvec_vck)
+        
 
         vectorized_overlap_ttp = np.vectorize(self._get_exc_overlap_ttp, signature='(),(),(),()->()')
         # it itp: transition range
@@ -862,7 +909,7 @@ class H2P():
         # ib is the index of the neighbour in qgrid
         Mssp = vectorized_overlap_ttp(it, itp, iq, ib) 
         
-        self.Mssp = Mssp/(self.bse_nv**2*self.bse_nc**2)        # under review
+        self.Mssp = Mssp/(self.ntransitions)**2        # under review
 
     def _get_amn_ttp(self, t, tp, iq):
         '''Calculate A_SSp(Q) = \sum_{ccpvvpk}A^{*SQ}_{cvk}<u_{ck}|u_{cpk}>'''
@@ -915,8 +962,8 @@ class H2P():
         print(f"h2peigvec_vck count: {np.count_nonzero(self.h2peigvec_vck)}")
 
 
-    def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
-
+    def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0], alpha=1.0):
+        self.alpha = alpha
         if self.Mssp is None:
             self.get_exc_overlap(trange, tprange)
 
