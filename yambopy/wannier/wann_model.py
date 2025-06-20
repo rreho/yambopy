@@ -106,7 +106,6 @@ class TBMODEL(tbmodels.Model):
         for ik in range(self.nk):
             (self.eigv[ik], self.eigvec[ik]) = scipy.linalg.eigh(self.H_k[ik])
             #(self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
-        
         self._get_occupations(self.nk, self.nb, self.eigv, fermie)
         self._reshape_eigvec(self.nk, self.nb, self.f_kn, self.eigv, self.eigvec)
         self._get_T_table()
