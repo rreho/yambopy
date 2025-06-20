@@ -906,6 +906,43 @@ class H2P():
         print("*** Converted all the yambo grids to wannier90 grids. ***")
 
 
+    def fix_and_align_bloch_phases(self):
+        """
+        Fix the global phase per k-point (make first significant element real-positive),
+        then align all k-points relative to k=0.
+
+        Parameters
+        ----------
+        eigvec : ndarray of shape (nk, nb, norb)
+            Bloch eigenvectors at each k-point (e.g. from Wannier interpolation or DFT).
+
+        Returns
+        -------
+        eigvec_fixed : ndarray of same shape, phase-aligned
+        """
+        eigvec = self.eigvec.copy()
+        nk, nb, norb = eigvec.shape
+
+        # Step 1: Global phase fix — make first significant element per (k, band) real and positive
+        for k in range(nk):
+            for b in range(nb):
+                vec = eigvec[k, b]
+                idx = np.argmax(np.abs(vec))
+                if np.abs(vec[idx]) > 1e-8:
+                    phase = vec[idx] / np.abs(vec[idx])
+                    eigvec[k, b] *= np.conj(phase)
+
+        # Step 2: Relative phase alignment — align all k-points to k=0
+        ref = eigvec[0]  # shape (nb, norb)
+        for k in range(1, nk):
+            for b in range(nb):
+                dot = np.vdot(ref[b], eigvec[k, b])
+                if np.abs(dot) > 1e-8:
+                    rel_phase = dot / np.abs(dot)
+                    eigvec[k, b] *= np.conj(rel_phase)
+
+        print("*** Fixed global and relative phases of Bloch states ***")
+        return eigvec
 
 
     def fix_and_align_phases(self):
@@ -973,6 +1010,7 @@ class H2P():
         trange = np.array(trange)   # transition S range 
         tprange = np.array(tprange) # transition Sprime range
         self.h2peigvec_vck = self.fix_and_align_phases()
+        self.eigvec = self.fix_and_align_bloch_phases()
         it, itp, iq, ib = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), np.arange(self.qmpgrid.nnkpts), indexing='ij')
         print(f"h2peigvec_vck count zeros: {self.h2peigvec_vck.size - np.count_nonzero(self.h2peigvec_vck)}")
 
@@ -993,7 +1031,7 @@ class H2P():
 
         # print(print("Δ =", np.abs(Mssp_1 - Mssp_2)))        
         # self.Mssp = Mssp_2/(np.sqrt(self.ntransitions/2))      # under review
-        self.Mssp = Mssp_2/(self.ntransitions*self.nv)      # under review
+        self.Mssp = Mssp_2/(self.ntransitions**2)      # under review
 
 
     def check_hermitian(self,M):
