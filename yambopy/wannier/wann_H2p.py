@@ -7,7 +7,6 @@ from yambopy.dbs.bsekerneldb import *
 from yambopy.dbs.electronsdb import *
 from yambopy.dbs.latticedb import *
 from yambopy.wannier.wann_io import AMN
-from numba import njit
 from scipy.linalg.lapack import zheev
 from time import time
 import scipy
