@@ -821,10 +821,10 @@ class H2P():
     def _get_exc_overlap_ttp(self, t, tp, iq, ib):
         '''
         Calculate M_SSp(Q,B) = ∑_{cc'vv'k} A^{SQ*}_{cvk} A^{S'Q+B}_{c'v'k+B}
-        × ⟨u_{ck}|u_{c'k+B}⟩ ⟨u_{v'k-Q-B}|u_{vk-Q}⟩
+        x ⟨u_{ck}|u_{c'k+B}⟩ ⟨u_{v'k-Q-B}|u_{vk-Q}⟩
         '''
-        indices = self.inverse_aux_t
-        chunk_size = max(int(self.dimbse / 100.0), 1)
+        indices = self.inverse_aux_t    #???????????????
+        chunk_size = max(int(self.dimbse / 100.0), (self.bse_nc*self.bse_nv))
 
         ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
         iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
@@ -859,6 +859,52 @@ class H2P():
 
                     # term4: ⟨u_{v'}(k-Q-B)|u_v(k-Q)⟩
                     u_v  = self.eigvec[ikmq, :, iv]   # shape (N, norb, 1)
+                    u_vp = self.eigvec[ikmq, :, ivp]  # shape (N, norb, M)
+                    term4 = np.einsum('nij,nij->ni', np.conjugate(u_vp), u_v)  # shape (N, M)
+
+                    Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
+
+        return Mssp_ttp
+    
+    def _get_exc_overlap_ttp_beta(self,t,tp,iq,ib):
+        '''
+
+        '''
+        indices = self.inverse_aux_t    #???????????????
+        chunk_size = max(int(self.dimbse / 100.0), (self.bse_nc*self.bse_nv))
+
+        ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
+        iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
+        ic_chunks = chunkify(self.BSE_table[indices, 2], chunk_size)
+
+        Mssp_ttp = 0
+        iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1]
+
+        for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks):  # ∑_{cvk}
+            ik = np.array(ik)[:, None]  # shape (N, 1)
+            iv = np.array(iv)[:, None]
+            ic = np.array(ic)[:, None]
+
+            ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]  # (N, 1)
+            ikmqmb = self.kmpgrid.kpb_grid_table[ikmq, int(ib+4)%self.nb, 1]
+            for ivp_chunk in iv_chunks:
+                for icp_chunk in ic_chunks:
+                    ivp = np.array(ivp_chunk)[None, :]  # shape (1, M)
+                    icp = np.array(icp_chunk)[None, :]
+
+                    # term1: A^{SQ*}_{cvk}
+                    term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])  # shape (N, 1)
+
+                    # term2: A^{S'Q}_{c'v'k}
+                    term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ik]  # shape (N, M)
+
+                    # term3: ⟨u_c(k)|u_{c'}(k+B)⟩
+                    u_c  = self.eigvec[ik, :, ic]     # shape (N, norb, 1)
+                    u_cp = self.eigvec[ik, :, icp]  # shape (N, norb, M)
+                    term3 = np.einsum('nij,nij->ni', np.conjugate(u_c), u_cp)  # shape (N, M)
+
+                    # term4: ⟨u_{v'}(k-Q-B)|u_v(k-Q)⟩
+                    u_v  = self.eigvec[ikmqmb, :, iv]   # shape (N, norb, 1)
                     u_vp = self.eigvec[ikmq, :, ivp]  # shape (N, norb, M)
                     term4 = np.einsum('nij,nij->ni', np.conjugate(u_vp), u_v)  # shape (N, M)
 
@@ -1014,9 +1060,12 @@ class H2P():
         it, itp, iq, ib = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), np.arange(self.qmpgrid.nnkpts), indexing='ij')
         print(f"h2peigvec_vck count zeros: {self.h2peigvec_vck.size - np.count_nonzero(self.h2peigvec_vck)}")
 
-
+        vectorized_overlap_ttp_2 = None
         # vectorized_overlap_ttp_1 = np.vectorize(self.fast_exc_overlap_vectorized, signature='(),(),(),()->()')
-        vectorized_overlap_ttp_2 = np.vectorize(self._get_exc_overlap_ttp, signature='(),(),(),()->()')
+        if self.alpha==1:
+            vectorized_overlap_ttp_2 = np.vectorize(self._get_exc_overlap_ttp, signature='(),(),(),()->()')
+        if self.alpha==0:
+            vectorized_overlap_ttp_2 = np.vectorize(self._get_exc_overlap_ttp_beta, signature='(),(),(),()->()')
 
         # it itp: transition range
         # iq is the q index in the qgrid
@@ -1027,16 +1076,28 @@ class H2P():
         # self.check_A_norms(Mssp_1)
         # self.check_A_norms(Mssp_2/(self.ntransitions)**2)
         # self.check_hermitian(Mssp_1)
-        # self.check_hermitian(Mssp_2/ (np.sqrt(self.ntransitions/2)))
+        self.check_hermitian(Mssp_2)
 
         # print(print("Δ =", np.abs(Mssp_1 - Mssp_2)))        
         # self.Mssp = Mssp_2/(np.sqrt(self.ntransitions/2))      # under review
         self.Mssp = Mssp_2/(self.ntransitions**2)      # under review
 
 
-    def check_hermitian(self,M):
-        dev = np.linalg.norm(M - M.conj().T)
+    def check_hermitian(self,Mssp):
+        """
+        Check that M^{Q,B} = [M^{Q+B,-B}]^dagger
+        """
+        nt,ntp,nq,nb = Mssp.shape
+        dev = 0
+        for t in range(nt):
+            for t2 in range(ntp):
+                for qi in range(nq):
+                    for bi in range(nb):
+                        qpb = self.qmpgrid.qpb_grid_table[qi,bi,1]
+                        dev += Mssp[t,t2,qi,bi] - np.conjugate(Mssp[t,t2,qpb, (bi+4)%nb])
+
         print(f"Hermitian deviation: {dev:.3e}")
+
 
     def check_A_norms(self,A):
         norms = np.linalg.norm(A, axis=(2,4))  # assuming shape: [nQ, nS, nv, nc=1, nk]
