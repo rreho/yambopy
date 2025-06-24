@@ -873,9 +873,9 @@ class H2P():
         indices = self.inverse_aux_t    #???????????????
         chunk_size = max(int(self.dimbse / 100.0), (self.bse_nc*self.bse_nv))
 
-        ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
-        iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
-        ic_chunks = chunkify(self.BSE_table[indices, 2], chunk_size)
+        ik_chunks = self.BSE_table[:, 0]
+        iv_chunks = self.BSE_table[:, 1]
+        ic_chunks = self.BSE_table[:, 2]
 
         Mssp_ttp = 0
         iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1]
