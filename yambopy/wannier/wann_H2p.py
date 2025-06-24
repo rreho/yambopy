@@ -826,9 +826,9 @@ class H2P():
         indices = self.inverse_aux_t    #???????????????
         chunk_size = max(int(self.dimbse / 100.0), (self.bse_nc*self.bse_nv))
 
-        ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
-        iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
-        ic_chunks = chunkify(self.BSE_table[indices, 2], chunk_size)
+        ik_chunks = self.BSE_table[indices, 0]
+        iv_chunks = self.BSE_table[indices, 1]
+        ic_chunks = self.BSE_table[indices, 2]
 
         Mssp_ttp = 0
         iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1]
@@ -841,8 +841,8 @@ class H2P():
             ikpb = self.kmpgrid.kpb_grid_table[ik, ib, 1]  # (N, 1)
             ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]  # (N, 1)
 
-            for ivp_chunk in iv_chunks:
-                for icp_chunk in ic_chunks:
+            for ivp_chunk, icp_chunk in zip(iv_chunks[:self.bse_nv*self.bse_nc],ic_chunks[:self.bse_nv*self.bse_nc]):   # caution when bse_table is not regular.
+
                     ivp = np.array(ivp_chunk)[None, :]  # shape (1, M)
                     icp = np.array(icp_chunk)[None, :]
 
@@ -887,8 +887,8 @@ class H2P():
 
             ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]  # (N, 1)
             ikmqmb = self.kmpgrid.kpb_grid_table[ikmq, (ib+4)%self.nb, 1]
-            for ivp_chunk in iv_chunks[:self.bse_nv]:   # caution when bse_table is not regular.
-                for icp_chunk in ic_chunks[:self.bse_nc]:
+            
+            for ivp_chunk, icp_chunk in zip(iv_chunks[:self.bse_nv*self.bse_nc],ic_chunks[:self.bse_nv*self.bse_nc]):   # caution when bse_table is not regular.
                     ivp = np.array(ivp_chunk)[None, :]  # shape (1, M)
                     icp = np.array(icp_chunk)[None, :]
 
@@ -1115,9 +1115,9 @@ class H2P():
         chunk_size=int(self.dimbse/100.0)
         if (chunk_size < 1): chunk_size=self.dimbse
         # Chunk the indices to manage memory usage
-        ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
-        iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
-        ic_chunks = chunkify(self.BSE_table[indices, 2], chunk_size)
+        ik_chunks = self.BSE_table[indices, 0]
+        iv_chunks = self.BSE_table[indices, 1]
+        ic_chunks = self.BSE_table[indices, 2]
 
         Ammn_ttp = 0
 
@@ -1125,7 +1125,7 @@ class H2P():
             ik = np.array(ik)[:, np.newaxis]
             iv = np.array(iv)[:, np.newaxis]
             ic = np.array(ic)[:, np.newaxis]
-            for ivp, icp in zip(iv_chunks,ic_chunks):
+            for ivp, icp in zip(iv_chunks[:self.bse_nv],ic_chunks[:self.bse_nc]):
                 #ivp = iv
                 #icp = icp
 
