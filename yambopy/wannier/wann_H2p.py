@@ -886,9 +886,9 @@ class H2P():
             ic = np.array(ic)[:, None]
 
             ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]  # (N, 1)
-            ikmqmb = self.kmpgrid.kpb_grid_table[ikmq, int(ib+4)%self.nb, 1]
-            for ivp_chunk in iv_chunks:
-                for icp_chunk in ic_chunks:
+            ikmqmb = self.kmpgrid.kpb_grid_table[ikmq, (ib+4)%self.nb, 1]
+            for ivp_chunk in iv_chunks[:self.bse_nv]:   # caution when bse_table is not regular.
+                for icp_chunk in ic_chunks[:self.bse_nc]:
                     ivp = np.array(ivp_chunk)[None, :]  # shape (1, M)
                     icp = np.array(icp_chunk)[None, :]
 
