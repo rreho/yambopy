@@ -824,45 +824,38 @@ class H2P():
         x ⟨u_{ck}|u_{c'k+B}⟩ ⟨u_{v'k-Q-B}|u_{vk-Q}⟩
         '''
         indices = self.inverse_aux_t    #???????????????
-        chunk_size = max(int(self.dimbse / 100.0), (self.bse_nc*self.bse_nv))
 
-        ik_chunks = self.BSE_table[indices, 0]
-        iv_chunks = self.BSE_table[indices, 1]
-        ic_chunks = self.BSE_table[indices, 2]
+        bset = self.bse_nc*self.bse_nv
+        k = self.BSE_table[indices, 0]
+        v = self.BSE_table[indices, 1]
+        c = self.BSE_table[indices, 2]
 
         Mssp_ttp = 0
         iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1]
 
-        for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks):  # ∑_{cvk}
-            ik = np.array(ik)[:, None]  # shape (N, 1)
-            iv = np.array(iv)[:, None]
-            ic = np.array(ic)[:, None]
-
+        for ik, iv, ic in zip(k,v,c):  # ∑_{cvk}
             ikpb = self.kmpgrid.kpb_grid_table[ik, ib, 1]  # (N, 1)
             ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]  # (N, 1)
+            for ivp, icp in zip(v[:bset], c[:bset]):
+                
+                    
+                # term1: A^{SQ*}_{cvk}
+                term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])  # shape (N, 1)
 
-            for ivp_chunk, icp_chunk in zip(iv_chunks[:self.bse_nv*self.bse_nc],ic_chunks[:self.bse_nv*self.bse_nc]):   # caution when bse_table is not regular.
+                # term2: A^{S'Q+B}_{c'v'k+B}
+                term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpb]  # shape (N, M)
 
-                    ivp = np.array(ivp_chunk)[None, :]  # shape (1, M)
-                    icp = np.array(icp_chunk)[None, :]
+                # term3: ⟨u_c(k)|u_{c'}(k+B)⟩
+                u_c  = self.eigvec[ik, :, ic]     # shape (N, norb, 1)
+                u_cp = self.eigvec[ikpb, :, icp]  # shape (N, norb, M)
+                term3 = np.vdot(u_c, u_cp)  # shape (N, M)
 
-                    # term1: A^{SQ*}_{cvk}
-                    term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])  # shape (N, 1)
+                # term4: ⟨u_{v'}(k-Q-B)|u_v(k-Q)⟩
+                u_v  = self.eigvec[ikmq, :, iv]   # shape (N, norb, 1)
+                u_vp = self.eigvec[ikmq, :, ivp]  # shape (N, norb, M)
+                term4 = np.vdot(u_vp, u_v)  # shape (N, M)
 
-                    # term2: A^{S'Q+B}_{c'v'k+B}
-                    term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpb]  # shape (N, M)
-
-                    # term3: ⟨u_c(k)|u_{c'}(k+B)⟩
-                    u_c  = self.eigvec[ik, :, ic]     # shape (N, norb, 1)
-                    u_cp = self.eigvec[ikpb, :, icp]  # shape (N, norb, M)
-                    term3 = np.einsum('nij,nij->ni', np.conjugate(u_c), u_cp)  # shape (N, M)
-
-                    # term4: ⟨u_{v'}(k-Q-B)|u_v(k-Q)⟩
-                    u_v  = self.eigvec[ikmq, :, iv]   # shape (N, norb, 1)
-                    u_vp = self.eigvec[ikmq, :, ivp]  # shape (N, norb, M)
-                    term4 = np.einsum('nij,nij->ni', np.conjugate(u_vp), u_v)  # shape (N, M)
-
-                    Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
+                Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
 
         return Mssp_ttp
     
@@ -871,44 +864,37 @@ class H2P():
 
         '''
         indices = self.inverse_aux_t    #???????????????
-        chunk_size = max(int(self.dimbse / 100.0), (self.bse_nc*self.bse_nv))
+        bset = self.bse_nc*self.bse_nv
 
-        ik_chunks = self.BSE_table[:, 0]
-        iv_chunks = self.BSE_table[:, 1]
-        ic_chunks = self.BSE_table[:, 2]
+        k = self.BSE_table[:, 0]
+        v = self.BSE_table[:, 1]
+        c = self.BSE_table[:, 2]
 
         Mssp_ttp = 0
         iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1]
 
-        for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks):  # ∑_{cvk}
-            ik = np.array(ik)[:, None]  # shape (N, 1)
-            iv = np.array(iv)[:, None]
-            ic = np.array(ic)[:, None]
-
+        for ik, iv, ic in zip(k,v,c):  # ∑_{cvk}
             ikmq = self.kmpgrid.kmq_grid_table[ik, iq, 1]  # (N, 1)
             ikmqmb = self.kmpgrid.kpb_grid_table[ikmq, (ib+4)%self.nb, 1]
-            
-            for ivp_chunk, icp_chunk in zip(iv_chunks[:self.bse_nv*self.bse_nc],ic_chunks[:self.bse_nv*self.bse_nc]):   # caution when bse_table is not regular.
-                    ivp = np.array(ivp_chunk)[None, :]  # shape (1, M)
-                    icp = np.array(icp_chunk)[None, :]
+            for ivp, icp in zip(v[:bset], c[:bset]):
 
-                    # term1: A^{SQ*}_{cvk}
-                    term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])  # shape (N, 1)
+                # term1: A^{SQ*}_{cvk}
+                term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])  # shape (N, 1)
 
-                    # term2: A^{S'Q}_{c'v'k}
-                    term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ik]  # shape (N, M)
+                # term2: A^{S'Q}_{c'v'k}
+                term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ik]  # shape (N, M)
 
-                    # term3: ⟨u_c(k)|u_{c'}(k+B)⟩
-                    u_c  = self.eigvec[ik, :, ic]     # shape (N, norb, 1)
-                    u_cp = self.eigvec[ik, :, icp]  # shape (N, norb, M)
-                    term3 = np.einsum('nij,nij->ni', np.conjugate(u_c), u_cp)  # shape (N, M)
+                # term3: ⟨u_c(k)|u_{c'}(k+B)⟩
+                u_c  = self.eigvec[ik, :, ic]     # shape (N, norb, 1)
+                u_cp = self.eigvec[ik, :, icp]  # shape (N, norb, M)
+                term3 = np.vdot(u_c, u_cp)  # shape (N, M)
 
-                    # term4: ⟨u_{v'}(k-Q-B)|u_v(k-Q)⟩
-                    u_v  = self.eigvec[ikmqmb, :, iv]   # shape (N, norb, 1)
-                    u_vp = self.eigvec[ikmq, :, ivp]  # shape (N, norb, M)
-                    term4 = np.einsum('nij,nij->ni', np.conjugate(u_vp), u_v)  # shape (N, M)
+                # term4: ⟨u_{v'}(k-Q-B)|u_v(k-Q)⟩
+                u_v  = self.eigvec[ikmqmb, :, iv]   # shape (N, norb, 1)
+                u_vp = self.eigvec[ikmq, :, ivp]  # shape (N, norb, M)
+                term4 = np.vdot(u_vp, u_v)  # shape (N, M)
 
-                    Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
+                Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
 
         return Mssp_ttp
 
