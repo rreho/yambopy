@@ -192,8 +192,8 @@ class NNKP_Grids(KPointGenerator):
         matched_indices = origin_indices[idx]   # index of the wannier90 kpoint in the yambo grid
         k = lat_k.red_kpoints[matched_indices]
 
-        self.wannier90toyambo_table = matched_indices   # this is the index of the yambo point given a wannier90 point
-        self.yambotowannier90_table = np.argsort(matched_indices)
+        self.yambotowannier90_table = matched_indices   # this is the index of the yambo point given a wannier90 point
+        self.wannier90toyambo_table = np.argsort(matched_indices)
         if yambo:
             self.set_yambo_grid()
 

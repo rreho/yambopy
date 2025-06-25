@@ -351,8 +351,6 @@ class H2P():
                 iv = BSE_table[inverse_aux_t, 1]
                 ic = BSE_table[inverse_aux_t, 2]
                 
-
-
                 # Broadcasting and advanced indexing
                 inverse_aux_t_slepc = inverse_aux_t[:self.dimslepc]
                 h2peigv[idx, :] = tmph2peigv
@@ -932,9 +930,9 @@ class H2P():
         y2w = self.kmpgrid.yambotowannier90_table
         # self.BSE_table[:,0] = y2w[self.BSE_table[:,0]]
         self.h2peigv = self.h2peigv[y2w]
-        self.h2peigvec = self.h2peigvec[:,:,self.BSE_table[:,0]][y2w,:,:]
         self.h2peigv_vck = None
-        self.h2peigvec_vck = self.h2peigvec_vck[:,:,:,:,y2w][y2w]
+        self.h2peigvec_vck = self.h2peigvec_vck[:,:,:,:,y2w][y2w,:]
+        self.h2peigvec = self.h2peigvec_vck.swapaxes(2,4).swapaxes(3,4).reshape(self.nq_double, self.dimslepc, self.dimbse)
         print("*** Converted all the yambo grids to wannier90 grids. ***")
 
 
@@ -986,25 +984,36 @@ class H2P():
         Returns: phase-fixed A with the same shape
         """
         nQ, nS, nv, nc, nk = self.h2peigvec_vck.shape
-        A_flat = self.h2peigvec_vck.reshape(nQ, nS, -1)
+        vec_vck = self.h2peigvec_vck.copy()
+        vec = self.h2peigvec.copy()
 
-        # Step 1: Global phase fix — make first significant element real and positive
-        ref_idx = np.argmax(np.abs(A_flat), axis=2)
-        ref_vals = np.take_along_axis(A_flat, ref_idx[:, :, None], axis=2)[:, :, 0]
-        global_phase = ref_vals / np.abs(ref_vals)
-        A_flat = A_flat * np.conj(global_phase[:, :, None])
+        for q in range(0,nQ):
 
-        # Step 2: Relative phase alignment — align all Q to Q=0
-        A0 = A_flat[0]  # shape (nS, ntrans)
-        for q in range(1, nQ):
-            for s in range(nS):
-                dot = np.vdot(A0[s], A_flat[q, s])  # complex scalar
-                rel_phase = dot / np.abs(dot)
-                A_flat[q, s] *= np.conj(rel_phase)
+            max_idx = np.argmax(np.abs(self.h2peigvec[q,:]),axis=1)  # (nS, nk)
+            max_vals = np.take_along_axis(vec[q], max_idx[:, None], axis=1).squeeze()  # shape (nS,)
+    
+    # Compute the phase
+            current_phase = np.angle(max_vals)  # shape (nS,)            phase_difference = current_phase 
+            vec[q, :, :] *= np.exp(-1j * current_phase[:, None])
+            vec_vck[q, :, :, :, :] *= np.exp(-1j * current_phase[:,None,None,None])
+
+
+        # # Step 1: Global phase fix — make first significant element real and positive
+        # ref_idx = np.argmax(np.abs(A_flat), axis=2)
+        # ref_vals = np.take_along_axis(A_flat, ref_idx[:, :, None], axis=2)[:, :, 0]
+        # global_phase = ref_vals / np.abs(ref_vals)
+        # A_flat = A_flat * np.conj(global_phase[:, :, None])
+
+        # # Step 2: Relative phase alignment — align all Q to Q=0
+        # A0 = A_flat[0]  # shape (nS, ntrans)
+        # for q in range(1, nQ):
+        #     for s in range(nS):
+        #         dot = np.vdot(A0[s], A_flat[q, s])  # complex scalar
+        #         rel_phase = dot / np.abs(dot)
+        #         A_flat[q, s] *= np.conj(rel_phase)
 
         print("*** Fixed global and relative phases across Q ***")
-        return A_flat.reshape(nQ, nS, nv, nc, nk)
-    
+        return vec, vec_vck
     
 
     def fast_exc_overlap_vectorized(self, t, tp, iq, ib):
@@ -1041,7 +1050,7 @@ class H2P():
 \sum_{cvc'v'k} A^{SQ\star}_{cvk}A^{S'Q+B}_{c'v'k+\alpha B} \bra{u_{ck}}\ket{u_{c'k+\alpha B}} \bra{u_{v'k-Q-\beta B}}\ket{u_{vk-Q}} \end{aligned}'''
         trange = np.array(trange)   # transition S range 
         tprange = np.array(tprange) # transition Sprime range
-        self.h2peigvec_vck = self.fix_and_align_phases()
+        self.h2peigvec, self.h2peigvec_vck = self.fix_and_align_phases()
         self.eigvec = self.fix_and_align_bloch_phases()
         it, itp, iq, ib = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), np.arange(self.qmpgrid.nnkpts), indexing='ij')
         print(f"h2peigvec_vck count zeros: {self.h2peigvec_vck.size - np.count_nonzero(self.h2peigvec_vck)}")
@@ -1066,7 +1075,7 @@ class H2P():
 
         # print(print("Δ =", np.abs(Mssp_1 - Mssp_2)))        
         # self.Mssp = Mssp_2/(np.sqrt(self.ntransitions/2))      # under review
-        self.Mssp = Mssp_2/(self.ntransitions**2)      # under review
+        self.Mssp = Mssp_2/(self.ntransitions*self.bse_nc*self.bse_nv)      # under review
 
 
     def check_hermitian(self,Mssp):
