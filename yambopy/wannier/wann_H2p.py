@@ -888,8 +888,8 @@ class H2P():
                 term3 = np.vdot(u_c, u_cp)  # shape (N, M)
 
                 # term4: ⟨u_{v'}(k-Q-B)|u_v(k-Q)⟩
-                u_v  = self.eigvec[ikmqmb, :, iv]   # shape (N, norb, 1)
-                u_vp = self.eigvec[ikmq, :, ivp]  # shape (N, norb, M)
+                u_v  = self.eigvec[ikmq, :, iv]   # shape (N, norb, 1)
+                u_vp = self.eigvec[ikmqmb, :, ivp]  # shape (N, norb, M)
                 term4 = np.vdot(u_vp, u_v)  # shape (N, M)
 
                 Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
