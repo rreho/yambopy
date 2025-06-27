@@ -1075,7 +1075,7 @@ class H2P():
 
         # print(print("Δ =", np.abs(Mssp_1 - Mssp_2)))        
         # self.Mssp = Mssp_2/(np.sqrt(self.ntransitions/2))      # under review
-        self.Mssp = Mssp_2/(self.ntransitions*self.bse_nc*self.bse_nv)      # under review
+        self.Mssp = Mssp_2#/(self.ntransitions*self.bse_nc*self.bse_nv)      # under review
 
 
     def check_hermitian(self,Mssp):
