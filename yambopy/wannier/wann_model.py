@@ -456,14 +456,18 @@ class TBMODEL(tbmodels.Model):
         Uknm = Umn.transpose(0,2,1)
         self.Uknm = Uknm
 
-    def _get_overlap(self):
-        Mmn = np.zeros((self.nb, self.nb,self.nk, self.nk), dtype=np.complex128)
+    def _get_overlap(self, nnkp=8):
+        self.nnkp = nnkp # set number of neighbours
+        Mmn = np.zeros((self.nk, self.nnkp, self.nb, self.nb), dtype=np.complex128)
+        #self.Mmn = np.einsum('ism,isn->inmij', self.eigvec.conj(), self.eigvec)
+        self.mpgrid.get_kpb_grid(self.mpgrid)
         # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
-        for n in range(self.nb):
-            for m in range(self.nb):   
+        for m in range(self.nb):
+            for n in range(self.nb):   
                 for ik in range(self.nk):
-                    for ikp in range(self.nk):
-                        Mmn[n,m,ik, ikp] = np.vdot(self.eigvec[ik,:,n],self.eigvec[ikp,:,m])
+                    for ib in range(self.nnkp):
+                        kpb = self.mpgrid.kpb_grid_table[ik,ib,1]
+                        Mmn[ik,ib,m, n] = np.vdot(self.eigvec[ik,:,m],self.eigvec[kpb,:,n])
         self.Mmn = Mmn
 
     def write_overlap(self,seedname='wannier90',):
