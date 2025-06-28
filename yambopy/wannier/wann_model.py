@@ -65,6 +65,8 @@ class TBMODEL(tbmodels.Model):
         #self.eig = self.eig.T
         # sort eigenvectors 
         # To-do should I check for the spin case?
+        # rotate eigenvectors fix phase issues
+        self.eigvec = self.fix_and_align_bloch_phases()
         t1 = time()
         print(f'Diagonalization took {t1-t0:.3f} sec')
 
@@ -109,7 +111,7 @@ class TBMODEL(tbmodels.Model):
         self._get_occupations(self.nk, self.nb, self.eigv, fermie)
         self._reshape_eigvec(self.nk, self.nb, self.f_kn, self.eigv, self.eigvec)
         self._get_T_table()
-        self._build_Umn()
+        self._build_Umn()     
         #self.r_mnk = self.pos_operator_matrix(self.eigvec, )
         
 
@@ -118,6 +120,8 @@ class TBMODEL(tbmodels.Model):
         #self.eig = self.eig.T
         # sort eigenvectors 
         # To-do should I check for the spin case?
+        # rotate eigenvectors fix phase issues
+        self.eigvec = self.fix_and_align_bloch_phases()
 
         t1 = time()
         print(f'Diagonalization took {t1-t0:.3f} s')
@@ -458,7 +462,7 @@ class TBMODEL(tbmodels.Model):
 
     def _get_overlap(self, nnkp=8):
         self.nnkp = nnkp # set number of neighbours
-        Mmn = np.zeros((self.nk, self.nnkp, self.nb, self.nb), dtype=np.complex128)
+        Mmn = np.zeros((self.nb, self.nb, self.nk, self.nnkp), dtype=np.complex128)
         #self.Mmn = np.einsum('ism,isn->inmij', self.eigvec.conj(), self.eigvec)
         self.mpgrid.get_kpb_grid(self.mpgrid)
         # here l stands for lambda, just to remember me that there is a small difference between lambda and transition index
@@ -467,7 +471,7 @@ class TBMODEL(tbmodels.Model):
                 for ik in range(self.nk):
                     for ib in range(self.nnkp):
                         kpb = self.mpgrid.kpb_grid_table[ik,ib,1]
-                        Mmn[ik,ib,m, n] = np.vdot(self.eigvec[ik,:,m],self.eigvec[kpb,:,n])
+                        Mmn[m,n,ik, ib] = np.vdot(self.eigvec[ik,:,m],self.eigvec[kpb,:,n])
         self.Mmn = Mmn
 
     def write_overlap(self,seedname='wannier90',):
@@ -483,11 +487,57 @@ class TBMODEL(tbmodels.Model):
         f_out.write(f'\t{self.nb}\t{self.nk}\t{self.nk}\n')  
         (self.kplusq_table, self.kminusq_table) = self.mpgrid.get_kq_tables(self.mpgrid)      
         for ik in range(self.nk):
-            for ikp in range(self.nk):
+            for ib in range(self.nnkp):
                 # +1 is for Fortran counting, assume all Gs are 0 for WanTIBEXOS (to be discussed)
-                f_out.write(f'\t{self.kplusq_table[ik,ikp,1]+1}\t{self.kplusq_table[ik,ikp,1]+1}\t{0}\t{0}\t{0}\n')
+                f_out.write(f'\t{self.kplusq_table[ik,ib,1]+1}\t{self.kplusq_table[ik,ib,1]+1}\t{0}\t{0}\t{0}\n')
                 for n in range(self.nb):
                     for m in range(self.nb):
-                        f_out.write(f'\t{np.real(self.Mmn[m,n,ik,ikp]):.14f}\t{np.imag(self.Mmn[m,n,ik,ikp]):.14f}\n')
+                        f_out.write(f'\t{np.real(self.Mmn[m,n,ik,ib]):.14f}\t{np.imag(self.Mmn[m,n,ik,ib]):.14f}\n')
         
         f_out.close()
+
+    def write_eig(self, seedname='wannier90', brange = [0]):
+        eig = np.zeros((len(brange), self.nk), dtype=np.complex128)
+        f_out = open(f'{seedname}_qurex.eig', 'w')
+        for ik in range(self.nk):
+            #iq_ibz_ink = self.qgrid_toibzk[iq]
+            for ib,b in enumerate(brange):
+                f_out.write(f'\t{ib+1}\t{ik+1}\t{np.real(self.eigv[ik,ib]):.13f}\n')
+
+    def fix_and_align_bloch_phases(self):
+        """
+        Fix the global phase per k-point (make first significant element real-positive),
+        then align all k-points relative to k=0.
+
+        Parameters
+        ----------
+        eigvec : ndarray of shape (nk, nb, norb)
+            Bloch eigenvectors at each k-point (e.g. from Wannier interpolation or DFT).
+
+        Returns
+        -------
+        eigvec_fixed : ndarray of same shape, phase-aligned
+        """
+        eigvec = self.eigvec.copy()
+        nk, nb, norb = eigvec.shape
+
+        # Step 1: Global phase fix — make first significant element per (k, band) real and positive
+        for k in range(nk):
+            for b in range(nb):
+                vec = eigvec[k, b]
+                idx = np.argmax(np.abs(vec))
+                if np.abs(vec[idx]) > 1e-8:
+                    phase = vec[idx] / np.abs(vec[idx])
+                    eigvec[k, b] *= np.conj(phase)
+
+        # Step 2: Relative phase alignment — align all k-points to k=0
+        ref = eigvec[0]  # shape (nb, norb)
+        for k in range(1, nk):
+            for b in range(nb):
+                dot = np.vdot(ref[b], eigvec[k, b])
+                if np.abs(dot) > 1e-8:
+                    rel_phase = dot / np.abs(dot)
+                    eigvec[k, b] *= np.conj(rel_phase)
+
+        print("*** Fixed global and relative phases of Bloch states ***")
+        return eigvec

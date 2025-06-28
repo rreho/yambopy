@@ -151,3 +151,18 @@ class ChangeBasis():
                         nk_vec[:,n,ik] += 1/self.nk*self._wann_to_bloch_factor(self, mRe, ik, n, p)[:,m,p]
         nk_vec = nk_vec.transpose(1,0,2)
         return nk_vec
+    
+def check_overlap_hermiticy(Mmn, kpb_grid_table):
+    """
+    Check that M_{mn}^{k,b} = [M_{mn}^{k+b,-B}]^{dagger}
+    """
+    nm,nn,nk,nnkp = Mmn.shape
+    dev = 0
+    for t in range(nm):
+        for t2 in range(nn):
+            for ki in range(nk):
+                for bi in range(nnkp):
+                    kpb = kpb_grid_table[ki,bi,1]
+                    dev += Mmn[t,t2,ki,bi] - np.conjugate(Mmn[t,t2,kpb, (bi+4)%nnkp])
+
+    print(f"Hermitian deviation: {dev:.3e}")
