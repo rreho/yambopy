@@ -6,7 +6,7 @@ from yambopy.wannier.wann_occupations import TB_occupations
 from yambopy.dbs.bsekerneldb import *
 from yambopy.dbs.electronsdb import *
 from yambopy.dbs.latticedb import *
-from yambopy.wannier.wann_io import AMN
+from yambopy.wannier.wann_io import AMN, MMN
 from scipy.linalg.lapack import zheev
 from time import time
 import scipy
@@ -843,16 +843,17 @@ class H2P():
                 # term2: A^{S'Q+B}_{c'v'k+B}
                 term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpb]  # shape (N, M)
 
-                # term3: ⟨u_c(k)|u_{c'}(k+B)⟩
-                u_c  = self.eigvec[ik, :, ic]     # shape (N, norb, 1)
-                u_cp = self.eigvec[ikpb, :, icp]  # shape (N, norb, M)
-                term3 = np.vdot(u_c, u_cp)  # shape (N, M)
-
+                # # term3: ⟨u_c(k)|u_{c'}(k+B)⟩
+                # u_c  = self.eigvec[ik, :, ic]     # shape (N, norb, 1)
+                # u_cp = self.eigvec[ikpb, :, icp]  # shape (N, norb, M)
+                # term3 = np.vdot(u_c, u_cp)  # shape (N, M)
+                # term3 RR: new solution based on originam Mmn file
+                term3 = self.Mmn_reduced[ik, ib, ic, icp]
                 # term4: ⟨u_{v'}(k-Q-B)|u_v(k-Q)⟩
-                u_v  = self.eigvec[ikmq, :, iv]   # shape (N, norb, 1)
-                u_vp = self.eigvec[ikmq, :, ivp]  # shape (N, norb, M)
-                term4 = np.vdot(u_vp, u_v)  # shape (N, M)
-
+                # u_v  = self.eigvec[ikmq, :, iv]   # shape (N, norb, 1)
+                # u_vp = self.eigvec[ikmq, :, ivp]  # shape (N, norb, M)
+                # term4 = np.vdot(u_vp, u_v)  # shape (N, M)
+                term4 = self.Mmn_reduced[ikmq, ib, iv, ivp]
                 Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
 
         return Mssp_ttp
@@ -883,15 +884,17 @@ class H2P():
                 term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ik]  # shape (N, M)
 
                 # term3: ⟨u_c(k)|u_{c'}(k+B)⟩
-                u_c  = self.eigvec[ik, :, ic]     # shape (N, norb, 1)
-                u_cp = self.eigvec[ik, :, icp]  # shape (N, norb, M)
-                term3 = np.vdot(u_c, u_cp)  # shape (N, M)
-
+                # u_c  = self.eigvec[ik, :, ic]     # shape (N, norb, 1)
+                # u_cp = self.eigvec[ik, :, icp]  # shape (N, norb, M)
+                # term3 = np.vdot(u_c, u_cp)  # shape (N, M)
+                # term3 RR: new solution based on originam Mmn file
+                term3 = self.Mmn_reduced[ik, ib, ic, icp]
                 # term4: ⟨u_{v'}(k-Q-B)|u_v(k-Q)⟩
-                u_v  = self.eigvec[ikmq, :, iv]   # shape (N, norb, 1)
-                u_vp = self.eigvec[ikmqmb, :, ivp]  # shape (N, norb, M)
-                term4 = np.vdot(u_vp, u_v)  # shape (N, M)
-
+                # u_v  = self.eigvec[ikmq, :, iv]   # shape (N, norb, 1)
+                # u_vp = self.eigvec[ikmqmb, :, ivp]  # shape (N, norb, M)
+                # term4 = np.vdot(u_vp, u_v)  # shape (N, M)
+                # term4 = np.vdot(u_vp, u_v)  # shape (N, M)
+                term4 = self.Mmn_reduced[ikmq, ib, iv, ivp]
                 Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
 
         return Mssp_ttp
@@ -1044,10 +1047,22 @@ class H2P():
 
         return np.sum(A1[:,None] * A2[None,:] * term3 * term4)
 
-    def get_exc_overlap(self, trange=[0], tprange=[0]):
+    def get_exc_overlap(self, Mmn_obj, trange=[0], tprange=[0]  ):
         '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk} A^{SpQ+B}_{cpvpk+B/2} \times <u_{ck}|u_{cpk+B/2}>_{uc}<u_{vpk-Q-B/2}|u_{vk-Q}>_{uc}'''
         '''\begin{aligned} M_{SS'}^{\alpha,\beta} = 
 \sum_{cvc'v'k} A^{SQ\star}_{cvk}A^{S'Q+B}_{c'v'k+\alpha B} \bra{u_{ck}}\ket{u_{c'k+\alpha B}} \bra{u_{v'k-Q-\beta B}}\ket{u_{vk-Q}} \end{aligned}'''
+
+        if not isinstance(Mmn_obj, MMN):
+            raise TypeError('Argument must be an instance of MMN')
+        Mmn = Mmn_obj.data
+        nm_Mmn = Mmn.shape[2]
+        nn_Mmn = Mmn.shape[3]
+        #Hard coded: the number of bands is different than number of wannier functions valid for LiF with num_bands = 10 and num_wann = 8
+        mmn_offset_v = 1
+        mmn_offset_c = 1
+        Mmn_reduced = Mmn[:,:,mmn_offset_v:mmn_offset_c,mmn_offset_v:mmn_offset_c]
+        self.Mmn_reduced = Mmn_reduced  
+
         trange = np.array(trange)   # transition S range 
         tprange = np.array(tprange) # transition Sprime range
         self.h2peigvec, self.h2peigvec_vck = self.fix_and_align_phases()
