@@ -198,8 +198,8 @@ class H2P():
     def correct_neighbours(self):
         # correct the eigv sorting wrt neighbours
         sort_idx = self.kmpgrid.sort_idx
-        self.eigv = np.take_along_axis(self.eigv, sort_idx[:,:], axis=1)
-        tmp = np.take_along_axis(self.eigvec, sort_idx[:, :, None], axis=1)
+        self.eigv = np.take_along_axis(self.eigv, sort_idx[:,:], axis=0)
+        tmp = np.take_along_axis(self.eigvec, sort_idx[:, :, None], axis=0)
         self.eigvec = np.take_along_axis(tmp, sort_idx[:, None, :], axis=2)
 
     def _buildH2P(self):
