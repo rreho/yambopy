@@ -118,7 +118,6 @@ class H2P():
         self.nq = len(qmpgrid.k)
         self.eigv = model.eigv
         self.eigvec = model.eigvec
-        self.correct_neighbours()
         self.gammaonly=gammaonly
         self.eta = eta
         if(self.gammaonly):
