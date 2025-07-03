@@ -83,8 +83,8 @@ def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
                             term1 = np.conjugate(h2p.h2peigvec_vck[iq, t, h2p.bse_nv - h2p.nv + iv, ic - h2p.nv, ik])  # shape (N, 1)
                             # term2: A^{S'Q+B}_{c'v'k+B}
                             term2 = h2p.h2peigvec_vck[iqpb, tp, h2p.bse_nv - h2p.nv + ivp, icp - h2p.nv, ikpb]  # shape (N, M)
-                            term3 = h2p.Mkpb[ik,ib,ic-1, icp-1]
-                            term4 = h2p.Mkmq[ik,iq,ivp-1, iv-1]
+                            term3 = h2p.Mkpb[ik,ib,ic-1, icp-1] # this is already saved in terms of kpb
+                            term4 = h2p.Mkmq[ik,iq,ivp-1, iv-1] # This is already saved in terms of ikmq
                             
                             Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
 
