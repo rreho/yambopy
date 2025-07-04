@@ -26,13 +26,15 @@ def compute_overlap_kmq(wfdb, nnkp_kgrid):
 
     Mkmq = np.zeros(shape=(nk,nq,nbands,nbands),dtype=np.complex128)
 
-    for ik, kmq_1 in enumerate(kmq_grid):
-        for iq, kmq_2 in enumerate(kmq_1):
+    for ik, _ in enumerate(kmq_grid):
+        for iq, ikmq in enumerate(qs[ik]):
+            kmq = nnkp_kgrid.k[ikmq]
+
             wfc_k1, gvec_k1 = wfdb.get_BZ_wf(qs[ik,iq])
             wfc_k2, gvec_k2 = wfdb.get_BZ_wf(qs[ik,iq])
 
             # wfc_k2, gvec_k2 = wfdb.get_BZ_wf(iq)
-            Mkmq[ik,iq] = wfc_inner_product(kmq_2, wfc_k1, gvec_k1, kmq_2, wfc_k1, gvec_k1)
+            Mkmq[ik,iq] = wfc_inner_product(kmq, wfc_k1, gvec_k1, kmq, wfc_k1, gvec_k1)
     return Mkmq
 
 def compute_overlap_kkpb(wfdb, nnkp_kgrid):
@@ -49,16 +51,16 @@ def compute_overlap_kkpb(wfdb, nnkp_kgrid):
 
     Mkpb = np.zeros(shape=(nk,nb,nbands,nbands),dtype=np.complex128)
 
-    for ik, k in enumerate(ks):
-        for ib, kpb in enumerate(bs[ik]):
+    for ik, _ in enumerate(ks):
+        for ib, ikpb in enumerate(bs[ik]):
             k1 = nnkp_kgrid.k[ik]
-            k2 = kpb_grid[ik,ib]
+            k2 = nnkp_kgrid.k[ikpb]
             wfc_k1, gvec_k1 = wfdb.get_BZ_wf(ik)
-            wfc_k2, gvec_k2 = wfdb.get_BZ_wf(kpb)
+            wfc_k2, gvec_k2 = wfdb.get_BZ_wf(ikpb)
             # wfc_k2, gvec_k2 = wfdb.get_BZ_wf(bs[ik,ib])
 
             # wfc_k2, gvec_k2 = wfdb.get_BZ_wf(iq)
-            Mkpb[ik,ib] = wfc_inner_product(k1, wfc_k1, gvec_k1, k2, wfc_k1, gvec_k1)
+            Mkpb[ik,ib] = wfc_inner_product(k1, wfc_k1, gvec_k1, k2, wfc_k2, gvec_k2)
     return Mkpb
 
 
