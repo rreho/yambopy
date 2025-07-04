@@ -1175,7 +1175,7 @@ class H2P():
                     for itp, tp in enumerate(tprange):
                         mssp_real = np.real(self.Mssp[tp, t, iq, ib])
                         mssp_imag = np.imag(self.Mssp[tp, t, iq, ib])
-                        output_lines.append(f'\t{mssp_real:.14f}\t{mssp_imag:.14f}\n')
+                        output_lines.append(f'\t{mssp_real:.12f}\t{mssp_imag:.12f}\n')
 
         # Writing all data at once
         with open(f'{seedname}_exc.mmn', 'w') as f_out:
@@ -1187,7 +1187,7 @@ class H2P():
         for iq in range(self.qmpgrid.nkpoints):
             #iq_ibz_ink = self.qgrid_toibzk[iq]
             for it,t in enumerate(trange):
-                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[iq,it]):.13f}\n')
+                f_out.write(f'\t{it+1}\t{iq+1}\t{np.real(self.h2peigv[iq,it]):.12f}\n')
     
     def write_exc_win(self, seedname='wannier90', trange=[0]):
         input_file = f'{seedname}.win'
@@ -1257,7 +1257,7 @@ class H2P():
         for iq, q in enumerate(self.kindices_table):
             for itp,tp in enumerate(tprange):
                 for it, t in enumerate(trange):                
-                    f_out.write(f'\t{it+1}\t{itp+1}\t{iq+1}\t{np.real(self.Amn[it,itp,iq])}\t\t{np.imag(self.Amn[it,itp,iq])}\n')
+                    f_out.write(f'\t{it+1}\t{itp+1}\t{iq+1}\t{np.real(self.Amn[it,itp,iq]):.12f}\t\t{np.imag(self.Amn[it,itp,iq]):.12f}\n')
 
     def _get_BSE_table(self):
         ntransitions = self.nk*self.bse_nc*self.bse_nv
