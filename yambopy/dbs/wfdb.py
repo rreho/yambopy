@@ -662,6 +662,56 @@ def wfc_inner_product(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gt
     #return np.einsum('sixg,sjxg->sij',wfc_bra_tmp,wfc_ket,optimize=True) #// einsum is very slow
     return inprod
 
+def Mmn_kkp(G0_bra, wfc_bra, gvec_bra, G0_ket, wfc_ket, gvec_ket, ket_Gtree=None):
+    """
+    Computes the inner product between two wavefunctions in reciprocal space. <k_bra | k_ket>
+    
+    Parameters
+    ----------
+    k_bra : ndarray
+        Crystal momentum of the bra wavefunction (3,) in reduced coordinates.
+    wfc_bra : ndarray
+        Wavefunction coefficients for the bra state with shape (nspin, nbnd, nspinor, ng) of yambo.
+    gvec_bra : ndarray
+        Miller indices of the bra wavefunction (ng, 3) in reduced coordinates of yambo.
+    wfc_ket : ndarray
+        Wavefunction coefficients for k+b the ket state with shape (nspin, nbnd, nspinor, ng) of yambo.
+    gvec_ket : ndarray
+        Miller indices of the ket wavefunction (ng, 3) in reduced coordinates of yambo.
+    ket_Gtree  : scipy.spatial._kdtree.KDTree (optional)
+        Kdtree for gvec_ket. leave it or give None to internally build one
+    G0 = k_w - ky # difference between wannier and yambo k vectors
+    #
+    Returns
+    -------
+    ndarray
+        Inner product matrix of shape (nspin, nbnd, nbnd). If the momenta mismatch
+        is too large, returns a zero matrix.
+    """
+    #
+    # Check consistency of wavefunction dimensions
+    assert wfc_ket.shape[:3] == wfc_bra.shape[:3], "Inconsistant wfcs"
+    #
+    nspin, nbnd, nspinor = wfc_ket.shape[:3]
+
+    # Construct KDTree for nearest-neighbor search in G-vectors
+    if ket_Gtree is None:
+        ket_Gtree = KDTree(gvec_ket-G0_ket)
+    gbra_shift = gvec_bra - G0_bra#+ G0[None,:]
+    ## get the nearest indices and their distance
+    dd, ii = ket_Gtree.query(gbra_shift, k=1)
+    #
+    wfc_bra_tmp = np.zeros(wfc_ket.shape,dtype=wfc_ket.dtype)
+    # Get only the indices that are present
+    bra_idx = ii[dd < 1e-6]
+    #
+    wfc_bra_tmp[:,:,:,bra_idx] = wfc_bra[...,dd<1e-6].conj()
+    # return the dot product
+    inprod = np.zeros((nspin, nbnd, nbnd),dtype=wfc_bra.dtype)
+    for ispin in range(nspin):
+        inprod[ispin] = wfc_bra_tmp[ispin].reshape(nbnd,-1)@wfc_ket[ispin].reshape(nbnd,-1).T
+    #return np.einsum('sixg,sjxg->sij',wfc_bra_tmp,wfc_ket,optimize=True) #// einsum is very slow
+    return inprod
 
 def su2_mat(symm_mat,time_rev1):
     """
