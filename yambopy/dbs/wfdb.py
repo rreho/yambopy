@@ -664,7 +664,7 @@ def wfc_inner_product(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gt
 
 
 
-def Mmn_kkp(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gtree=None):
+def Mmn_kkp(G0_bra, wfc_bra, gvec_bra, G0_ket, wfc_ket, gvec_ket, ket_Gtree=None):
     """
     Computes the inner product between two wavefunctions in reciprocal space. <k_bra | k_ket>
     
@@ -673,17 +673,16 @@ def Mmn_kkp(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gtree=None):
     k_bra : ndarray
         Crystal momentum of the bra wavefunction (3,) in reduced coordinates.
     wfc_bra : ndarray
-        Wavefunction coefficients for the bra state with shape (nspin, nbnd, nspinor, ng).
+        Wavefunction coefficients for the bra state with shape (nspin, nbnd, nspinor, ng) of yambo.
     gvec_bra : ndarray
-        Miller indices of the bra wavefunction (ng, 3) in reduced coordinates.The G that converts from yambo to wannier90
-    k_ket : ndarray
-        Crystal momentum of the ket wavefunction (3,) in reduced coordinates.
+        Miller indices of the bra wavefunction (ng, 3) in reduced coordinates of yambo.
     wfc_ket : ndarray
-        Wavefunction coefficients for the ket state with shape (nspin, nbnd, nspinor, ng). k+b The G that converts from yambo to wannier90 in k+b
+        Wavefunction coefficients for k+b the ket state with shape (nspin, nbnd, nspinor, ng) of yambo.
     gvec_ket : ndarray
-        Miller indices of the ket wavefunction (ng, 3) in reduced coordinates.
+        Miller indices of the ket wavefunction (ng, 3) in reduced coordinates of yambo.
     ket_Gtree  : scipy.spatial._kdtree.KDTree (optional)
         Kdtree for gvec_ket. leave it or give None to internally build one
+    G0 = k_w - ky # difference between wannier and yambo k vectors
     #
     Returns
     -------
@@ -704,8 +703,8 @@ def Mmn_kkp(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gtree=None):
     #    return np.zeros((nspin, nbnd, nbnd),dtype=wfc_ket.dtype)
     # Construct KDTree for nearest-neighbor search in G-vectors
     if ket_Gtree is None:
-        ket_Gtree = KDTree(gvec_ket)
-    gbra_shift = gvec_bra #+ G0[None,:]
+        ket_Gtree = KDTree(gvec_ket-G0_ket)
+    gbra_shift = gvec_bra -G0_bra#+ G0[None,:]
     ## get the nearest indices and their distance
     dd, ii = ket_Gtree.query(gbra_shift, k=1)
     #
