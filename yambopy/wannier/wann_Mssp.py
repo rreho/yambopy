@@ -1,5 +1,11 @@
 import numpy as np
-
+try:
+    from pykdtree.kdtree import KDTree 
+    ## pykdtree is much faster and is recommanded
+    ## pip install pykdtree
+    ## useful in Dmat computation
+except ImportError as e:
+    from scipy.spatial import KDTree
 
 def convert_to_wannier90(wfdb, nnkp_kgrid):
     "WFdb conversion to wannier90 kgrid"
@@ -13,6 +19,7 @@ def convert_to_wannier90(wfdb, nnkp_kgrid):
     print("Converted to Wannier90 grids.")
 
 def compute_overlap_kmq(wfdb, nnkp_kgrid):
+    '''\bra{u_{v'k-Q}}\ket{u_{vk-Q}}'''
     from yambopy.dbs.wfdb import wfc_inner_product
     if getattr(wfdb, 'wf_bz', None) is None: wfdb.expand_fullBZ()
     if getattr(wfdb, 'wannier90', None) is None:convert_to_wannier90(wfdb, nnkp_kgrid)
@@ -28,17 +35,18 @@ def compute_overlap_kmq(wfdb, nnkp_kgrid):
 
     for ik, _ in enumerate(kmq_grid):
         for iq, ikmq in enumerate(qs[ik]):
-            kmq = nnkp_kgrid.k[ikmq]
-
+            # kmq = nnkp_kgrid.k[ikmq]
+            G0_bra = [0,0,0] # We are already using wannier90 grid
+            G0_ket = [0,0,0] # We are already using wannier90 grid
             wfc_k1, gvec_k1 = wfdb.get_BZ_wf(qs[ik,iq])
-            wfc_k2, gvec_k2 = wfdb.get_BZ_wf(qs[ik,iq])
+            # wfc_k2, gvec_k2 = wfdb.get_BZ_wf(qs[ik,iq])
 
             # wfc_k2, gvec_k2 = wfdb.get_BZ_wf(iq)
-            Mkmq[ik,iq] = wfc_inner_product(kmq, wfc_k1, gvec_k1, kmq, wfc_k1, gvec_k1)
+            Mkmq[ik,iq] = Mmn_kkp(G0_bra, wfc_k1, gvec_k1, G0_ket, wfc_k1, gvec_k1)
     return Mkmq
 
 def compute_overlap_kkpb(wfdb, nnkp_kgrid):
-    from yambopy.dbs.wfdb import wfc_inner_product
+    '''\bra{u_{ck}}\ket{u_{c'k+ B}}'''
     if getattr(wfdb, 'wf_bz', None) is None: wfdb.expand_fullBZ()
     if getattr(wfdb, 'wannier90', None) is None:convert_to_wannier90(wfdb, nnkp_kgrid)
     kpb_table = nnkp_kgrid.kpb_grid_table
@@ -52,17 +60,19 @@ def compute_overlap_kkpb(wfdb, nnkp_kgrid):
     Mkpb = np.zeros(shape=(nk,nb,nbands,nbands),dtype=np.complex128)
 
     for ik, _ in enumerate(ks):
-        for ib, ikpb in enumerate(bs[ik]):
-            k1 = nnkp_kgrid.k[ik]
-            k2 = nnkp_kgrid.k[ikpb]
+        print(ik)
+        for ib, kpb in enumerate(bs[ik]):
+            # k1 = nnkp_kgrid.k[ik]
+            # k2 = nnkp_kgrid.k[kpb]
+            G0_bra =[0,0,0] # we are already using wannier90 grid
+            G0_ket =[0,0,0] # we are already using wannier90 grid
+
             wfc_k1, gvec_k1 = wfdb.get_BZ_wf(ik)
-            wfc_k2, gvec_k2 = wfdb.get_BZ_wf(ikpb)
-            # wfc_k2, gvec_k2 = wfdb.get_BZ_wf(bs[ik,ib])
-
+            wfc_k2, gvec_k2 = wfdb.get_BZ_wf(kpb)
+            
             # wfc_k2, gvec_k2 = wfdb.get_BZ_wf(iq)
-            Mkpb[ik,ib] = wfc_inner_product(k1, wfc_k1, gvec_k1, k2, wfc_k2, gvec_k2)
+            Mkpb[ik,ib] = Mmn_kkp(G0_bra, wfc_k1, gvec_k1,G0_ket, wfc_k2, gvec_k2)
     return Mkpb
-
 
 
 def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
@@ -96,3 +106,54 @@ def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
                     Mssp[t,tp,iq,ib] = Mssp_ttp
     h2p.Mssp = Mssp
     return Mssp
+
+def Mmn_kkp(G0_bra, wfc_bra, gvec_bra, G0_ket, wfc_ket, gvec_ket, ket_Gtree=None):
+    """
+    Computes the inner product between two wavefunctions in reciprocal space. <k_bra | k_ket>
+    
+    Parameters
+    ----------
+    k_bra : ndarray
+        Crystal momentum of the bra wavefunction (3,) in reduced coordinates.
+    wfc_bra : ndarray
+        Wavefunction coefficients for the bra state with shape (nspin, nbnd, nspinor, ng) of yambo.
+    gvec_bra : ndarray
+        Miller indices of the bra wavefunction (ng, 3) in reduced coordinates of yambo.
+    wfc_ket : ndarray
+        Wavefunction coefficients for k+b the ket state with shape (nspin, nbnd, nspinor, ng) of yambo.
+    gvec_ket : ndarray
+        Miller indices of the ket wavefunction (ng, 3) in reduced coordinates of yambo.
+    ket_Gtree  : scipy.spatial._kdtree.KDTree (optional)
+        Kdtree for gvec_ket. leave it or give None to internally build one
+    G0 = k_w - ky # difference between wannier and yambo k vectors
+    #
+    Returns
+    -------
+    ndarray
+        Inner product matrix of shape (nspin, nbnd, nbnd). If the momenta mismatch
+        is too large, returns a zero matrix.
+    """
+    #
+    # Check consistency of wavefunction dimensions
+    assert wfc_ket.shape[:3] == wfc_bra.shape[:3], "Inconsistant wfcs"
+    #
+    nspin, nbnd, nspinor = wfc_ket.shape[:3]
+
+    # Construct KDTree for nearest-neighbor search in G-vectors
+    if ket_Gtree is None:
+        ket_Gtree = KDTree(gvec_ket-G0_ket)
+    gbra_shift = gvec_bra - G0_bra#+ G0[None,:]
+    ## get the nearest indices and their distance
+    dd, ii = ket_Gtree.query(gbra_shift, k=1)
+    #
+    wfc_bra_tmp = np.zeros(wfc_ket.shape,dtype=wfc_ket.dtype)
+    # Get only the indices that are present
+    bra_idx = ii[dd < 1e-6]
+    #
+    wfc_bra_tmp[:,:,:,bra_idx] = wfc_bra[...,dd<1e-6].conj()
+    # return the dot product
+    inprod = np.zeros((nspin, nbnd, nbnd),dtype=wfc_bra.dtype)
+    for ispin in range(nspin):
+        inprod[ispin] = wfc_bra_tmp[ispin].reshape(nbnd,-1)@wfc_ket[ispin].reshape(nbnd,-1).T
+    #return np.einsum('sixg,sjxg->sij',wfc_bra_tmp,wfc_ket,optimize=True) #// einsum is very slow
+    return inprod
