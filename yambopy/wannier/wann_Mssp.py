@@ -45,34 +45,33 @@ def compute_overlap_kmq(wfdb, nnkp_kgrid):
             Mkmq[ik,iq] = Mmn_kkp(G0_bra, wfc_k1, gvec_k1, G0_ket, wfc_k1, gvec_k1)
     return Mkmq
 
-def compute_overlap_kkpb(wfdb, nnkp_kgrid):
+def compute_overlap_kkpb(wfdb, nnkp):
     '''\bra{u_{ck}}\ket{u_{c'k+ B}}'''
     if getattr(wfdb, 'wf_bz', None) is None: wfdb.expand_fullBZ()
-    if getattr(wfdb, 'wannier90', None) is None:convert_to_wannier90(wfdb, nnkp_kgrid)
-    kpb_table = nnkp_kgrid.kpb_grid_table
-    kpb_grid = nnkp_kgrid.kpb_grid
-    ks = kpb_table[:,:,0]
-    bs = kpb_table[:,:,1]
-    nk = len(ks)
-    nb = kpb_grid.shape[1]
+    nk = wfdb.nkpoints
+    nb = 8
+    k_bra = nnkp.data[:,0]-1
+    k_ket = nnkp.data[:,1]-1
+    Gs_ket = nnkp.data[:,2:]
+
     nbands = wfdb.nbands
 
     Mkpb = np.zeros(shape=(nk,nb,nbands,nbands),dtype=np.complex128)
 
-    for ik, _ in enumerate(ks):
-        print(ik)
-        for ib, kpb in enumerate(bs[ik]):
-            # k1 = nnkp_kgrid.k[ik]
-            # k2 = nnkp_kgrid.k[kpb]
-            G0_bra =[0,0,0] # we are already using wannier90 grid
-            G0_ket =[0,0,0] # we are already using wannier90 grid
+    for ik, k1 in enumerate(k_bra):
+        
+        k2 = k_ket[ik]
+        ib = ik% nb
 
-            wfc_k1, gvec_k1 = wfdb.get_BZ_wf(ik)
-            wfc_k2, gvec_k2 = wfdb.get_BZ_wf(kpb)
+        G0_bra = [0,0,0]
+        G0_ket = Gs_ket[ik]
+        print(int(k1))
+        wfc_k1, gvec_k1 = wfdb.get_BZ_wf(int(k1))
+        wfc_k2, gvec_k2 = wfdb.get_BZ_wf(int(k2))
             
-            # wfc_k2, gvec_k2 = wfdb.get_BZ_wf(iq)
-            Mkpb[ik,ib] = Mmn_kkp(G0_bra, wfc_k1, gvec_k1,G0_ket, wfc_k2, gvec_k2)
+        Mkpb[int(ik/nb),ib] = Mmn_kkp(G0_bra, wfc_k1, gvec_k1,G0_ket, wfc_k2, gvec_k2)
     return Mkpb
+
 
 
 def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
