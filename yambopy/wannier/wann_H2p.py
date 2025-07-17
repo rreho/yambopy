@@ -393,7 +393,7 @@ class H2P():
         del K_Ex
         gc.collect()
         
-        H2P = f_diff * K_diff
+        H2P = f_diff / self.nk * K_diff
         del K_diff, f_diff
         gc.collect()
         
@@ -561,17 +561,18 @@ class H2P():
         del dotc, dotv
         gc.collect()
         
-        if self.nq_double == 1:
-            return K_direct, np.array([[0.0]])
+        # if self.nq_double == 1:
+            # return K_direct, np.array([[0.0]])
         
-        dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
-        dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
+        dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigv)
+        dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigvp), eigcp)
         
         del eigc, eigcp, eigv, eigvp  
         gc.collect()
 
 
         K_Ex = cpot_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+        # K_Ex *=0
         del cpot_array
         gc.collect()
 
