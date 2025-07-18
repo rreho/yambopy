@@ -383,7 +383,7 @@ class H2P():
         K_direct, K_Ex = self._getKdq()       #sorry
 
         gc.collect()
-        K_diff = K_direct - K_Ex[:,np.newaxis,:]
+        K_sum = K_direct + K_Ex[:,np.newaxis,:]
         f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
         # f_kmqn = self.f_qn.tile().reshape(self.nk, self.nq_double, self.nb)
         # f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]]
@@ -393,8 +393,8 @@ class H2P():
         del K_Ex
         gc.collect()
         
-        H2P = f_diff / self.nk * K_diff
-        del K_diff, f_diff
+        H2P = f_diff/self.nk * K_sum
+        del K_sum, f_diff
         gc.collect()
         
         result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
@@ -561,18 +561,21 @@ class H2P():
         del dotc, dotv
         gc.collect()
         
-        # if self.nq_double == 1:
-            # return K_direct, np.array([[0.0]])
+        if self.nq_double == 1:
+            # In the case of optical absorption Q=0, there is no exchange term.
+            del eigc, eigcp, eigv, eigvp  
+            del cpot_array
+            gc.collect()
+            return K_direct, np.array([[0.0]])
         
-        dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigv)
-        dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigvp), eigcp)
-        
+        dotc2 = np.einsum('ijk,ijlk->li',np.conjugate(eigc), eigv)
+        dotv2 = np.einsum('ijlk,ijk->lj',np.conjugate(eigvp), eigcp)
+          
         del eigc, eigcp, eigv, eigvp  
         gc.collect()
 
 
-        K_Ex = cpot_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
-        # K_Ex *=0
+        K_Ex = - cpot_array[0][ikminusq[0]][:,None,None] * dotc2 * dotv2   # V(Q)
         del cpot_array
         gc.collect()
 
@@ -729,7 +732,7 @@ class H2P():
             weight_bse = np.zeros(self.ntransitions)+1
             if hasattr(self.model.mpgrid, 'red_kpoints_full'): # ibz case
 
-                weight_bse = (self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]])**(1/6)#*self.model.mpgrid.nkpoints
+                weight_bse = (self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]])#*self.model.mpgrid.nkpoints
 
             vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 #* ibz_factor**2
             piVk = 8*np.pi/(vbz)
