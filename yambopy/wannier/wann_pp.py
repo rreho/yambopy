@@ -32,6 +32,43 @@ class ExcitonBands(H2P):
         H2P = np.zeros((self.nq_list, self.dimbse, self.dimbse), dtype=np.complex128)
         print('initialize buildh2p from cpot')
         t0 = time()
+        cpot_array = None
+
+        if (self.ctype=='v2dt2'):
+            #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
+            # Ensure inputs are NumPy arrays
+            #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
+            #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            cpot_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dt2(np.array([[0,0,0]]),self.red_kpoints)
+
+        elif(self.ctype == 'v2dk'):
+            #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
+                        # K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
+                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dk(np.array([[0,0,0]]),self.red_kpoints)
+
+        elif(self.ctype == 'vcoul'):
+            #print('''\n Kernel built from screened Coulomb potential.\n
+            #   Screening should be set via the instance of the Coulomb Potential class.\n
+            #   ''')
+            cpot_array = self.cpot.vcoul(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.vcoul(np.array([[0,0,0]]),self.red_kpoints)
+
+        elif(self.ctype == 'v2dt'):
+            #print('''\n Kernel built from v2dt Coulomb potential.\n
+            #   ''')
+            cpot_array = self.cpot.v2dt(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dt(np.array([[0,0,0]]),self.red_kpoints)
+
+        elif(self.ctype == 'v2drk'):
+            #print('''\n Kernel built from v2drk Coulomb potential.\n
+            #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
+            #   ''')
+            cpot_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2drk(np.array([[0,0,0]]),self.red_kpoints)
+
         kminusqlist_table = self.kmpgrid.k[:,None,:] - self.red_kpoints[None,:,:]
         eigv_kmq, eigvec_kmq = self.model.get_eigenval_and_vec(kminusqlist_table.reshape(self.nk*self.nq_list,3))
         # compute the fermi occupations for k-q
