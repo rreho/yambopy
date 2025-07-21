@@ -32,6 +32,43 @@ class ExcitonBands(H2P):
         H2P = np.zeros((self.nq_list, self.dimbse, self.dimbse), dtype=np.complex128)
         print('initialize buildh2p from cpot')
         t0 = time()
+        cpot_array = None
+
+        if (self.ctype=='v2dt2'):
+            #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
+            # Ensure inputs are NumPy arrays
+            #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
+            #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            cpot_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dt2(np.array([[0,0,0]]),self.red_kpoints)
+
+        elif(self.ctype == 'v2dk'):
+            #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
+                        # K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
+                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
+            cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dk(np.array([[0,0,0]]),self.red_kpoints)
+
+        elif(self.ctype == 'vcoul'):
+            #print('''\n Kernel built from screened Coulomb potential.\n
+            #   Screening should be set via the instance of the Coulomb Potential class.\n
+            #   ''')
+            cpot_array = self.cpot.vcoul(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.vcoul(np.array([[0,0,0]]),self.red_kpoints)
+
+        elif(self.ctype == 'v2dt'):
+            #print('''\n Kernel built from v2dt Coulomb potential.\n
+            #   ''')
+            cpot_array = self.cpot.v2dt(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dt(np.array([[0,0,0]]),self.red_kpoints)
+
+        elif(self.ctype == 'v2drk'):
+            #print('''\n Kernel built from v2drk Coulomb potential.\n
+            #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
+            #   ''')
+            cpot_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2drk(np.array([[0,0,0]]),self.red_kpoints)
+
         kminusqlist_table = self.kmpgrid.k[:,None,:] - self.red_kpoints[None,:,:]
         eigv_kmq, eigvec_kmq = self.model.get_eigenval_and_vec(kminusqlist_table.reshape(self.nk*self.nq_list,3))
         # compute the fermi occupations for k-q
@@ -49,30 +86,34 @@ class ExcitonBands(H2P):
         dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
         dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
 
-        dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
-        dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
+        dotc2 = np.einsum('ijk,ijlk->li',np.conjugate(eigc), eigv)
+        dotv2 = np.einsum('ijlk,ijk->lj',np.conjugate(eigvp), eigcp)
                 
         del eigc, eigcp, eigv, eigvp
         gc.collect()
         
-        cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+        cpot_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+        cpot_q_array = self.cpot.v2dt2(np.array([[0,0,0]]),self.red_kpoints)
         K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
         del dotc, dotv
         gc.collect()
-        K_Ex = cpot_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+        K_Ex = - cpot_q_array[0,:,None] * dotc2 * dotv2
+        # K_Ex*=0
 
-        K_diff = K_direct - K_Ex[:,np.newaxis,:]
+        K_sum = K_direct + K_Ex[:,np.newaxis,:]
         f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
         # f_kmqn = self.f_qn.tile().reshape(self.nk, self.nq_double, self.nb)
         # f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]]
         # f_diff -=f_kmqn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
 
         f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
-        del K_Ex
+        # del K_Ex
+        self.K_direct = K_direct
+        self.K_Ex = K_Ex
         gc.collect()
 
         # eigv_diff_ttp = eigv_diff
-        H2P = f_diff * K_diff
+        H2P = f_diff/self.nk* K_sum
         # diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff_ttp)  # when t ==tp
         # H2P += diag
         # eigc1 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis, :]   # conduction bands

@@ -96,7 +96,7 @@ class H2P():
     '''
     def __init__(self, model, electronsdb_path, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
                  ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, f_qn = None,\
-                 TD=False,  TBos=300 , run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01):
+                 TD=False, run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01):
     
     # nk, nb, nc, nv,eigv, eigvec, bse_nv, bse_nc, T_table, electronsdb, kmpgrid, qmpgrid,excitons=None, \
     #               kernel_path=None, excitons_path=None,cpot=None,ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, \
@@ -144,7 +144,6 @@ class H2P():
         self.BSE_table = self._get_BSE_table()
         self.ktype = ktype
         self.TD = TD #Tahm-Dancoff
-        self.TBos = TBos
         self.method = method
         self.run_parallel = run_parallel
         self.Mssp = None
@@ -384,7 +383,7 @@ class H2P():
         K_direct, K_Ex = self._getKdq()       #sorry
 
         gc.collect()
-        K_diff = K_direct - K_Ex[:,np.newaxis,:]
+        K_sum = K_direct + K_Ex[:,np.newaxis,:]
         f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
         # f_kmqn = self.f_qn.tile().reshape(self.nk, self.nq_double, self.nb)
         # f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]]
@@ -394,8 +393,8 @@ class H2P():
         del K_Ex
         gc.collect()
         
-        H2P = f_diff * K_diff
-        del K_diff, f_diff
+        H2P = f_diff * K_sum
+        del K_sum, f_diff
         gc.collect()
         
         result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
@@ -509,6 +508,9 @@ class H2P():
 
             return K_direct
         cpot_array = None
+        cpot_q_array = None
+
+        ikminusq = self.kminusq_table[:, :, 1]
 
         if (self.ctype=='v2dt2'):
             #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
@@ -516,6 +518,7 @@ class H2P():
             #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
             #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
             cpot_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dt2(np.array([[0,0,0]]),self.qmpgrid.k)
 
         
         elif(self.ctype == 'v2dk'):
@@ -523,6 +526,7 @@ class H2P():
                         # K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
                         # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
             cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dk(np.array([[0,0,0]]),self.qmpgrid.k)
 
         
         elif(self.ctype == 'vcoul'):
@@ -530,24 +534,22 @@ class H2P():
             #   Screening should be set via the instance of the Coulomb Potential class.\n
             #   ''')
             cpot_array = self.cpot.vcoul(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.vcoul(np.array([[0,0,0]]),self.qmpgrid.k)
 
         elif(self.ctype == 'v2dt'):
             #print('''\n Kernel built from v2dt Coulomb potential.\n
             #   ''')
             cpot_array = self.cpot.v2dt(self.kmpgrid.car_kpoints, self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dt(np.array([[0,0,0]]),self.qmpgrid.k)
 
 
         elif(self.ctype == 'v2drk'):
             #print('''\n Kernel built from v2drk Coulomb potential.\n
             #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
             #   ''')
-            # K_direct = self.cpot.v2drk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])            
-            # K_ex = self.cpot.v2drk(self.qmpgrid.car_kpoints[iq,:],[0.0,0.0,0.0] )\
-                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikminusq,:, iv])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikp,: ,icp])
             cpot_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2drk(np.array([[0,0,0]]),self.qmpgrid.k)
 
-        ikminusq = self.kminusq_table[:, :, 1]
         eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
         eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
         eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
@@ -563,16 +565,20 @@ class H2P():
         gc.collect()
         
         if self.nq_double == 1:
+            # In the case of optical absorption Q=0, there is no exchange term.
+            del eigc, eigcp, eigv, eigvp  
+            del cpot_array
+            gc.collect()
             return K_direct, np.array([[0.0]])
         
-        dotc2 = np.einsum('ijk,jilk->li',np.conjugate(eigc), eigvp)
-        dotv2 = np.einsum('ijkl,jil->ki',np.conjugate(eigv), eigcp)
-        
+        dotc2 = np.einsum('ijk,ijlk->li',np.conjugate(eigc), eigv)
+        dotv2 = np.einsum('ijlk,ijk->lj',np.conjugate(eigvp), eigcp)
+          
         del eigc, eigcp, eigv, eigvp  
         gc.collect()
 
 
-        K_Ex = cpot_array[0][self.BSE_table[:,0]] * dotc2 * dotv2
+        K_Ex = - cpot_q_array[0,ikminusq[0],None] * dotc2 * dotv2   # V(Q)
         del cpot_array
         gc.collect()
 
@@ -654,7 +660,7 @@ class H2P():
                         *np.einsum('j,j->', self.eigvec[ikpminusq, :, ivp].conj(), self.eigvec[ikp, :, icp])          
         return K_ex
         
-    def get_eps(self, hlm, emin, emax, estep, eta):
+    def get_eps(self, hlm, emin, emax, estep, eta, method="Boltz", Tel=0.0, Tbos=300.0, sigma=0.1):
         '''
         Compute microscopic dielectric function 
         dipole_left/right = l/r_residuals.
@@ -664,6 +670,7 @@ class H2P():
         self.w = w.copy()
         F_kcv = np.zeros((self.dimbse,3,3), dtype=np.complex128)
         eps = np.zeros((len(w),3,3), dtype=np.complex128)
+        pl0 = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
             np.fill_diagonal(eps[i,:,:], 1.0)
         # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
@@ -727,34 +734,24 @@ class H2P():
             #         #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             weight_bse = np.zeros(self.ntransitions)+1
             if hasattr(self.model.mpgrid, 'red_kpoints_full'): # ibz case
-                # nk = self.nk  # number of IBZ k-points
-                # split = self.ntransitions // nk
 
-                # base = np.arange(nk * split).reshape(nk, split)
-                # reordered = base[self.model.mpgrid.kpoint_indices]
-
-                # ibz_to_bz = reordered.reshape(-1)
-                # F_kcv = self.F_kcv[ibz_to_bz]
-                weight_bse = (self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]])**(1/6)#*self.model.mpgrid.nkpoints
-                # F_kcv*=1/weight_bse[:,np.newaxis,np.newaxis]
-                # ediff = h2peigv*weight_bse[:, np.newaxis] - self.w[np.newaxis, :]
-                # ediff = h2peigv[ibz_to_bz][:, np.newaxis] - self.w[np.newaxis, :]
-            # else:
-            #     # self.cpot.lattice.expand_kpoints()
-            #     orig_weights = self.cpot.lattice.weights_ibz.copy()
-            #     orig_weights[:8]=1
-            #     orig_weights[[0,1,2,3,7,8,14,4,5,6,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35]]
-            #     weight_bse = orig_weights[self.BSE_table[:,0]]#*self.cpot.lattice.nkpoints
+                weight_bse = (self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]])#*self.model.mpgrid.nkpoints
 
             vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 #* ibz_factor**2
             piVk = 8*np.pi/(vbz)
             eps = piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
             eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
+            
+            f_pl = TB_occupations(self.h2peigv[0],Tel = Tel, Tbos=Tbos, Eb=self.h2peigv[0][0], sigma=sigma)._get_fkn(method=method)
+            pl0 = piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
+            pl0 += 1j*piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
+            # pl0 = eps + f_pl * piVk* F_kcv*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
+                        #  + 1j*piVk* F_kcv*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
             #self.pl = pl
             # self.w = w
             # self.eps_0 = eps_0
-        return w, eps
+        return w, eps, pl0
     
     def get_eps_yambo(self, hlm, emin, emax, estep, eta):
         '''
@@ -835,21 +832,20 @@ class H2P():
             iv = np.array(iv)[:, np.newaxis]
             ic = np.array(ic)[:, np.newaxis]
             for ivp, icp in zip(iv_chunks,ic_chunks):
-                ivp = iv
-                icp = icp
+                #ivp = iv
+                #icp = icp
 
-            iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
-            #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
-            ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
-            ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
-            ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
-            term1 = np.conjugate(self.h2peigvec_vck[iqpb, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-            term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
+                iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
+                #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
+                ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
+                ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
+                ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
+                term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+                term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
 
-            term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
-            term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
-            Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
-
+                term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
+                term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
+                Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
         return Mssp_ttp
 
     
@@ -871,28 +867,66 @@ class H2P():
         
         self.Mssp = Mssp/(self.bse_nv**2*self.bse_nc**2)
 
-    def _get_amn_ttp(self, t, tp, iq_ibz):
-        A_squared = np.abs(self.h2peigv_vck)**2
-        #w_qk = np.sum(A_squared, axis = (2,3))
-        ik = self.BSE_table[t][0]
-        iv = self.BSE_table[t][1] 
-        ic = self.BSE_table[t][2] 
-        #ikp = self.BSE_table[tp][0]
-        #ivp = self.BSE_table[tp][1] 
-        #icp = self.BSE_table[tp][2] 
-        ikmq = self.kmpgrid.kmq_grid_table[ik,iq_ibz][1]
-        Ammn_ttp = self.h2peigvec_vck[iq_ibz,t, self.bse_nv-self.nv+iv, ic-self.nv,ik]*np.vdot(self.eigvec[ikmq,:,iv], self.eigvec[ik,:,ic])
+    def _get_amn_ttp(self, t, tp, iq):
+        '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''
+        #Extract indices from BSE_table
+        if self.method == 'skip-diago':
+            indices = self.inverse_aux_t
+        else:
+            indices = np.arange(0,self.dimbse,1)
+        chunk_size=int(self.dimbse/100.0)
+        if (chunk_size < 1): chunk_size=self.dimbse
+        # Chunk the indices to manage memory usage
+        ik_chunks = chunkify(self.BSE_table[indices, 0], chunk_size)
+        iv_chunks = chunkify(self.BSE_table[indices, 1], chunk_size)
+        ic_chunks = chunkify(self.BSE_table[indices, 2], chunk_size)
+
+        Ammn_ttp = 0
+
+        for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks):
+            ik = np.array(ik)[:, np.newaxis]
+            iv = np.array(iv)[:, np.newaxis]
+            ic = np.array(ic)[:, np.newaxis]
+            for ivp, icp in zip(iv_chunks,ic_chunks):
+                #ivp = iv
+                #icp = icp
+
+                #iqpb = self.qmpgrid.qpb_grid_table[iq_ibz, ib, 1] #points belong to qgrid
+                #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
+                ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
+                ikplusq = self.kplusq_table[ik, iq, 1] # points belong to k grids
+                term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
+                term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ik]
+
+                term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ik, :, icp])
+                term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmq, :, ivp]), self.eigvec[ikmq, :, iv])
+                Ammn_ttp += np.sum(term1 * term2 * term3 * term4)
         #Ammn_ttp = np.sum(self.h2peigvec_vck[iq_ibz, t, :, :, :] * np.conjugate(self.h2peigvec_vck[iq_ibz, tp, :, :, :]))
         return Ammn_ttp
 
     def get_exc_amn(self, trange = [0], tprange = [0]):
         Amn = np.zeros((len(trange), len(tprange),self.qmpgrid.nkpoints), dtype=np.complex128)
-        for it,t in enumerate(trange):
-            for itp, tp in enumerate(tprange):
-                for iq in range(self.qmpgrid.nkpoints):
-                    iq_ibz = self.qgrid_toibzk[iq]
-                    Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq)        
-        self.Amn = Amn
+        trange = np.array(trange)
+        tprange = np.array(tprange)
+
+        il, ilp, iq = np.meshgrid(trange, tprange, np.arange(self.qmpgrid.nkpoints), indexing='ij')
+        print(f"eigvec count: {np.count_nonzero(self.eigvec)}")
+        print(f"h2peigvec_vck count: {np.count_nonzero(self.h2peigvec_vck)}")
+
+        vectorized_amn_ttp = np.vectorize(self._get_amn_ttp, signature='(),(),()->()')
+        # il ip: transition range
+        # iq is the q index in the qgrid
+        # kindices_table[iq] returns the index of the q-point in the k-grid
+        # ib is the index of the neighbourg in qgrid
+        Assp = vectorized_amn_ttp(il, ilp, iq )
+
+        self.Amn = Assp/(self.bse_nv**2*self.bse_nc**2)
+        #for it,t in enumerate(trange):
+        #    for itp, tp in enumerate(tprange):
+        #        for iq in range(self.qmpgrid.nkpoints):
+        #            iq_ibz = self.qgrid_toibzk[iq]
+        #            Amn[t,tp, iq] = self._get_amn_ttp(t,tp, iq)        
+        #self.Amn = Amn/(self.bse_nv**2*self.bse_nc**2)
 
     def write_exc_overlap(self, seedname='wannier90_exc', trange=[0], tprange=[0]):
 
