@@ -239,7 +239,7 @@ class TBMODEL(tbmodels.Model):
         R_dist = np.zeros(hr.nrpts, dtype= np.float64)
         for i in range(self.nrpos):
             R_dist[i] = np.linalg.norm(self.pos[i])
-            max_hr_p[i] = np.max(np.abs(hr_mn_p[i]))
+            max_hr_p[i] = np.linalg.norm(hr_mn_p[i])
         fig, ax = plt.subplots()
         ax.set_xlabel('R [Bohr]')
         ax.set_ylabel(r'max $H_{MN}(R)$')
