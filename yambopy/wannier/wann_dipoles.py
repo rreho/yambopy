@@ -37,7 +37,8 @@ class TB_dipoles():
         self.eigvecc_t = eigvecc_t
         self.eigvecv_t = eigvecv_t
         if self.hlm[0][0][0][0] ==0:
-            raise ValueError
+            print(f"WARNING: hlm zero: {self.hlm[0][0][0][0]}")
+
         else:
             print(f"hlm not zero: {self.hlm[0][0][0][0]}")
         self.method = method
@@ -252,7 +253,7 @@ class TB_dipoles():
         '''computes osc strength from dipoles
         F_{\alpha, \beta}^{n, BSE} = ( \Sum_c,v,k = \dfrac{A^n_{c,v,k,0} < c,k | P_{\alpha} |v,k >}{E_{c,k} - E{v,k} + i \eta_1} ) * c.c
         '''
-        print('Computing oscillator strenght')
+        print('Computing oscillator strength')
         import time
         t0 = time.time()
         dipoles_bse_kcv = self.dipoles_bse_kcv

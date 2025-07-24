@@ -25,6 +25,93 @@ class TBMODEL(tbmodels.Model):
         super().__init__(*args, **kwargs)
         self.Mmn = None
     
+    def supercell(  # pylint: disable=too-many-locals
+        self, size: ty.Sequence[int]
+    ) -> tbmodels.Model:
+        """Generate a model for a supercell of the current unit cell.
+
+        Parameters
+        ----------
+        size : 
+            The size of the supercell, given as integer multiples of the
+            current lattice vectors
+        """
+        import itertools
+        import collections as co
+
+        HoppingType = ty.Dict[ty.Tuple[int, ...], ty.Any]
+
+        size_array = np.array(size).astype(dtype=int, casting="safe")
+        if size_array.shape != (self.dim,):
+            raise ValueError(
+                "The given 'size' has incorrect shape {}, should be {}.".format(
+                    size_array.shape, (self.dim,)
+                )
+            )
+        volume_multiplier = np.prod(size_array)
+        new_occ = None if self.occ is None else volume_multiplier * self.occ
+        if self.uc is None:
+            new_uc = None
+        else:
+            new_uc = (self.uc.T * size_array).T
+
+        # the new positions, normalized to the supercell
+        new_pos: ty.List[np.ndarray] = []
+        reduced_pos = np.array([p / size_array for p in self.pos])
+        uc_offsets = list(
+            np.array(offset)
+            for offset in itertools.product(*[range(n) for n in size_array])
+        )
+        for current_uc_offset in uc_offsets:
+            new_pos.extend(reduced_pos + (current_uc_offset / size_array))
+
+        new_size = self.size * volume_multiplier
+        new_hop: HoppingType = co.defaultdict(
+            lambda: np.zeros((new_size, new_size), dtype=complex)
+        )
+
+        # Can be used to get the orbital offset of a given unit cell
+        # by taking the inner product with the unit cell position.
+        uc_idx_multiplier = (
+            np.array([np.prod(size[i:], dtype=int) for i in range(1, len(size) + 1)])
+            * self.size
+        )
+
+        for uc1_idx, uc1_pos in enumerate(uc_offsets):
+            uc1_idx_offset = uc1_idx * self.size
+
+            for R, hop_mat in self.hop.items():
+                hop_mat = self._array_cast(hop_mat)
+
+                # position of the uc of orbital 2, not mapped inside supercell
+                full_uc2_pos = uc1_pos + R
+                # mapped into the supercell
+                uc2_pos = full_uc2_pos % size_array
+                uc2_idx_offset = np.inner(uc_idx_multiplier, uc2_pos)
+
+                # R in terms of supercells
+                new_R = np.array(np.floor(full_uc2_pos / size_array), dtype=int)
+
+                new_hop[tuple(new_R)][
+                    uc1_idx_offset : uc1_idx_offset + self.size,
+                    uc2_idx_offset : uc2_idx_offset + self.size,
+                ] += hop_mat
+
+        return TBMODEL(
+            **co.ChainMap(
+                dict(
+                    hop=new_hop,
+                    occ=new_occ,
+                    uc=new_uc,
+                    size=new_size,
+                    pos=new_pos,
+                    contains_cc=False,
+                ),
+                self._input_kwargs,
+            )
+        )
+
+
     @classmethod
     def set_mpgrid(cls,mpgrid):
         """
@@ -70,6 +157,18 @@ class TBMODEL(tbmodels.Model):
 
     def solve_ham_from_hr(self, latdb, hr, fermie):
         # k in reduced coordinates
+        """
+        Solve the Hamiltonian matrix with the k-points defined in the input 
+        Monkhorst-Pack grid.
+
+        Parameters:
+            latdb: The lattice database.
+            hr: The Hamiltonian matrix in Wannier90 format.
+            fermie: The Fermi energy.
+
+        Returns:
+            The eigenvalues and eigenvectors of the Hamiltonian matrix at the k-points.
+        """
         self.latdb = latdb
         nkpt = self.mpgrid.nkpoints
         H_k = np.zeros((nkpt, hr.num_wann, hr.num_wann), dtype=np.complex128)
@@ -94,7 +193,6 @@ class TBMODEL(tbmodels.Model):
         for ik in range(self.nk):
             (self.eigv[ik], self.eigvec[ik]) = scipy.linalg.eigh(self.H_k[ik])
             #(self.eigv[ik],self.eigvec[ik]) = sort_eig(self.eigv[ik],self.eigvec[ik])
-        
         self._get_occupations(self.nk, self.nb, self.eigv, fermie)
         self._reshape_eigvec(self.nk, self.nb, self.f_kn, self.eigv, self.eigvec)
         self._get_T_table()
@@ -189,8 +287,16 @@ class TBMODEL(tbmodels.Model):
 
 
     def _get_h_k(self, k, lat, hr, fermie, from_hr=True):
-        ''' computes hamiltonian at k from real space hamiltonian
-        k is one k-point in reduced coordinates
+        '''
+        This mehod computes the Hamiltonian matrix hk at a given k-point k in reduced coordinates,
+        using the real-space Hamiltonian hr. It does this by:
+
+        1) Getting the positions pos from the Hamiltonian hr (either from hr directly or by calling get_pos_from_ham).
+        2)Computing the Fourier factor kvecs by taking the dot product of pos and k.
+        3)Iterating over the positions, adding the contribution of each position to the Hamiltonian matrix hk using the Fourier factor and the real-space Hamiltonian hr.
+        
+        The result is the Hamiltonian matrix hk at the given k-point k. The Fermi energy fermie is
+        not currently added to the result, as indicated by the commented-out line.        
         '''
         #ws_deg is needed for fourier factor
         #to do, make it work also for hr from tbmodels
@@ -216,12 +322,23 @@ class TBMODEL(tbmodels.Model):
         return hk
 
     def _get_h_R(self, lat, hr, fermie, from_hr=True):
-        ''' get hamiltonian at R from real space hamiltonian
-        R is one lattice vector in reduced coordinates
-        '''
         #ws_deg is needed for fourier factor
         #to do, make it work also for hr from tbmodels
         # I started but I do not have ffactor from tbmodels.
+        '''
+        This method returns the real-space Hamiltonian matrix hr_mn_p at R, by iterating over the positions and adding the contribution 
+        of each position to the Hamiltonian matrix using the Fourier factor and the real-space Hamiltonian hr.
+        
+        Parameters:
+        k (numpy array): k-point in reduced coordinates
+        lat (3x3 array): lattice vectors
+        hr (tbmodels class): tight-binding Hamiltonian
+        fermie (float): Fermi energy
+        from_hr (bool): if True, read from tbmodels, if False from Wannier90 output
+        
+        Returns:
+        hr_mn_p (numpy array): real-space Hamiltonian matrix at R
+        '''
         if (not from_hr):
             pos = self.get_pos_from_ham(lat, hr, from_hr)
         else:
@@ -233,6 +350,30 @@ class TBMODEL(tbmodels.Model):
         return hr_mn_p    
     
     def decay_R(self, lat, hr ,fermie, from_hr = True):
+        """
+        Calculate the decay of the Hamiltonian matrix elements with respect to the distance R.
+
+        This method computes the maximum absolute value of the Hamiltonian matrix elements 
+        for each real-space lattice vector R and plots them against the distance |R|.
+
+        Parameters
+        ----------
+        lat : array_like
+            The lattice vectors.
+        hr : object
+            The Hamiltonian object containing Hamiltonian matrix elements and related data.
+        fermie : float
+            The Fermi energy.
+        from_hr : bool, optional
+            If True, compute using the real-space Hamiltonian (default: True).
+
+        Returns
+        -------
+        R_dist : ndarray
+            The distances of each lattice vector R.
+        max_hr_p : ndarray
+            The maximum absolute values of the Hamiltonian matrix elements at each R.
+        """
         hr_mn_p = self._get_h_R(lat, hr, fermie, from_hr)
         #calculate distances
         max_hr_p = np.zeros(hr.nrpts, dtype= np.float64)
@@ -328,6 +469,29 @@ class TBMODEL(tbmodels.Model):
         # return r_mnk    
     @classmethod
     def _reshape_eigvec(cls, nk, nb, f_kn, eigv, eigvec):
+        """
+        Reshapes the eigenvectors and eigenvalues from a full matrix to separated valence and conduction bands.
+
+        Parameters
+        ----------
+        nk : int
+            The number of k-points.
+        nb : int
+            The number of bands.
+        f_kn : ndarray
+            The occupation number at each k-point and band.
+        eigv : ndarray
+            The eigenvalues.
+        eigvec : ndarray
+            The eigenvectors.
+
+        Notes
+        -----
+        The eigenvectors are reshaped from a full matrix to separated valence and conduction bands.
+        The valence (conduction) bands are stored in the first (last) `nv` (`nc`) columns of the eigenvectors.
+        The eigenvalues are also separated into valence and conduction bands.
+        The occupation number is used to distinguish between valence and conduction bands.
+        """
         nv = np.count_nonzero(f_kn[0])
         nc = nb -nv
         eigvecv = np.zeros((nk, nb, nv),dtype=np.complex128)

@@ -96,9 +96,13 @@ class YamboEm1sRotate():
 
 
         # Get symmetries in CC and real-space atomic positions
-        _, n_atoms = np.unique(expanded_lattice.atomic_numbers, return_counts=True)
-        atom_pos = expanded_lattice.car_atomic_positions
-        self.sym_car = expanded_lattice.sym_car
+        if not os.path.isfile('%s/%s'%(save_path,db1)): raise FileNotFoundError("File %s not found."%db1)
+        database = Dataset("%s/%s"%(save_path,db1), 'r')
+        self.sym_car = np.transpose( database.variables['SYMMETRY'][:], (0,2,1) ) # transpose leaving first axis as symm index
+        n_atoms =  database.variables['N_ATOMS'][:].astype(int)
+        atom_pos = database.variables['ATOM_POS'][:]
+        if verbose: iku_kpoints_ibz = database.variables['K-POINTS'][:].T
+        database.close()
         self.nsyms = len(self.sym_car)
         if verbose: iku_kpoints_ibz = expanded_lattice.ibz_kpoints
 
@@ -274,8 +278,8 @@ class YamboEm1sRotate():
         def netcdftype(var_type):
             """ Distinguish between double and float
             """
-            if var.dtype=='float32': return 'f4'
-            elif var.dtype=='float64': return 'f8'
+            if var_type=='float32': return 'f4'
+            elif var_type=='float64': return 'f8'
             else: raise TypeError('\n[ERROR] Variable type not recognized. It should be either float (float32) or double (float64).\n')
         
         # New database
