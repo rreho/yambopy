@@ -84,7 +84,7 @@ class ExcitonBands(H2P):
         eigv = eigvec_kmq[self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
         eigvp = eigvec_kmq[self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
         dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
-        dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigv), eigvp)
+        dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigvp), eigv)
 
         dotc2 = np.einsum('ijk,ijlk->li',np.conjugate(eigc), eigv)
         dotv2 = np.einsum('ijlk,ijk->lj',np.conjugate(eigvp), eigcp)
@@ -97,23 +97,23 @@ class ExcitonBands(H2P):
         K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
         del dotc, dotv
         gc.collect()
-        K_Ex = - cpot_q_array[0,:,None] * dotc2 * dotv2
+        K_Ex = - cpot_q_array.T * dotc2 * dotv2
         # K_Ex*=0
 
-        K_sum = K_direct + K_Ex[:,np.newaxis,:]
-        f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
+        K_sum = K_direct + K_Ex[:,:,np.newaxis]
+        # f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
         # f_kmqn = self.f_qn.tile().reshape(self.nk, self.nq_double, self.nb)
         # f_diff = self.f_kn[ikminusq][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,1]]
         # f_diff -=f_kmqn[ikminusgamma][:,self.BSE_table[:,0],:][:,:,self.BSE_table[:,2]] 
 
-        f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
+        f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-self.f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
         # del K_Ex
         self.K_direct = K_direct
         self.K_Ex = K_Ex
         gc.collect()
 
         # eigv_diff_ttp = eigv_diff
-        H2P = f_diff/self.nk* K_sum
+        H2P = f_diff * K_sum
         # diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), eigv_diff_ttp)  # when t ==tp
         # H2P += diag
         # eigc1 = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis, :]   # conduction bands
@@ -140,8 +140,9 @@ class ExcitonBands(H2P):
         # K_ex[:, range(K_ex.shape[1]), range(K_ex.shape[2])] = 0.0 #replaces the line where Kernel is 0 if t=tp
 
         # H2P = f_diff*(K_d - K_ex)
-        eigv_diff = (eigv_k[:,None, self.BSE_table[:,2]]-eigv_kmq[:,:,self.BSE_table[:,1]])[self.BSE_table[:,0],:,:].swapaxes(1,0)
-        diag = np.einsum('lm, klm -> klm', np.eye(self.dimbse), eigv_diff) # when t ==tp
+        result = eigv_kmq[self.BSE_table[:, 0],:, self.BSE_table[:, 1]].T  # Shape: (nqpoints, ntransitions)
+        eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
+        diag = np.einsum('ij,ki->kij', np.eye(self.dimbse),eigv_diff)  # when t ==tp
         H2P += diag
         print(f'Completed in {time() - t0} seconds')
 
