@@ -83,7 +83,7 @@ def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
                 print(iq)
                 for ib in range(nb):
                     Mssp_ttp = 0
-                    iqpb = h2p.qmpgrid.qpb_grid_table[iq, ib, 1]
+                    iqpb = nnkp_qgrid.qpb_grid_table[iq, ib, 1]
                     bset = h2p.bse_nc*h2p.bse_nv
                     k = h2p.BSE_table[:, 0]
                     v = h2p.BSE_table[:, 1]
