@@ -19,10 +19,12 @@ def convert_to_wannier90(wfdb, nnkp_kgrid):
     print("Converted to Wannier90 grids.")
 
 def compute_overlap_kmq(wfdb, nnkp_kgrid):
-    '''\bra{u_{v'k-Q}}\ket{u_{vk-Q}}'''
+    '''\bra{u_{v'k-Q}}\ket{u_{vk-Q}}
+    Make sure the wfdb used contains only the bse bands.
+    '''
     from yambopy.dbs.wfdb import wfc_inner_product
     if getattr(wfdb, 'wf_bz', None) is None: wfdb.expand_fullBZ()
-    if getattr(wfdb, 'wannier90', None) is None:convert_to_wannier90(wfdb, nnkp_kgrid)
+    # if getattr(wfdb, 'wannier90', None) is None:convert_to_wannier90(wfdb, nnkp_kgrid)
     kmq_table = nnkp_kgrid.kmq_grid_table
     kmq_grid = nnkp_kgrid.kmq_grid
     ks = kmq_table[:,:,0]
@@ -46,10 +48,12 @@ def compute_overlap_kmq(wfdb, nnkp_kgrid):
     return Mkmq
 
 def compute_overlap_kkpb(wfdb, nnkp):
-    '''\bra{u_{ck}}\ket{u_{c'k+ B}}'''
+    '''\bra{u_{ck}}\ket{u_{c'k+ B}}
+    Make sure the wfdb used contains only the bse bands.
+    '''
     if getattr(wfdb, 'wf_bz', None) is None: wfdb.expand_fullBZ()
-    nk = wfdb.nkpoints
-    nb = 8
+    nk = wfdb.nkBZ
+    nb = nnkp.nnkpts
     k_bra = nnkp.data[:,0]-1
     k_ket = nnkp.data[:,1]-1
     Gs_ket = nnkp.data[:,2:]
@@ -75,8 +79,11 @@ def compute_overlap_kkpb(wfdb, nnkp):
 
 
 def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
+    """
+    Make sure the wfdb used contains only the bse bands.
+    """
     nb = nnkp_kgrid.b_list[0].shape[0]
-    Mssp = np.zeros(shape=(trange,trange,h2p.nq,h2p.nb ))
+    Mssp = np.zeros(shape=(trange,trange,h2p.nq,nb ))
     for t in range(0,trange):
         for tp in range(0,trange):
             for iq, q in enumerate(nnkp_qgrid.red_kpoints):
@@ -97,8 +104,8 @@ def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
                             term1 = np.conjugate(h2p.h2peigvec_vck[iq, t, h2p.bse_nv - h2p.nv + iv, ic - h2p.nv, ik])  # shape (N, 1)
                             # term2: A^{S'Q+B}_{c'v'k+B}
                             term2 = h2p.h2peigvec_vck[iqpb, tp, h2p.bse_nv - h2p.nv + ivp, icp - h2p.nv, ikpb]  # shape (N, M)
-                            term3 = h2p.Mkpb[ik,ib,ic-1, icp-1] # this is already saved in terms of kpb
-                            term4 = h2p.Mkmq[ik,iq,ivp-1, iv-1] # This is already saved in terms of ikmq
+                            term3 = h2p.Mkpb[ik,ib,h2p.bse_nv - h2p.nv + ic, h2p.bse_nv - h2p.nv + icp] # this is already saved in terms of kpb
+                            term4 = h2p.Mkmq[ik,iq,h2p.bse_nv - h2p.nv + ivp, h2p.bse_nv - h2p.nv + iv] # This is already saved in terms of ikmq
                             
                             Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
 
