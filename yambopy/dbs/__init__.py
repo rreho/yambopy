@@ -10,3 +10,4 @@ This will allow the user to create his own scripts to manipulate the data
 """
 from .latticedb import *
 from .electronsdb import *
+from .qpdb import *
