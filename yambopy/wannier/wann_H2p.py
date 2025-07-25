@@ -125,7 +125,7 @@ class H2P():
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
         except ValueError:
             print('Warning! Q=0 index not found')
-        self.dimbse = self.bse_nv*self.bse_nc*self.nq
+        self.dimbse = self.bse_nv*self.bse_nc*self.nk
         if electronsdb_path:
             self.electronsdb_path = electronsdb_path
             self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
@@ -388,7 +388,6 @@ class H2P():
 
         # Precompute kplusq and kminusq tables
         ikminusq = self.kminusq_table[:, :, 1]
-        ikminusgamma = self.kminusq_table[:, :, 0]
         K_direct, K_Ex = (None, None)
         if self.nq == 1:
             K_direct  = self._getKd()
@@ -396,15 +395,19 @@ class H2P():
             K_direct, K_Ex = self._getKdq()
 
         gc.collect()
-        f_kmqn = np.tile(self.f_qn[None, :, :], (self.nk, 1, 1))
+        eigv_kmq = self.eigv[ikminusq]
+        f_kmqn = self._get_occupations(eigv_kmq, self.model.fermie)
+        f_kmqn = f_kmqn.reshape(self.nk, self.nq, self.nb)
 
         f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
         gc.collect()
         
-        H2P = f_diff * K_direct
+        H2P = f_diff/self.nk * K_direct
         if K_Ex is not None:
-            H2P += f_diff*K_Ex[:,:,np.newaxis]
-        del f_diff, K_Ex, K_direct
+            H2P += f_diff/self.nk * K_Ex[:,:,np.newaxis]
+        # del f_diff, K_Ex, K_direct
+        self.K_Ex = K_Ex
+        self.K_direct = K_direct
         gc.collect()
         
         result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
@@ -414,7 +417,7 @@ class H2P():
         self.eigv_diff_ttp = eigv_diff
         del eigv_diff
         gc.collect()
-        
+        print(self.dimbse)
         diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), self.eigv_diff_ttp)  # when t ==tp
         H2P += diag
         del diag 
@@ -1195,7 +1198,10 @@ class H2P():
         inverse_aux_t[aux_t] = np.arange(aux_t.size)        
         
         return aux_t, inverse_aux_t
-
+    def _get_occupations(self, eigv, fermie):
+        occupations = fermi_dirac(eigv,fermie)
+        return np.real(occupations)
+    
 def chunkify(lst, n):
     """Divide list `lst` into `n` chunks."""
     return [lst[i::n] for i in range(n)]    
