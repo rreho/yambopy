@@ -126,7 +126,7 @@ class ExcitonBands(H2P):
     def get_exciton_weights_bz(self, n=None):
         """get weight of state in each band in full bz"""
         nq = self.h2p.nq
-        weight = np.abs(self.h2p.h2peigvec_vck.reshape(nq,self.ntransitions, self.ntransitions))
+        weight = np.abs(self.h2peigvec_vck)
         weight_norm = weight/np.max(weight)
 
         return weight_norm[:,:n,:n] if n is not None else weight_norm
@@ -202,16 +202,16 @@ class ExcitonBands(H2P):
     def get_exciton_2D(self,f=None,n=None):
         """get data of the exciton in 2D"""
         weights = self.get_exciton_weights_bz(n=n)
-        #sum all the bands
-        weights_bz_sum = np.sum(weights,axis=1)
+        #sum all the transitions
+        weights_bz_sum = np.sum(weights,axis=(1,2,3))
         if f: weights_bz_sum = f(weights_bz_sum)
         from yambopy.lattice import replicate_red_kmesh
         kmesh_full, kmesh_idx = replicate_red_kmesh(self.h2p.kmpgrid.k,repx=range(-1,2),repy=range(-1,2))
         x,y = red_car(kmesh_full,self.kmpgrid.rlat)[:,:2].T
-        weights_bz_sum = weights_bz_sum[kmesh_idx]
+        weights_bz_sum = weights_bz_sum[:,kmesh_idx].swapaxes(0,1)
         return x,y,weights_bz_sum
     
-    def plot_exciton_2D_ax(self,ax,n=None,f=None,mode='hexagon',limfactor=0.8,spin_pol=None,**kwargs):
+    def plot_exciton_2D_ax(self,ax,q=0,n=None,f=None,mode='hexagon',limfactor=0.8,spin_pol=None,**kwargs):
         """
         Plot the exciton weights in a 2D Brillouin zone
        
@@ -231,7 +231,7 @@ class ExcitonBands(H2P):
         else:
            x,y,weights_bz_sum = self.get_exciton_2D(f=f,n=n)
 
-        weights_bz_sum=weights_bz_sum/np.max(weights_bz_sum)
+        weights_bz_sum=weights_bz_sum[:,q]/np.max(weights_bz_sum[:,q])
         
         #filter points outside of area
         lim = np.max(self.latdb.rlat)*limfactor
@@ -248,10 +248,8 @@ class ExcitonBands(H2P):
             mask = (x > -dlim) & (x < dlim) & (y > -dlim) & (y < dlim)
             x_filtered = x[mask]
             y_filtered = y[mask]
-            weights_filtered = weights_bz_sum[mask, :]  # Filter rows only
-            weights_bz_sum = np.hstack((x_filtered[:, np.newaxis],
-                                y_filtered[:, np.newaxis],
-                                weights_filtered))
+            weights_filtered = weights_bz_sum[mask]  # Filter rows only
+            # weights_bz_sum = weights_filtered
             # x,y,weights_bz_sum = np.array(filtered_weights).T
         # Add contours of BZ
         from yambopy.plot.plotting import BZ_Wigner_Seitz
@@ -261,21 +259,21 @@ class ExcitonBands(H2P):
         if mode == 'hexagon': 
             scale = kwargs.pop('scale',1)
             if spin_pol=='up':
-               s=ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum_up,rasterized=True,**kwargs)
+               ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum_up,rasterized=True,**kwargs)
             elif spin_pol=='dw':
-               s=ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum_dw,rasterized=True,**kwargs)
+               ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum_dw,rasterized=True,**kwargs)
             else:
-               s=ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum,rasterized=True,**kwargs)
+               ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum,rasterized=True,**kwargs)
             ax.set_xlim(-lim,lim)
             ax.set_ylim(-lim,lim)
         elif mode == 'square': 
             scale = kwargs.pop('scale',1)
             if spin_pol=='up':
-               s=ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum_up,rasterized=True,**kwargs)
+               ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum_up,rasterized=True,**kwargs)
             elif spin_pol=='dw':
-               s=ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum_dw,rasterized=True,**kwargs)
+               ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum_dw,rasterized=True,**kwargs)
             else:
-               s=ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum,rasterized=True,**kwargs)
+               ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum,rasterized=True,**kwargs)
             ax.set_xlim(-lim,lim)
             ax.set_ylim(-lim,lim)
         elif mode == 'rbf':
@@ -304,16 +302,16 @@ class ExcitonBands(H2P):
                    weights_bz_sum[:,col] = rbfi(x,np.ones_like(x)*y[col])
             # NB we have to take the transpose of the imshow data to get the correct plot
             if spin_pol=='up':
-               s=ax.imshow(weights_bz_sum_up.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
+               ax.imshow(weights_bz_sum_up.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
             elif spin_pol=='dw':
-               s=ax.imshow(weights_bz_sum_dw.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
+               ax.imshow(weights_bz_sum_dw.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
             else:
-               s=ax.imshow(weights_bz_sum.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
+               ax.imshow(weights_bz_sum.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
         title = kwargs.pop('title',str('excitons'))
 
         ax.set_title(title)
         ax.set_aspect('equal')
         ax.set_xticks([])
         ax.set_yticks([])
-       
-        return ax,s
+
+        return ax
