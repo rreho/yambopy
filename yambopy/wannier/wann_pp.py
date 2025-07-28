@@ -120,7 +120,6 @@ class ExcitonBands(H2P):
         return H2P
 
     def _get_occupations(self, eigv, fermie):
-    def _get_occupations(self, eigv, fermie):
         occupations = fermi_dirac(eigv,fermie)
         return np.real(occupations)
     
