@@ -20,7 +20,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
 ]
-dependencies = [ "numpy", "scipy", "netCDF4", "h5py", "matplotlib", "pyyaml", "lxml", "monty","scikit-learn","tqdm"]
+dependencies = [ "numpy", "scipy", "netCDF4", "h5py", "matplotlib", "pyyaml", "lxml", "monty","scikit-learn","h5py","fortio","ase","sisl","tbmodels", "pytest", "pytest-cov","tqdm"]
 [project.urls]
 "Homepage" = "https://github.com/yambo-code/yambopy"
 "Documentation" = "https://www.yambo-code.eu/wiki/index.php/First_steps_in_Yambopy"
@@ -43,6 +43,7 @@ packages = ['yambopy',
             'yambopy.flow',
             'yambopy.nl',
             'yambopy.quasiparticles',
+            'yambopy.wannier',
             'yambopy.letzelphc_interface',
             'qepy',
             'qepy.upf_interface',

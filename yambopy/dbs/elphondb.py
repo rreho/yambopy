@@ -83,7 +83,7 @@ class YamboElectronPhononDB():
                  
         #read qpoints    
         self.qpoints = database.variables['PH_Q'][:].T
-        self.car_qpoints = np.array([ q/self.alat for q in self.qpoints ])
+        self.car_qpoints = self.qpoints/self.alat
         #read dimensions of electron phonon parameters
         self.nmodes, self.nqpoints, self.nkpoints, b_1, b_2 = database.variables['PARS'][:5].astype(int)
         if b_1>b_2: # Old database (no GkkpBands in PARS)
@@ -96,13 +96,13 @@ class YamboElectronPhononDB():
 
         try: #check if IBZ K-point list is provided
             self.ibz_kpoints_elph = database.variables['HEAD_KPT'][:].T
-            self.ibz_car_kpoints = np.array([ k/self.alat for k in self.ibz_kpoints_elph ])
+            self.ibz_car_kpoints = np.array([ self.ibz_kpoints_elph ])/self.alat
         except KeyError: 
             pass
 
         try: # Check if full K-point list is provided (upon expansion), otherwise use the one from ns.db1
             self.kpoints_elph = database.variables['PH_K'][:].T
-            self.car_kpoints = np.array([ k/self.alat for k in self.kpoints_elph ])
+            self.car_kpoints = self.kpoints_elph/self.alat
             database.close()
         except KeyError:
             database.close()

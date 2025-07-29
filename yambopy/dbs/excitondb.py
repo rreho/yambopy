@@ -547,8 +547,7 @@ class YamboExcitonDB(object):
         # Lattice and Symmetry Variables
         lattice = self.lattice
         cell = (lattice.lat, lattice.red_atomic_positions, lattice.atomic_numbers)
-
-        symrel = [sym for sym,trev in zip(lattice.sym_rec_red,lattice.time_rev_list) if trev==False ]
+        symrel = symrel = lattice.sym_rec_red[~lattice.time_rev_list] # the ~ is a bitwise NOT
         time_rev = True
 
         nelect = 0  # Why?
@@ -1073,7 +1072,7 @@ class YamboExcitonDB(object):
         fermie = kwargs.pop('fermie',0)
         ##
         if not lattice.mag_syms:
-            symrel = [sym for sym,trev in zip(lattice.sym_rec_red,lattice.time_rev_list) if trev==False ]
+            symrel = symrel = lattice.sym_rec_red[~lattice.time_rev_list] # the ~ is a bitwise NOT
             trev_for_interp = lattice.time_rev
         # Handle special case of mag_sys + trev (e.g. SOC + ferromagnet, etc)
         elif lattice.time_rev:
@@ -1136,7 +1135,7 @@ class YamboExcitonDB(object):
 
         fermie = kwargs.pop('fermie',0)
         ##
-        symrel = [sym for sym,trev in zip(lattice.sym_rec_red,lattice.time_rev_list) if trev==False ]
+        symrel = symrel = lattice.sym_rec_red[~lattice.time_rev_list] # the ~ is a bitwise NOT
         time_rev = True
  
         weights = self.get_exciton_weights(excitons)
@@ -1239,7 +1238,7 @@ class YamboExcitonDB(object):
         if nexcitons == 'all': nexcitons = self.nexcitons
 
         #energy range
-        w = np.arange(emin,emax,estep,dtype=np.float32)
+        w = np.arange(emin,emax,estep,dtype=np.float64)
         nenergies = len(w)
         
         if verbose:
@@ -1305,7 +1304,7 @@ class YamboExcitonDB(object):
         if nexcitons == 'all': nexcitons = self.nexcitons
 
         #energy range
-        w = np.arange(emin,emax,estep,dtype=np.float32)
+        w = np.arange(emin,emax,estep,dtype=np.float64)
         nenergies = len(w)
         
         if verbose:
@@ -1606,7 +1605,7 @@ class YamboExcitonDB(object):
 
         fermie = kwargs.pop('fermie',0)
         ##
-        symrel = [sym for sym,trev in zip(lattice.sym_rec_red,lattice.time_rev_list) if trev==False ]
+        symrel = symrel = lattice.sym_rec_red[~lattice.time_rev_list] # the ~ is a bitwise NOT
         time_rev = True
  
         weights_up, weights_dw = self.get_exciton_weights_spin_pol(excitons)

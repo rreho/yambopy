@@ -119,6 +119,47 @@ class YamboBSEKernelDB(object):
             Wcv[ik-1,ip-1] = kernel[it1_subset,it2_subset]
         return Wcv
 
+    def get_kernel_value_bands_4D(self, excitons, bands_range):
+        """
+        Get value of kernel matrix elements as a function of (v, c, k, p)
+        where v and c are valence and conduction bands, k and p are k-point indices.
+
+        Args:
+        excitons: YamboExcitonDB object containing exciton data and the lattice structure
+        bands_range: Tuple (min_band, max_band) defining the range of band indices
+
+        Returns:
+        W: A 4D numpy array with dimensions corresponding to (v, c, k, p)
+        """
+        table = excitons.table
+        nk = self.lattice.nkpoints
+        kernel = self.kernel
+        self.consistency_BSE_BSK(excitons)
+
+        min_band, max_band = bands_range
+        nbands = max_band
+
+        # Initialize the 4D array for kernel values with dimensions covering the band range
+        W = np.zeros((nbands, nbands, nk, nk), dtype=complex)
+
+        # Iterate over all possible v, c bands within the specified range
+        for iv_index, iv in enumerate(range(min_band, max_band + 1), start=0):
+            for ic_index, ic in enumerate(range(min_band, max_band + 1), start=0):
+                if iv not in table[:, 1] or ic not in table[:, 2]:
+                    continue
+
+                t_v = np.where(table[:, 1] == iv)[0]
+                t_c = np.where(table[:, 2] == ic)[0]
+                t_vc = [t for t in t_v if t in t_c]
+
+                for it1_subset, it2_subset in product(t_vc, repeat=2):
+                    ik = table[it1_subset][0]
+                    ip = table[it2_subset][0]
+                    # Store in 4D array, adjusting indices for zero-based Python indexing
+                    W[iv-1, ic-1, ik - 1, ip - 1] = kernel[it1_subset, it2_subset]
+
+        return W
+    
     def get_string(self,mark="="):
         lines = []; app = lines.append
         app( marquee(self.__class__.__name__,mark=mark) )
@@ -126,5 +167,26 @@ class YamboBSEKernelDB(object):
         app( "number of transitions: %d"%self.ntransitions )
         return '\n'.join(lines)
     
+    def get_kernel_indices_bands(self,excitons, bands, iq):
+        ''' Given a pair of v and c indices get the t indices of the kernel
+        '''
+        table  = excitons.table
+        nk     = self.lattice.nkpoints
+        kernel = self.kernel
+        self.consistency_BSE_BSK(excitons)
+        
+        if bands[0] not in table[:,1] or bands[1] not in table[:,2]:
+            raise ValueError('Band indices not matching available transitions')
+             
+        # Find indices where selected valence band appears
+        t_v = np.where(table[:,1]==bands[0])[0]
+        # Find indices where selected conduction band appears
+        t_c = np.where(table[:,2]==bands[1])[0]
+        t_k = np.where(table[:,0]==iq)[0]
+        # Among those, find subset of indices where both appear together
+        t_vc = [t for t in t_v if (t in t_c and t in t_k) ]
+
+        return t_vc[0]       
+
     def __str__(self):
         return self.get_string()

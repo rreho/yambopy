@@ -38,6 +38,8 @@ Modules:
         - YamboEm1sExpand: expand em1s from unit cell to supercell [IN DEVELOPMENT]
     analyse:
         - YamboAnalyser: read .json files generated with yamboout and plot them together
+    wannier
+        - HR: wannier io read w90 data
 """
 import numpy as np
 
@@ -72,7 +74,6 @@ from yambopy.dbs.elphondb import *
 from yambopy.dbs.bsekerneldb import *
 from yambopy.dbs.excphondb import *
 from yambopy.dbs.kqgridsdb import *
-
 #input/output files
 from yambopy.io.inputfile import *
 from yambopy.io.outputfile import *
@@ -129,3 +130,6 @@ from yambopy.gkkp.refine_gkkp import *
 
 #data
 from yambopy.data import *
+
+#wannier files
+from yambopy.wannier import *

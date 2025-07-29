@@ -35,15 +35,15 @@ class YamboLatticeDB(object):
     @classmethod
     def from_db(cls,filename='ns.db1',Expand=True,atol=1e-6):
         return cls.from_db_file(filename,Expand,atol)
-    
+     
     @classmethod
-    def from_db_file(cls,filename='ns.db1',Expand=True,atol=1e-6):
+    def from_db_file(cls,folder='.',filename='ns.db1',Expand=False, atol=1e-6):
         """ Initialize YamboLattice from a local dbfile """
+        path_filename = os.path.join(folder,filename)
+        if not os.path.isfile(path_filename):
+            raise FileNotFoundError(f"error opening %s in YamboLatticeDB"%path_filename)
 
-        if not os.path.isfile(filename):
-            raise FileNotFoundError("error opening %s in YamboLatticeDB"%filename)
-
-        with Dataset(filename) as database:
+        with Dataset(path_filename) as database:
 
             dimensions = database.variables['DIMENSIONS'][:]
             time_rev = dimensions[9].astype(int)
@@ -157,7 +157,7 @@ class YamboLatticeDB(object):
     def car_kpoints(self):
         """convert form internal yambo units to cartesian lattice units"""
         if not hasattr(self,"_car_kpoints"):
-            self._car_kpoints = np.array([ k/self.alat for k in self.iku_kpoints ])
+            self._car_kpoints = np.array(self.iku_kpoints/self.alat)
         return self._car_kpoints
 
     @property
@@ -171,38 +171,32 @@ class YamboLatticeDB(object):
     def sym_red(self):
         """Convert cartesian transformations to reduced transformations"""
         if not hasattr(self,"_sym_red"):
-            sym_red = np.zeros([self.nsym,3,3],dtype=int)
-            for n,s in enumerate(self.sym_car):
-                sym_red[n] = np.round(np.dot(np.dot(self.lat,s.T),np.linalg.inv(self.lat)))
-            self._sym_red = sym_red
+            transposed_sym = np.transpose(self.sym_car, axes=[0, 2, 1])
+            R_inv = np.linalg.inv(self.lat)
+            self._sym_red = np.round(np.einsum('ij,njk,kl->nil', self.lat, transposed_sym, R_inv))
         return self._sym_red
 
     @property
     def sym_rec_red(self):
         """Convert reduced transformations to reduced reciprocal transformations"""
         if not hasattr(self,"_sym_rec_red"):
-            sym_rec_red = np.zeros([self.nsym,3,3],dtype=int)
-            for n,s in enumerate(self.sym_red):
-                sym_rec_red[n] = np.linalg.inv(s).T
-            self._sym_rec_red = sym_rec_red
+            S_inv = np.linalg.inv(self.sym_red)
+            self._sym_rec_red = np.transpose(S_inv, axes=[0, 2, 1])
         return self._sym_rec_red
          
     @property
     def sym_rec(self):
         """Convert cartesian transformations to reciprocal transformations"""
         if not hasattr(self,"_sym_rec"):
-            sym_rec = np.zeros([self.nsym,3,3])
-            for n,s in enumerate(self.sym_car):
-                sym_rec[n] = np.linalg.inv(s).T
-            self._sym_rec = sym_rec
+            S_inv = np.linalg.inv(self.sym_car)
+            self._sym_rec = np.transpose(S_inv, axes=[0, 2, 1])
         return self._sym_rec
 
     @property
     def time_rev_list(self):
         """get a list of symmetries with time reversal"""
-        time_rev_list = [False]*self.nsym
-        for i in range(self.nsym):
-            time_rev_list[i] = ( i >= self.nsym/(self.time_rev+1) )
+        threshold = self.nsym // (self.time_rev + 1)
+        time_rev_list = np.arange(self.nsym) >= threshold
         return time_rev_list
 
     def expand_kpoints(self,verbose=1,atol=1.e-6):
@@ -213,18 +207,20 @@ class YamboLatticeDB(object):
         with the corresponding index in the irreducible brillouin zone
         """
 
-        # Store original kpoints in iku coordinates
-        self.ibz_kpoints = self.iku_kpoints
-
         weights, kpoints_indexes, symmetry_indexes, kpoints_full = expand_kpoints(self.car_kpoints,self.sym_car,self.rlat,atol=atol)
 
+        if weights is None:
+            self.iku_kpoints      = np.array(kpoints_full*self.alat)
+            return
         if verbose: print("%d kpoints expanded to %d"%(len(self.car_kpoints),len(kpoints_full)))
-
+                # Store original kpoints in iku coordinates
+        self.ibz_kpoints = self.iku_kpoints
+        self.ibz_kpoints_standard = car_red(np.array([k/self.alat for k in self.ibz_kpoints]), self.rlat)
         #set the variables
         self.weights_ibz      = weights
         self.kpoints_indexes  = kpoints_indexes
         self.symmetry_indexes = symmetry_indexes
-        self.iku_kpoints      = [k*self.alat for k in kpoints_full]
+        self.iku_kpoints      = np.array(kpoints_full*self.alat)
 
     def get_units_info(self):
 
