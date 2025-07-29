@@ -207,18 +207,15 @@ class YamboLatticeDB(object):
         with the corresponding index in the irreducible brillouin zone
         """
 
-        # Store original kpoints in iku coordinates
-        _, _, counts = np.unique(self.iku_kpoints, axis=0, return_index=True, return_counts=True)
-        if len(np.where(counts > 1)[0]) > 0:
-            print("[WARNING] Found duplicate k-points in iku coordinates, Probably already expanded.\n Exiting")
-            return
-        self.ibz_kpoints = self.iku_kpoints
-        self.ibz_kpoints_standard = car_red(np.array([k/self.alat for k in self.ibz_kpoints]), self.rlat)
-
         weights, kpoints_indexes, symmetry_indexes, kpoints_full = expand_kpoints(self.car_kpoints,self.sym_car,self.rlat,atol=atol)
 
+        if weights is None:
+            self.iku_kpoints      = np.array(kpoints_full*self.alat)
+            return
         if verbose: print("%d kpoints expanded to %d"%(len(self.car_kpoints),len(kpoints_full)))
-
+                # Store original kpoints in iku coordinates
+        self.ibz_kpoints = self.iku_kpoints
+        self.ibz_kpoints_standard = car_red(np.array([k/self.alat for k in self.ibz_kpoints]), self.rlat)
         #set the variables
         self.weights_ibz      = weights
         self.kpoints_indexes  = kpoints_indexes
