@@ -10,13 +10,13 @@ def load_grids():
 
     lat_k = YamboLatticeDB.from_db_file(f'{YAMBO_PATH}/yambo-DS/10x10x10/SAVE/')
     lat_q = YamboLatticeDB.from_db_file(f'{YAMBO_PATH}/yambo-DS/5x5x5/SAVE/')
-    nnkp_kgrid = NNKP_Grids(f'{QE_PATH}/nscf-wannier-10x10x10//LiF', lat_k, yambo_grid=True)
-    nnkp_qgrid = NNKP_Grids(f'{QE_PATH}/nscf-wannier-5x5x5//LiF', lat_q, yambo_grid=True)
+    nnkp_kgrid = NNKP_Grids(f'{QE_PATH}/nscf-wannier-10x10x10//LiF')
+    nnkp_qgrid = NNKP_Grids(f'{QE_PATH}/nscf-wannier-5x5x5//LiF')
 
     nnkp_kgrid.get_kmq_grid(nnkp_qgrid)
-    nnkp_kgrid.get_qpb_grid(nnkp_qgrid)
+    # nnkp_kgrid.get_qpb_grid(nnkp_kgrid)
     nnkp_qgrid.get_qpb_grid(nnkp_qgrid)
-    nnkp_kgrid.get_kpbover2_grid(nnkp_qgrid)
+    nnkp_kgrid.get_kpbover2_grid(nnkp_kgrid)
     nnkp_kgrid.get_kmqmbover2_grid(nnkp_qgrid)
 
     return nnkp_kgrid

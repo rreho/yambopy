@@ -23,7 +23,7 @@ class NNKP_Grids(KPointGenerator):
         self.weights = 1/self.nkpoints
         self.k_tree = cKDTree(self.k)
 
-    def get_kmq_grid(self,qgrid, sign = "+"):
+    def get_kmq_grid(self,qgrid):
         # if not isinstance(qmpgrid, NNKP_Grids):
         #     raise TypeError('Argument must be an instance of NNKP_Grids')
         #here I need to use the k-q grid and then apply -b/2
