@@ -128,8 +128,12 @@ class H2P():
         self.dimbse = self.bse_nv*self.bse_nc*self.nk
         if electronsdb_path:
             self.electronsdb_path = electronsdb_path
-            self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
             self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
+            if self.latdb.ibz_nkpoints != self.nk:
+                self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
+            else:
+                self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=False)
+
         else:
             self.electronsdb_path = None    # required when initializing ExcitonBands in pp
             self.electronsdb = FakeLatticeObject(model)
@@ -582,8 +586,6 @@ class H2P():
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
                                 self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
-        # self.dipoles_bse = tb_dipoles.dipoles_bse
-        #self.dipoles = tb_dipoles.dipoles # ??? gargabe now
         if(self.ktype=='IP'):
             F_kcv = tb_dipoles.F_kcv
             self.F_kcv = F_kcv
