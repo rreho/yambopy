@@ -115,7 +115,7 @@ class YamboWFDB:
             else :
                 self.ydb = YamboLatticeDB.from_db_file(ns_db1_fname, Expand=True)
             ## total kpoints in full BZ
-            self.nkBZ = len(self.ydb.symmetry_indexes)
+            self.nkBZ = len(self.ydb.red_kpoints)
             #
             # Read G-vectors and other data from ns_db1
             ns_db1 = Dataset(ns_db1_fname, 'r')

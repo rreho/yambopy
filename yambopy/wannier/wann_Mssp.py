@@ -69,7 +69,6 @@ def compute_overlap_kkpb(wfdb, nnkp):
 
         G0_bra = [0,0,0]
         G0_ket = Gs_ket[ik]
-        print(int(k1))
         wfc_k1, gvec_k1 = wfdb.get_BZ_wf(int(k1))
         wfc_k2, gvec_k2 = wfdb.get_BZ_wf(int(k2))
             
