@@ -208,6 +208,10 @@ class YamboLatticeDB(object):
         """
 
         # Store original kpoints in iku coordinates
+        _, _, counts = np.unique(self.iku_kpoints, axis=0, return_index=True, return_counts=True)
+        if len(np.where(counts > 1)[0]) > 0:
+            print("[WARNING] Found duplicate k-points in iku coordinates, Probably already expanded.\n Exiting")
+            return
         self.ibz_kpoints = self.iku_kpoints
         self.ibz_kpoints_standard = car_red(np.array([k/self.alat for k in self.ibz_kpoints]), self.rlat)
 
