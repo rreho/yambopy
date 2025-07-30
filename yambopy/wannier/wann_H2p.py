@@ -835,7 +835,18 @@ class H2P():
     def _get_occupations(self, eigv, fermie):
         occupations = fermi_dirac(eigv,fermie)
         return np.real(occupations)
-    
+    def convert_to_yambo_table(self, nv_ks):
+        # nv_ks is the number of valence bands in the kohn-sham ground state calculation. Not the subspace used my wannier
+        nv_factor = nv_ks - self.nv
+        nk_col = self.BSE_table[:,0]+1
+        nv_col = self.BSE_table[:,1] + nv_factor +1
+        nc_col = self.BSE_table[:,2] + nv_factor +1
+
+        new_table = np.zeros((self.BSE_table.shape[0],5), dtype = int)
+        arr_ones = np.ones(shape=(self.BSE_table.shape[0]),dtype=int)
+        new_table = np.column_stack([nk_col,nv_col, nc_col,arr_ones,arr_ones])
+        return  new_table
+
 def chunkify(lst, n):
     """Divide list `lst` into `n` chunks."""
     return [lst[i::n] for i in range(n)]    
