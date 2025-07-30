@@ -170,3 +170,6 @@ To use the same commit message as RR use:
 
 `git config core.hooksPath .githooks`
 
+# Pytest
+Intall with
+`pip install .[dev]`

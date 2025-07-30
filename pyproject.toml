@@ -22,6 +22,8 @@ classifiers = [
 ]
 dependencies = [ "numpy", "scipy", "netCDF4", "h5py", "matplotlib", "pyyaml", "lxml","monty","scikit-learn", "sphinx","sphinx-rtd-theme","sphinx-proof","h5py","fortio","ase","sisl","tbmodels",
 "tqdm","jupyter-book","numba"]
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "flake8"]
 [project.urls]
 "Homepage" = "https://github.com/yambo-code/yambopy"
 "Documentation" = "https://www.yambo-code.eu/wiki/index.php/First_steps_in_Yambopy"
