@@ -1,7 +1,5 @@
-# Copyright (c) 2018, Henrique Miranda
+# Copyright (c) 2025, Muralidhar Nalabothula
 # All rights reserved.
-#
-# This file is part of the yambopy project
 #
 # Author: MN
 
@@ -25,6 +23,7 @@ try:
 except ImportError as e:
     from scipy.spatial import KDTree
 from yambopy.kpoints import build_ktree, find_kpt
+from yambopy.tools.function_profiler import func_profile
 
 class YamboWFDB:
     """
@@ -85,7 +84,7 @@ class YamboWFDB:
             path (str, optional): Path to the directory containing the wavefunction files. Defaults to the current directory.
             save (str, optional): Subdirectory containing the wavefunction files. Defaults to 'SAVE'.
             filename (str, optional): Name of the wavefunction file. Defaults to 'ns.wf'.
-            bands_range (list, optional): Range of bands to load. Defaults to all bands.
+            bands_range (list, optional): Range of bands to load. Defaults to all bands. Python indexing. Right one is excluded.
         """
         if path is None:
             path = os.getcwd()
@@ -129,6 +128,7 @@ class YamboWFDB:
             # K-points in BZ (crystal units)
             self.kBZ = self.ydb.iku_kpoints / lat_param[None, :]
             self.kBZ = self.kBZ @ lat_vec
+            self.ktree = build_ktree(self.kBZ)
 
             # G-vectors in cartesian units
             G_vec = ns_db1['G-VECTORS'][...].data.T
@@ -215,6 +215,13 @@ class YamboWFDB:
     def assert_bnd_range(self, ib):
         """Assert that the band index is valid."""
         assert 0 <= ib < self.nbands, "Invalid band index"
+    
+    def kptBZidx(self, kpts):
+        """ 
+        return the index of the kpoint or kpoints in the wavefunction db.
+        The kpts must be in crystal (reduced) coordinates.
+        """
+        return find_kpt(self.ktree, kpts)
 
     def get_spin_projections(self, ik, ib=-1, s_z=np.array([[1, 0], [0, -1]])):
         """
@@ -389,7 +396,8 @@ class YamboWFDB:
         time_rev = (isym >= len(self.ydb.sym_car) / (1 + int(np.rint(self.ydb.time_rev))))
         return self.apply_symm(kvec, wfc_k, gvecs_k, time_rev, sym_mat)
 
-    
+
+    @func_profile
     def apply_symm(self, kvec, wfc_k, gvecs_k, time_rev, sym_mat, frac_vec=np.array([0, 0, 0])):
         """
         Apply symmetry to wavefunctions.
@@ -427,7 +435,8 @@ class YamboWFDB:
 
         return [Rkvec, wfc_rot, gvec_rot]
 
-    
+
+    @func_profile
     def to_real_space(self, wfc_tmp, gvec_tmp, grid=[]):
         """
         Convert wavefunctions from G-space to real space.
@@ -492,6 +501,9 @@ class YamboWFDB:
             self.kBZ[i] = kbz
             self.wf_bz[i][...,:ng_t]  = w_t
             self.g_bz[i][:ng_t,:]  = g_t
+        #
+        self.ktree = build_ktree(self.kBZ)
+        return 
 
     def get_BZ_kpt(self, ik):
         """
@@ -518,7 +530,8 @@ class YamboWFDB:
         #
         return [self.wf_bz[ik][..., :self.ngBZ[ik]], self.g_bz[ik, :self.ngBZ[ik], :]]
 
-    
+
+    @func_profile
     def Dmat(self, symm_mat=None, frac_vec=None, time_rev=None):
         """
         Computes the symmetry-adapted matrix elements < Rk | U(R) | k >.
@@ -561,7 +574,7 @@ class YamboWFDB:
             frac_vec = np.zeros((len(symm_mat),3),dtype=symm_mat.dtype)
             time_rev = int(np.rint(self.ydb.time_rev))
         #
-        ktree = build_ktree(self.kBZ)
+        ktree = self.ktree #build_ktree(self.kBZ)
         Dmat = []
         nsym = len(symm_mat)
         kpt_idx = self.ydb.kpoints_indexes
@@ -604,7 +617,7 @@ class YamboWFDB:
         #
         return Dmat
 
-
+@func_profile
 def wfc_inner_product(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gtree=None):
     """
     Computes the inner product between two wavefunctions in reciprocal space. <k_bra | k_ket>
