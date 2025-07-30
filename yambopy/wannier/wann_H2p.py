@@ -118,7 +118,7 @@ class H2P():
         if(self.gammaonly):
             self.nq_double = 1
         else:
-            self.nq_double = len(self.qmpgrid.red_kpoints_full)
+            self.nq_double = len(self.qmpgrid.k)
         self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid) # get a q point in the qgrid and return index the the q point in the k grid
         self.qindices_table={v: i for i, v in enumerate(self.kindices_table)} # get a q point in the qgrid expressed in the k grid and return index of the qpoint in the qgrid
         try:
