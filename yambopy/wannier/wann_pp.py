@@ -24,7 +24,7 @@ class ExcitonBands(H2P):
         self.path_qpoints = path_qpoints
         self.nq_list = len(path_qpoints.get_klist())
         self.red_kpoints = self.path_qpoints.get_klist()[:,0:3]
-        self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)*ang2bohr # result in Bohr
+        self.car_kpoints = red_car(self.red_kpoints, self.latdb.rlat)*ang2bohr # result in Bohr
         self.nq_double = self.nq_list
         self.method = method
         self.Tel = Tel
@@ -131,12 +131,6 @@ class ExcitonBands(H2P):
 
         return weight_norm[:,:n,:n] if n is not None else weight_norm
     
-    def get_exciton_weights(self,nq):
-        """get weight of state in each band in the q path"""
-        weight = np.abs(self.h2peigvec_vck.reshape(nq,self.ntransitions, self.ntransitions))
-        weight_norm = weight/np.max(weight)
-        return weight_norm
-    
     def plot_exciton_dispersion(self, n = None, ax=None, **kwargs):
         """Take the weights from the eigenvectors, and plot first n exciton bands"""
         if n is None: n = self.dimbse        
@@ -199,119 +193,125 @@ class ExcitonBands(H2P):
 
         return fig, ax
 
-    def get_exciton_2D(self,f=None,n=None):
-        """get data of the exciton in 2D"""
-        weights = self.get_exciton_weights_bz(n=n)
-        #sum all the transitions
-        weights_bz_sum = np.sum(weights,axis=(1,2,3))
-        if f: weights_bz_sum = f(weights_bz_sum)
-        from yambopy.lattice import replicate_red_kmesh
-        kmesh_full, kmesh_idx = replicate_red_kmesh(self.h2p.kmpgrid.k,repx=range(-1,2),repy=range(-1,2))
-        x,y = red_car(kmesh_full,self.kmpgrid.rlat)[:,:2].T
-        weights_bz_sum = weights_bz_sum[:,kmesh_idx].swapaxes(0,1)
-        return x,y,weights_bz_sum
+def get_exciton_weights(self,nq):
+    """get weight of state in each band in the q path"""
+    weight = np.abs(self.h2peigvec_vck.reshape(nq,self.ntransitions, self.ntransitions))
+    weight_norm = weight/np.max(weight)
+    return weight_norm
+
+def get_exciton_2D(self,f=None,n=None):
+    """get data of the exciton in 2D"""
+    weights = self.get_exciton_weights_bz(n=n)
+    #sum all the transitions
+    weights_bz_sum = np.sum(weights,axis=(1,2,3))
+    if f: weights_bz_sum = f(weights_bz_sum)
+    from yambopy.lattice import replicate_red_kmesh
+    kmesh_full, kmesh_idx = replicate_red_kmesh(self.h2p.kmpgrid.k,repx=range(-1,2),repy=range(-1,2))
+    x,y = red_car(kmesh_full,self.latdb.rlat)[:,:2].T
+    weights_bz_sum = weights_bz_sum[:,kmesh_idx].swapaxes(0,1)
+    return x,y,weights_bz_sum
+
+def plot_exciton_2D_ax(self,ax,q=0,n=None,f=None,mode='hexagon',limfactor=0.8,spin_pol=None,**kwargs):
+    """
+    Plot the exciton weights in a 2D Brillouin zone
     
-    def plot_exciton_2D_ax(self,ax,q=0,n=None,f=None,mode='hexagon',limfactor=0.8,spin_pol=None,**kwargs):
-        """
-        Plot the exciton weights in a 2D Brillouin zone
-       
-           Arguments:
-            excitons -> list of exciton indexes to plot
-            f -> function to apply to the exciton weights. Ex. f=log will compute the 
-                 log of th weight to enhance the small contributions
-            mode -> possible values are 'hexagon'/'square' to use hexagons/squares as markers for the 
-                    weights plot and 'rbf' to interpolate the weights using radial basis functions.
-            limfactor -> factor of the lattice parameter to choose the limits of the plot 
-            scale -> size of the markers
-        """
-        if spin_pol is not None: print('Plotting exciton mad in 2D axis for spin polarization: %s' % spin_pol)
+        Arguments:
+        excitons -> list of exciton indexes to plot
+        f -> function to apply to the exciton weights. Ex. f=log will compute the 
+                log of th weight to enhance the small contributions
+        mode -> possible values are 'hexagon'/'square' to use hexagons/squares as markers for the 
+                weights plot and 'rbf' to interpolate the weights using radial basis functions.
+        limfactor -> factor of the lattice parameter to choose the limits of the plot 
+        scale -> size of the markers
+    """
+    if spin_pol is not None: print('Plotting exciton mad in 2D axis for spin polarization: %s' % spin_pol)
 
-        if spin_pol is not None:
-           x,y,weights_bz_sum_up,weights_bz_sum_dw = self.get_exciton_2D_spin_pol(excitons,f=f)
+    if spin_pol is not None:
+        x,y,weights_bz_sum_up,weights_bz_sum_dw = self.get_exciton_2D_spin_pol(excitons,f=f)
+    else:
+        x,y,weights_bz_sum = self.get_exciton_2D(f=f,n=n)
+
+    weights_bz_sum=weights_bz_sum[:,q]/np.max(weights_bz_sum[:,q])
+    
+    #filter points outside of area
+    lim = np.max(self.latdb.rlat)*limfactor
+    dlim = lim*1.1
+    if spin_pol is not None:
+        filtered_weights_up = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_up) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
+        filtered_weights_dw = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_dw) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
+        x,y,weights_bz_sum_up = np.array(filtered_weights_up).T
+        x,y,weights_bz_sum_dw = np.array(filtered_weights_dw).T
+    else:
+        x = np.asarray(x)
+        y = np.asarray(y)
+        weights_bz_sum = np.asarray(weights_bz_sum)
+        mask = (x > -dlim) & (x < dlim) & (y > -dlim) & (y < dlim)
+        x_filtered = x[mask]
+        y_filtered = y[mask]
+        weights_filtered = weights_bz_sum[mask]  # Filter rows only
+        # weights_bz_sum = weights_filtered
+        # x,y,weights_bz_sum = np.array(filtered_weights).T
+    # Add contours of BZ
+    from yambopy.plot.plotting import BZ_Wigner_Seitz
+    ax.add_patch(BZ_Wigner_Seitz(self.latdb))
+
+    #plotting
+    if mode == 'hexagon': 
+        scale = kwargs.pop('scale',1)
+        if spin_pol=='up':
+            ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum_up,rasterized=True,**kwargs)
+        elif spin_pol=='dw':
+            ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum_dw,rasterized=True,**kwargs)
         else:
-           x,y,weights_bz_sum = self.get_exciton_2D(f=f,n=n)
-
-        weights_bz_sum=weights_bz_sum[:,q]/np.max(weights_bz_sum[:,q])
-        
-        #filter points outside of area
-        lim = np.max(self.latdb.rlat)*limfactor
-        dlim = lim*1.1
-        if spin_pol is not None:
-           filtered_weights_up = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_up) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
-           filtered_weights_dw = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_dw) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
-           x,y,weights_bz_sum_up = np.array(filtered_weights_up).T
-           x,y,weights_bz_sum_dw = np.array(filtered_weights_dw).T
+            ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum,rasterized=True,**kwargs)
+        ax.set_xlim(-lim,lim)
+        ax.set_ylim(-lim,lim)
+    elif mode == 'square': 
+        scale = kwargs.pop('scale',1)
+        if spin_pol=='up':
+            ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum_up,rasterized=True,**kwargs)
+        elif spin_pol=='dw':
+            ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum_dw,rasterized=True,**kwargs)
         else:
-            x = np.asarray(x)
-            y = np.asarray(y)
-            weights_bz_sum = np.asarray(weights_bz_sum)
-            mask = (x > -dlim) & (x < dlim) & (y > -dlim) & (y < dlim)
-            x_filtered = x[mask]
-            y_filtered = y[mask]
-            weights_filtered = weights_bz_sum[mask]  # Filter rows only
-            # weights_bz_sum = weights_filtered
-            # x,y,weights_bz_sum = np.array(filtered_weights).T
-        # Add contours of BZ
-        from yambopy.plot.plotting import BZ_Wigner_Seitz
-        ax.add_patch(BZ_Wigner_Seitz(self.latdb))
+            ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum,rasterized=True,**kwargs)
+        ax.set_xlim(-lim,lim)
+        ax.set_ylim(-lim,lim)
+    elif mode == 'rbf':
+        from scipy.interpolate import Rbf
+        npts = kwargs.pop('npts',100)
+        interp_method = kwargs.pop('interp_method','bicubic')
+        if spin_pol=='up':
+            rbfi = Rbf(x,y,weights_bz_sum_up,function='linear')
+            x = y = np.linspace(-lim,lim,npts)
+            weights_bz_sum_up = np.zeros([npts,npts])
+        elif spin_pol=='dw':
+            rbfi = Rbf(x,y,weights_bz_sum_dw,function='linear')
+            x = y = np.linspace(-lim,lim,npts)
+            weights_bz_sum_dw = np.zeros([npts,npts])
+        else:
+            rbfi = Rbf(x,y,weights_bz_sum,function='linear')
+            x = y = np.linspace(-lim,lim,npts)
+            weights_bz_sum = np.zeros([npts,npts])
 
-        #plotting
-        if mode == 'hexagon': 
-            scale = kwargs.pop('scale',1)
+        for col in range(npts):
             if spin_pol=='up':
-               ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum_up,rasterized=True,**kwargs)
+                weights_bz_sum_up[:,col] = rbfi(x,np.ones_like(x)*y[col])
             elif spin_pol=='dw':
-               ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum_dw,rasterized=True,**kwargs)
+                weights_bz_sum_dw[:,col] = rbfi(x,np.ones_like(x)*y[col])
             else:
-               ax.scatter(x,y,s=scale,marker='H',c=weights_bz_sum,rasterized=True,**kwargs)
-            ax.set_xlim(-lim,lim)
-            ax.set_ylim(-lim,lim)
-        elif mode == 'square': 
-            scale = kwargs.pop('scale',1)
-            if spin_pol=='up':
-               ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum_up,rasterized=True,**kwargs)
-            elif spin_pol=='dw':
-               ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum_dw,rasterized=True,**kwargs)
-            else:
-               ax.scatter(x,y,s=scale,marker='s',c=weights_bz_sum,rasterized=True,**kwargs)
-            ax.set_xlim(-lim,lim)
-            ax.set_ylim(-lim,lim)
-        elif mode == 'rbf':
-            from scipy.interpolate import Rbf
-            npts = kwargs.pop('npts',100)
-            interp_method = kwargs.pop('interp_method','bicubic')
-            if spin_pol=='up':
-               rbfi = Rbf(x,y,weights_bz_sum_up,function='linear')
-               x = y = np.linspace(-lim,lim,npts)
-               weights_bz_sum_up = np.zeros([npts,npts])
-            elif spin_pol=='dw':
-               rbfi = Rbf(x,y,weights_bz_sum_dw,function='linear')
-               x = y = np.linspace(-lim,lim,npts)
-               weights_bz_sum_dw = np.zeros([npts,npts])
-            else:
-               rbfi = Rbf(x,y,weights_bz_sum,function='linear')
-               x = y = np.linspace(-lim,lim,npts)
-               weights_bz_sum = np.zeros([npts,npts])
+                weights_bz_sum[:,col] = rbfi(x,np.ones_like(x)*y[col])
+        # NB we have to take the transpose of the imshow data to get the correct plot
+        if spin_pol=='up':
+            ax.imshow(weights_bz_sum_up.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
+        elif spin_pol=='dw':
+            ax.imshow(weights_bz_sum_dw.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
+        else:
+            ax.imshow(weights_bz_sum.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
+    title = kwargs.pop('title',str('excitons'))
 
-            for col in range(npts):
-                if spin_pol=='up':
-                   weights_bz_sum_up[:,col] = rbfi(x,np.ones_like(x)*y[col])
-                elif spin_pol=='dw':
-                   weights_bz_sum_dw[:,col] = rbfi(x,np.ones_like(x)*y[col])
-                else:
-                   weights_bz_sum[:,col] = rbfi(x,np.ones_like(x)*y[col])
-            # NB we have to take the transpose of the imshow data to get the correct plot
-            if spin_pol=='up':
-               ax.imshow(weights_bz_sum_up.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
-            elif spin_pol=='dw':
-               ax.imshow(weights_bz_sum_dw.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
-            else:
-               ax.imshow(weights_bz_sum.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
-        title = kwargs.pop('title',str('excitons'))
+    ax.set_title(title)
+    ax.set_aspect('equal')
+    ax.set_xticks([])
+    ax.set_yticks([])
 
-        ax.set_title(title)
-        ax.set_aspect('equal')
-        ax.set_xticks([])
-        ax.set_yticks([])
-
-        return ax
+    return ax
