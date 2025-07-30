@@ -135,10 +135,6 @@ class symmetrized_mp_grid(KPointGenerator):
 
         _, closest_indices_ibz = self.k_tree.query(self.red_kpoints_full[self.point_map[closest_indices]], k=1)#!
 
-
-        # Return the appropriate type
-
-
         return closest_indices_ibz
     
 class tb_Monkhorst_Pack(KPointGenerator):
@@ -171,11 +167,18 @@ class tb_Monkhorst_Pack(KPointGenerator):
         self.nkpoints = len(self.k)
         self.k_tree = cKDTree(self.k)        
 
+    def get_kq_tables(self,qmpgrid, sign="+"):
+        kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints), dtype=int)
+        # Assign to tables
+
+        _,kplusq_table = self.get_kpq_grid(qmpgrid)
+        _,kminusq_table = self.get_kmq_grid(qmpgrid, sign=sign)
+
+        return kplusq_table, kminusq_table
     def get_kmq_grid(self,qmpgrid, sign):
         # if not isinstance(qmpgrid, NNKP_Grids):
         #     raise TypeError('Argument must be an instance of NNKP_Grids')
-        #here I need to use the k-q grid and then apply -b/2
-        # Prepare dimensions
         if sign not in ["+", "-"]:
             raise ValueError("Invalid sign option. Choose either '+' for a-b or '-' for b-a")
         

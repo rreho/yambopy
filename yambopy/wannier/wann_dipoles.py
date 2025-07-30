@@ -148,7 +148,6 @@ class TB_dipoles():
             gr = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GR
             ga = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GA 
             BSE_TABLE = self.BSE_table.copy() - np.array([0, self.offset_nv, self.nv])  # move to the BSE kernel subset
-            
             dip1 = self.h2peigvec_vck[:,BSE_TABLE[:,1], BSE_TABLE[:,2], BSE_TABLE[:,0]]
             dothlm = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:] ,self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,1]])  # Take the eigvec_v of the transition
             dothlm_conj = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:] ,self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,2]]) # Take the eigvec_c of the transition

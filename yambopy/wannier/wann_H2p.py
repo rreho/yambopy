@@ -120,7 +120,6 @@ class H2P():
         else:
             self.nq_double = len(self.qmpgrid.k)
         self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid) # get a q point in the qgrid and return index the the q point in the k grid
-        self.qindices_table={v: i for i, v in enumerate(self.kindices_table)} # get a q point in the qgrid expressed in the k grid and return index of the qpoint in the qgrid
         try:
             self.q0index = self.qmpgrid.find_closest_kpoint([0.0,0.0,0.0])
         except ValueError:
@@ -169,8 +168,8 @@ class H2P():
             Model coulomb potential, and possibly coulomb/screening from Yambo 
             """
             self.ctype = ctype
-            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid)  # the argument of get_kq_tables used to be self.qmpgrid. But for building the BSE hamiltonian we should not use the half-grid. To be tested for loop involving the q/2 hamiltonian  
-            (self.qplusk_table, self.qminusk_table) = self.qmpgrid.get_kq_tables(self.kmpgrid, sign='-')  # minus sign to have k-q  
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid) 
+            (self.qplusk_table, self.qminusk_table) = self.qmpgrid.get_kq_tables(self.kmpgrid, sign="-")  # minus sign to have k-q  
             print(f'\n Building H2P from model Coulomb potentials {self.ctype}\n')
             self.cpot = cpot
             self.H2P = self._buildH2P_fromcpot()
@@ -272,8 +271,8 @@ class H2P():
 
             for idx, exc_db_file in enumerate(exciton_db_files):
                 yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=exc_db_file)
-                v_band = np.min(yexc_atk.table[:, 1])
-                c_band = np.max(yexc_atk.table[:, 2])
+                # v_band = np.min(yexc_atk.table[:, 1])
+                # c_band = np.max(yexc_atk.table[:, 2])
                 kernel_db = YamboBSEKernelDB.from_db_file(self.latdb, folder=f'{self.kernel_path}',Qpt=kpoints_indexes[idx]+1)
                 aux_t = np.lexsort((yexc_atk.table[:,2], yexc_atk.table[:,1],yexc_atk.table[:,0]))
                 K_ttp = kernel_db.kernel[aux_t][:,aux_t]
@@ -287,8 +286,8 @@ class H2P():
                 ivp = BSE_table[:, 1]
                 icp = BSE_table[:, 2]
 
-                ikplusq = self.kplusq_table_yambo[ik, kpoints_indexes[idx],1]
-                ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],1]
+                # ikplusq = self.kplusq_table_yambo[ik, kpoints_indexes[idx],1]
+                # ikminusq = self.kminusq_table_yambo[ik, kpoints_indexes[idx],1]
                 ikpminusq = self.kminusq_table_yambo[ikp, kpoints_indexes[idx],1]
 
                 # Ensure deltaE is diagonal
@@ -318,7 +317,6 @@ class H2P():
         No diagonaliztion needed."""
         if self.skip_diago:
             H2P = None
-            full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
             # self.qgrid_toibzk = self.electronsdb.kpoints_indexes[self.kindices_table[:]]
             # self.ibzk_toqgrid={v: i for i, v in enumerate(self.qgrid_toibzk)}
 
@@ -358,7 +356,7 @@ class H2P():
                 ic = BSE_table[inverse_aux_t, 2]
                 
                 # Broadcasting and advanced indexing
-                inverse_aux_t_slepc = inverse_aux_t[:self.dimslepc]
+                # inverse_aux_t_slepc = inverse_aux_t[:self.dimslepc]
                 h2peigv[idx, :] = tmph2peigv
                 h2peigvec[idx, :, :] = tmph2peigvec[:self.dimslepc, :]
 
