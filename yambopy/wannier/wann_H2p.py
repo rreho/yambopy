@@ -118,7 +118,7 @@ class H2P():
         if(self.gammaonly):
             self.nq_double = 1
         else:
-            self.nq_double = len(self.qmpgrid.k)
+            self.nq_double = len(self.qmpgrid.red_kpoints_full)
         self.kindices_table=self.kmpgrid.get_kindices_fromq(self.qmpgrid) # get a q point in the qgrid and return index the the q point in the k grid
         self.qindices_table={v: i for i, v in enumerate(self.kindices_table)} # get a q point in the qgrid expressed in the k grid and return index of the qpoint in the qgrid
         try:
@@ -575,8 +575,6 @@ class H2P():
         pl0 = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
             np.fill_diagonal(eps[i,:,:], 1.0)
-        # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
-
         h2peigvec_vck=self.h2peigvec_vck[self.q0index]
         h2peigv_vck = self.h2peigv_vck[self.q0index]
         h2peigvec = self.h2peigvec[self.q0index]
@@ -584,7 +582,7 @@ class H2P():
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
-                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
+                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck=h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
         # compute osc strength
         if(self.ktype=='IP'):
             F_kcv = tb_dipoles.F_kcv
@@ -614,21 +612,15 @@ class H2P():
             # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
             self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
             ediff = h2peigv[:, np.newaxis]-w[np.newaxis, :]
-            ibz_factor = 1
-
-            weight_bse = np.zeros(self.ntransitions)+1
-            if hasattr(self.model.mpgrid, 'red_kpoints_full'): # ibz case
-
-                weight_bse = (self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]])#*self.model.mpgrid.nkpoints
 
             vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 #* ibz_factor**2
             piVk = 8*np.pi/(vbz)
-            eps = piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
-            eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
+            eps = piVk * np.einsum('txy,tw->wxy',F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
+            eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
             
             f_pl = TB_occupations(self.h2peigv[0],Tel = Tel, Tbos=Tbos, Eb=self.h2peigv[0][0], sigma=sigma)._get_fkn(method=method)
-            pl0 = piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
-            pl0 += 1j*piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
+            pl0 = piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
+            pl0 += 1j*piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
             # pl0 = eps + f_pl * piVk* F_kcv*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                         #  + 1j*piVk* F_kcv*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')

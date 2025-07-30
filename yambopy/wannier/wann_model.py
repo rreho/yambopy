@@ -119,7 +119,10 @@ class TBMODEL(tbmodels.Model):
 
         Parameters:
             mpgrid: The Monkhorst-Pack grid.
-        """        
+        """
+                # Check if mpgrid is of type symmetrized_mp_grid
+        if type(mpgrid).__name__ == "symmetrized_mp_grid":
+            raise TypeError("Error: solving the BSE kernel in the ibz is not supported. Exiting.")
         cls.mpgrid = mpgrid
     
     def solve_ham(self, k: ty.Union[ty.Sequence[float], ty.Sequence[ty.Sequence[float]]], convention: int = 2):
@@ -169,6 +172,10 @@ class TBMODEL(tbmodels.Model):
         Returns:
             The eigenvalues and eigenvectors of the Hamiltonian matrix at the k-points.
         """
+        # Check if mpgrid is of type symmetrized_mp_grid
+        if type(self.mpgrid).__name__ == "symmetrized_mp_grid":
+            raise TypeError("Error: solving the BSE kernel in the ibz is not supported. Exiting.")
+
         self.latdb = latdb
         nkpt = self.mpgrid.nkpoints
         H_k = np.zeros((nkpt, hr.num_wann, hr.num_wann), dtype=np.complex128)
