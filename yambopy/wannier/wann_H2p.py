@@ -317,7 +317,6 @@ class H2P():
         No diagonaliztion needed."""
         if self.skip_diago:
             H2P = None
-            full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
             # self.qgrid_toibzk = self.electronsdb.kpoints_indexes[self.kindices_table[:]]
             # self.ibzk_toqgrid={v: i for i, v in enumerate(self.qgrid_toibzk)}
 
