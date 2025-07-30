@@ -13,7 +13,6 @@ import subprocess
 import filecmp
 from yambopy import *
 from qepy import *
-import imp
 
 #######################################################
 # Silicon GW convergence
