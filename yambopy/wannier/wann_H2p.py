@@ -761,21 +761,6 @@ class H2P():
 
         print("*** Fixed global and relative phases across Q ***")
         return vec, vec_vck
-    
-    def check_hermitian(self,Mssp):
-        """
-        Check that M^{Q,B} = [M^{Q+B,-B}]^dagger
-        """
-        nt,ntp,nq,nb = Mssp.shape
-        dev = 0
-        for t in range(nt):
-            for t2 in range(ntp):
-                for qi in range(nq):
-                    for bi in range(nb):
-                        qpb = self.qmpgrid.qpb_grid_table[qi,bi,1]
-                        dev += Mssp[t,t2,qi,bi] - np.conjugate(Mssp[t,t2,qpb, (bi+4)%nb])
-
-        print(f"Hermitian deviation: {dev:.3e}")
 
 
     def check_A_norms(self,A):
