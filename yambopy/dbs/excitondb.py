@@ -666,8 +666,8 @@ class YamboExcitonDB(object):
 
             #add weights
             sum_weights = 0
-            for t,kcv in enumerate(self.table):
-                k,c,v = kcv[0:3]-1
+            for t,kvc in enumerate(self.table):
+                k,v,c = kvc[0:3]-1
                 this_weight = abs2(eivec[t])
                 weights[k,c] += this_weight
                 weights[k,v] += this_weight
@@ -684,8 +684,8 @@ class YamboExcitonDB(object):
             eivec = self.eigenvectors[exciton-1]
             #add weights
             sum_weights = 0
-            for t,kcv in enumerate(self.table):
-                k,c,v = kcv[0:3]
+            for t,kvc in enumerate(self.table):
+                k,v,c = kvc[0:3]
                 total_weights[k-1] += abs2(eivec[t])
             if abs(sum(total_weights) - 1) > 1e-3: raise ValueError('Excitonic weights does not sum to 1 but to %lf.'%sum_weights)
  
@@ -704,8 +704,8 @@ class YamboExcitonDB(object):
             eivec = self.eigenvectors[exciton-1]
             #add weights
             #sum_weights = 0
-            for t,kcv in enumerate(self.table):
-                k,c,v = kcv-1                             
+            for t,kvc in enumerate(self.table):
+                k,v,c = kvc-1                             
                 #k,v,c = kcv-1                 # bug?? Double-check
                 this_weight = abs2(eivec[t])
                 w_k_v_to_c[k,v-v_min,c-c_min] = this_weight   # new
@@ -1547,14 +1547,14 @@ class YamboExcitonDB(object):
     
         """get weight of state in each band for spin-polarized case"""
         table_up, table_dw, table_updw = [] , [], []
-        for t,kcv in enumerate(self.table):
-            k,c,v,c_s,v_s = kcv-1   # We substract 1 to be consistent with python numbering of arrays
+        for t,kvc in enumerate(self.table):
+            k,v,c,v_s,c_s = kvc-1   # We substract 1 to be consistent with python numbering of arrays
             if c_s == 0 and v_s == 0:
-               table_up.append(np.array(kcv[0:3]))
+               table_up.append(np.array(kvc[0:3]))
             if c_s == 1 and v_s == 1:
-               table_dw.append(np.array(kcv[0:3]))
+               table_dw.append(np.array(kvc[0:3]))
             if c_s == 1 and v_s == 0:
-               table_updw.append(np.array(kcv[0:3]))
+               table_updw.append(np.array(kvc[0:3]))
         table_up=np.array(table_up)
         table_dw=np.array(table_dw)
         table_updw=np.array(table_updw)
@@ -1576,8 +1576,8 @@ class YamboExcitonDB(object):
             eivec = self.eigenvectors[exciton-1]
             #add weights
             sum_weights = 0
-            for t,kcv in enumerate(self.table):
-                k,c,v,c_s,v_s = kcv-1   # We substract 1 to be consistent with python numbering of arrays
+            for t,kvc in enumerate(self.table):
+                k,v,c,v_s,c_s = kvc-1   # We substract 1 to be consistent with python numbering of arrays
                 this_weight = abs2(eivec[t])
                 if c_s == 0 and v_s == 0:
                    weights_up[k,c] += this_weight
