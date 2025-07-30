@@ -23,16 +23,16 @@ class NNKP_Grids(KPointGenerator):
         self.weights = 1/self.nkpoints
         self.k_tree = cKDTree(self.k)
 
-    def get_kmq_grid(self,qgrid):
+    def get_kmq_grid(self,qmpgrid, sign):
         # if not isinstance(qmpgrid, NNKP_Grids):
         #     raise TypeError('Argument must be an instance of NNKP_Grids')
         #here I need to use the k-q grid and then apply -b/2
         # Prepare dimensions
 
-        kmq_grid = self.k[:,None,:] - qgrid.k[None,:,:]
+        kmq_grid = self.k[:,None,:] - qmpgrid.k[None,:,:]
 
         nkpoints = self.nkpoints
-        nqpoints = qgrid.nkpoints
+        nqpoints = qmpgrid.nkpoints
         n_images=1
         shifts = np.array(np.meshgrid(
             *[np.arange(-n_images, n_images + 1)] * 3)).T.reshape(-1, 3)
@@ -40,7 +40,7 @@ class NNKP_Grids(KPointGenerator):
         n_shifts = len(shifts)
 
         # Create all periodic images of the k-points
-        images = (qgrid.k[:, None, :] + shifts[None, :, :]).reshape(-1, 3)
+        images = (qmpgrid.k[:, None, :] + shifts[None, :, :]).reshape(-1, 3)
         # Track which original index each image comes from
         origin_indices = np.repeat(np.arange(nkpoints), n_shifts)
         tree = cKDTree(images)
@@ -48,7 +48,7 @@ class NNKP_Grids(KPointGenerator):
         dist, idx = tree.query(kmq_grid)
         # matched_images = images[idx]
         matched_indices = origin_indices[idx]
-        kmq_grid = qgrid.k[matched_indices]
+        kmq_grid = qmpgrid.k[matched_indices]
 
         Gvec = np.zeros(shape=(nkpoints, nqpoints, 3))        # temporarily
 
@@ -105,10 +105,21 @@ class NNKP_Grids(KPointGenerator):
         self.kpq_grid_table = kpq_grid_table
 
         return kpq_grid, kpq_grid_table
-      
+    
+    def find_closest_kpoint(self, points):
+        # Convert points to a numpy array
+        points = np.atleast_2d(points)  # Ensure points is a 2D array (N, 3)
+        # Calculate distances using broadcasting and periodic boundary conditions
+        distance, closest_indices = self.k_tree.query(points, k=1)
+
+        # Return the appropriate type
+        return closest_indices if points.shape[0] > 1 else int(closest_indices[0])
+
 
     def sort_B_G(self, kpb_grid_table):
-        bvec_sorting = np.array([1,7,6,4,0,2,3,5]) # don't ask
+        'Maintain the same order of b-vectors'
+        kpoints = self.k[kpb_grid_table[0,:, 1]]
+        bvec_sorting = np.lexsort((kpoints[:, 2], kpoints[:, 1], kpoints[:, 0]))
         argsorted  = np.argsort(bvec_sorting) # don't ask!
         k0 = self.k                     # shape (nk, 3)
         nk, nb = kpb_grid_table.shape[:2]
@@ -151,6 +162,9 @@ class NNKP_Grids(KPointGenerator):
         self.b_list = Bvecs_sorted
         self.kpb_grid = np.take_along_axis(kpb_grid, sort_idx[:,:,None], axis=1)
         self.kpb_grid_table = np.take_along_axis(kpb_grid_table, sort_idx[:,:,None], axis=1)
+        nb = self.b_list.shape[1]
+        self.kmb_grid = self.kpb_grid[:,::-1,:] # Because the b-vecs are sorted this works
+        self.kmb_grid_table = self.kpb_grid_table[:,::-1,:]
 
     def get_qpb_grid(self, qmpgrid: 'NNKP_Grids'):
         '''

@@ -96,7 +96,7 @@ def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
                     c = h2p.BSE_table[:, 2]
                     for ik, iv, ic in zip(k,v,c):  # ∑_{cvk}
                         ikpb = h2p.kmpgrid.kpb_grid_table[ik, ib, 1]  # (N, 1)
-                        ikmq = h2p.kmpgrid.kmq_grid_table[ik, iq, 1]  # (N, 1)
+                        # ikmq = h2p.kmpgrid.kmq_grid_table[ik, iq, 1]  # (N, 1)
                         for ivp, icp in zip(v[:bset], c[:bset]):
 
                             # term1: A^{SQ*}_{cvk}

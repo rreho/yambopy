@@ -89,18 +89,11 @@ class KPointGenerator():
         return folded_k_points, G_vectors
 
     def find_closest_kpoint(self, points):
-
         # Convert points to a numpy array
         points = np.atleast_2d(points)  # Ensure points is a 2D array (N, 3)
-        
         # Calculate distances using broadcasting and periodic boundary conditions
-        #delta = (self.k[np.newaxis, :, :] - points[:, np.newaxis, :] + 0.5) % 1 - 0.5
         distance, closest_indices = self.k_tree.query(points, k=1)
-        #distances = np.linalg.norm(delta, axis=2)  # Shape (N, nkpoints)
-        
-        # Find the index of the minimum distance for each point
-        #closest_indices = np.argmin(distances, axis=1)  # Shape (N,)
-        
+
         # Return the appropriate type
         return closest_indices if points.shape[0] > 1 else int(closest_indices[0])
 
