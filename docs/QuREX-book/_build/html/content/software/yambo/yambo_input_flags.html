@@ -36,7 +36,6 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-thebe.css?v=4fa983c6" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/proof.css?v=b4b7a797" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
@@ -61,12 +60,10 @@
     <script async="async" src="../../../_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'content/software/yambo/yambo_input_flags';</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
-    <link rel="next" title="Workflows" href="../../workflows/workflows.html" />
+    <link rel="next" title="Workflows" href="../../tutorials/tutorials.html" />
     <link rel="prev" title="Yambo" href="yambo.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -138,7 +135,7 @@
     
   
 
-<a class="navbar-brand logo" href="../../intro.html">
+<a class="navbar-brand logo" href="../../../intro.html">
   
   
   
@@ -160,7 +157,7 @@
         
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
-                <a class="reference internal" href="../../intro.html">
+                <a class="reference internal" href="../../../intro.html">
                     QuREX Theoretical Formalism
                 </a>
             </li>
@@ -180,13 +177,20 @@
 </ul>
 </details></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Workflows</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../workflows/workflows.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../workflows/exciton_phonon.html">Exciton-Phonon</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../tutorials/tutorials.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/exciton_phonon.html">Exciton-Phonon</a></li>
 
 </ul>
 </details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebooks</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/notebooks.html">Notebooks Dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/exciton_phonon.html"><span class="xref myst">Exciton-Phonon Tutorial</span></a></li>
+
+
 </ul>
 
     </div>
@@ -412,7 +416,7 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="yambo-input-variables">
+  <section id="yambo-input-variables">
 <h1>Yambo Input variables<a class="headerlink" href="#yambo-input-variables" title="Link to this heading">#</a></h1>
 <p>All the default input flags parsed to <code class="docutils literal notranslate"><span class="pre">yambo</span></code></p>
 <section id="runlevels">
@@ -585,7 +589,7 @@
 <li><p>BSKmod  [BSE] IP/Hartree/HF/ALDA/SEX/BSfxcBSK_mode</p></li>
 <li><p>Gauge  [BSE/X] Gauge (length|velocity)</p></li>
 <li><p>NoCondSumRule [BSE/X] Do not impose the conductivity sum rule in velocity gauge</p></li>
-<li><p>MetDamp       [BSE] Define <span class="math notranslate nohighlight">\(//slash//w+=sqrt(//slash//w*(//slash//w+i//slash//eta))\)</span></p></li>
+<li><p>MetDamp       [BSE] Define $//slash//w+=sqrt(//slash//w*(//slash//w+i//slash//eta))$</p></li>
 <li><p>BSSmod    [BSS] (h)aydock/(d)iagonalization/(s)lepc/(i)nversion/(t)ddft</p></li>
 <li><p>BSEprop   [BSS] Can be any among abs/jdos/kerr/magn/dich/photolum/esrt</p></li>
 <li><p>BSEdips   [BSS] Can be “trace/none” or “xy/xz/yz” to define off-diagonal rotation plane</p></li>
@@ -708,7 +712,7 @@
 <h3>Real Time dynamics<a class="headerlink" href="#real-time-dynamics" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p>RTBands    [RT] Bands</p></li>
-<li><p>TwoAlpha   [RT] <span class="math notranslate nohighlight">\(C_{nk} \approx \alpha*\Gamma_{nk}^2 2_{alpha}\)</span></p></li>
+<li><p>TwoAlpha   [RT] $C_{nk} \approx \alpha*\Gamma_{nk}^2 2_{alpha}$</p></li>
 <li><p>GrKind     [RT] G-ret kind: Lorentzian (QP)/ Hyperbolic QP_secant (HS)</p></li>
 <li><p>RADLifeTime: [RT] Radiative life-time (if negative Yambo sets it equal to Phase_LifeTime in NL)</p></li>
 <li><p>RADmagnific: [RT] Radiative life-time magnificationRAD_magnification</p></li>
@@ -863,7 +867,7 @@
 <li><p>DipApproach    [DIP] [G-space v/R-space x/Covariant/Shifted grids]</p></li>
 <li><p>DipComputed    [DIP] [default R P V; extra P2 Spin Orb]</p></li>
 <li><p>ShiftedPaths   [DIP] Shifted grids paths (separated by a space)grid_paths,</p></li>
-<li><p>DipPDirect [DIP] Directly compute <span class="math notranslate nohighlight">\(&lt;v&gt;\)</span> also when using other approaches for dipoles</p></li>
+<li><p>DipPDirect [DIP] Directly compute $<v>$ also when using other approaches for dipoles</p></li>
 <li><p>DipBandsALL: [DIP] Compute all bands range, not only valence and conduction</p></li>
 </ul>
 </section>
@@ -972,7 +976,7 @@
       </div>
     </a>
     <a class="right-next"
-       href="../../workflows/workflows.html"
+       href="../../tutorials/tutorials.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>

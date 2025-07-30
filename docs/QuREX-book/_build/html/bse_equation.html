@@ -36,7 +36,6 @@
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
-    <link rel="stylesheet" type="text/css" href="_static/proof.css?v=b4b7a797" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
@@ -61,8 +60,6 @@
     <script async="async" src="_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'bse_equation';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -179,6 +176,21 @@
 <li class="toctree-l2"><a class="reference internal" href="content/software/yambo/yambo_input_flags.html">Yambo Input variables</a></li>
 </ul>
 </details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="content/tutorials/tutorials.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/tutorials/exciton_phonon.html">Exciton-Phonon</a></li>
+
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebooks</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="notebooks/notebooks.html">Notebooks Dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/exciton_phonon.html"><span class="xref myst">Exciton-Phonon Tutorial</span></a></li>
+
+
 </ul>
 
     </div>
@@ -326,40 +338,38 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="bse-equation">
+  <section id="bse-equation">
 <h1>BSE Equation<a class="headerlink" href="#bse-equation" title="Link to this heading">#</a></h1>
 <p>The Bethe-Salper Equations (BSE) allows computing neutral excitations for electron-hole interactions.
-Following the Ai-MBPT formalism <span id="id1">[<a class="reference internal" href="workflows/exciton_phonon.html#id32" title="Andrea Marini, Conor Hogan, Myrta Grüning, and Daniele Varsano. Yambo: an ab initio tool for excited state calculations. Computer Physics Communications, 180(8):1392–1403, 2009.">Marini <em>et al.</em>, 2009</a>, <a class="reference internal" href="workflows/exciton_phonon.html#id6" title="Davide Sangalli, Andrea Ferretti, Henrique Miranda, Claudio Attaccalite, Ivan Marri, Elena Cannuccia, P Melo, Margherita Marsili, Fulvio Paleari, Antimo Marrazzo, and others. Many-body perturbation theory calculations using the yambo code. Journal of Physics: Condensed Matter, 31(32):325902, 2019.">Sangalli <em>et al.</em>, 2019</a>]</span> the exciton energies and wavefunctions, are obtained solving the BSE equation in the Tamm-Dancoff approximation including local field effects <span id="id2">[<a class="reference internal" href="workflows/exciton_phonon.html#id29" title="Giovanni Onida, Lucia Reining, and Angel Rubio. Electronic excitations: density-functional versus many-body green’s-function approaches. Reviews of modern physics, 74(2):601, 2002.">Onida <em>et al.</em>, 2002</a>]</span>.</p>
+Following the Ai-MBPT formalism <span id="id1">[<a class="reference internal" href="wannier_exciton.html#id32" title="Andrea Marini, Conor Hogan, Myrta Grüning, and Daniele Varsano. Yambo: an ab initio tool for excited state calculations. Computer Physics Communications, 180(8):1392–1403, 2009.">Marini <em>et al.</em>, 2009</a>, <a class="reference internal" href="wannier_exciton.html#id6" title="Davide Sangalli, Andrea Ferretti, Henrique Miranda, Claudio Attaccalite, Ivan Marri, Elena Cannuccia, P Melo, Margherita Marsili, Fulvio Paleari, Antimo Marrazzo, and others. Many-body perturbation theory calculations using the yambo code. Journal of Physics: Condensed Matter, 31(32):325902, 2019.">Sangalli <em>et al.</em>, 2019</a>]</span> the exciton energies and wavefunctions, are obtained solving the BSE equation in the Tamm-Dancoff approximation including local field effects <span id="id2">[<a class="reference internal" href="wannier_exciton.html#id29" title="Giovanni Onida, Lucia Reining, and Angel Rubio. Electronic excitations: density-functional versus many-body green’s-function approaches. Reviews of modern physics, 74(2):601, 2002.">Onida <em>et al.</em>, 2002</a>]</span>.</p>
 <p>The BSE can be recast into an eigenvalue equation</p>
-<div class="math notranslate nohighlight" id="equation-eq-bse">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-bse" title="Link to this equation">#</a></span>\[\begin{split}
-    \left(\varepsilon_{c\mathbf{k}}^{\mathrm{GW}}
-    -\varepsilon_{\mathrm{v}\mathbf{k-Q}}^{\mathrm{GW}}\right)
-    A_{\mathrm{vc}\mathbf{k}}^\lambda+\sum_{\mathbf{k}^{\prime}
-    c^{\prime} \mathbf{v}^{\prime}}
-    K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{\mathbf{Q}}
-    A_{v^{\prime} c^{\prime} \mathbf{k}^{\prime}}^{\lambda,\mathbf{Q}}
-    =E_{\lambda,\mathbf{Q}} A_{v c \mathbf{k}}^{\lambda,\mathbf{Q}}
-\end{split}\]</div>
-<p>where <span class="math notranslate nohighlight">\(\varepsilon_{c\mathbf{k}/v\mathbf{k}}\)</span> are quasi-particle band energies,
-<span class="math notranslate nohighlight">\(A^{\lambda}_{v c\mathbf{k}}\)</span> are the BSE coefficients, <span class="math notranslate nohighlight">\(E_{\lambda,\mathbf{Q}}\)</span> %are
-the energy of exciton <span class="math notranslate nohighlight">\(\lambda\)</span>, and <span class="math notranslate nohighlight">\(\mathbf{Q}\)</span> the momentum transfer between an electron at <span class="math notranslate nohighlight">\(\mathbf{k}\)</span> and a hole at <span class="math notranslate nohighlight">\(\mathbf{k-Q}\)</span>.
-The kernel <span class="math notranslate nohighlight">\(K\)</span> contains the electron-hole Coulomb interaction matrix elements, which is the sum of the direct <span class="math notranslate nohighlight">\(K^{d}\)</span> and exchange <span class="math notranslate nohighlight">\(K^{x}\)</span> terms and can be written as
-$<span class="math notranslate nohighlight">\(
-    K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{\mathbf{Q}} =     K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{d,\mathbf{Q}} +     K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{x,\mathbf{Q}}
-\)</span>$</p>
-<p>Following the prescription of \textit{Dias et al.} <span id="id3">[<a class="reference internal" href="workflows/exciton_phonon.html#id43" title="Alexandre C Dias, Julian FRV Silveira, and Fanyao Qu. Wantibexos: a wannier based tight binding code for electronic band structure, excitonic and optoelectronic properties of solids. Computer Physics Communications, 285:108636, 2023.">Dias <em>et al.</em>, 2023</a>]</span>} we can compute the direct and exchange terms as follows:</p>
-<div class="math notranslate nohighlight" id="equation-eq-kernels">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-kernels" title="Link to this equation">#</a></span>\[\begin{split}
-    K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{d,\mathbf{Q}} = V(\mathbf{k}-\mathbf{k}^\prime)\langle
-    c,\mathbf{k}|
-    c^\prime,\mathbf{k}^\prime\rangle\langle
-    v^\prime, \mathbf{k}^\prime-\mathbf{Q}|v\mathbf{k-Q}\rangle \\
-    K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{x,\mathbf{Q}} = -V(\mathbf{k}-\mathbf{k}^\prime)\langle
-    c,\mathbf{k}|
-    v,\mathbf{k}-\mathbf{Q}\rangle\langle
-    v^\prime, \mathbf{k}^\prime-\mathbf{Q}|c^\prime\mathbf{k}^\prime-\mathbf{Q}\rangle \\    
-\end{split}\]</div>
+<p>$$
+\left(\varepsilon_{c\mathbf{k}}^{\mathrm{GW}}
+-\varepsilon_{\mathrm{v}\mathbf{k-Q}}^{\mathrm{GW}}\right)
+A_{\mathrm{vc}\mathbf{k}}^\lambda+\sum_{\mathbf{k}^{\prime}
+c^{\prime} \mathbf{v}^{\prime}}
+K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{\mathbf{Q}}
+A_{v^{\prime} c^{\prime} \mathbf{k}^{\prime}}^{\lambda,\mathbf{Q}}
+=E_{\lambda,\mathbf{Q}} A_{v c \mathbf{k}}^{\lambda,\mathbf{Q}}
+$$ (eq-BSE)</p>
+<p>where $\varepsilon_{c\mathbf{k}/v\mathbf{k}}$ are quasi-particle band energies,
+$A^{\lambda}<em>{v c\mathbf{k}}$ are the BSE coefficients, $E</em>{\lambda,\mathbf{Q}}$ %are
+the energy of exciton $\lambda$, and $\mathbf{Q}$ the momentum transfer between an electron at $\mathbf{k}$ and a hole at $\mathbf{k-Q}$.
+The kernel $K$ contains the electron-hole Coulomb interaction matrix elements, which is the sum of the direct $K^{d}$ and exchange $K^{x}$ terms and can be written as
+$$
+K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{\mathbf{Q}} =     K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{d,\mathbf{Q}} +     K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{x,\mathbf{Q}}
+$$</p>
+<p>Following the prescription of \textit{Dias et al.} <span id="id3">[<a class="reference internal" href="wannier_exciton.html#id43" title="Alexandre C Dias, Julian FRV Silveira, and Fanyao Qu. Wantibexos: a wannier based tight binding code for electronic band structure, excitonic and optoelectronic properties of solids. Computer Physics Communications, 285:108636, 2023.">Dias <em>et al.</em>, 2023</a>]</span>} we can compute the direct and exchange terms as follows:</p>
+<p>$$
+K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{d,\mathbf{Q}} = V(\mathbf{k}-\mathbf{k}^\prime)\langle
+c,\mathbf{k}|
+c^\prime,\mathbf{k}^\prime\rangle\langle
+v^\prime, \mathbf{k}^\prime-\mathbf{Q}|v\mathbf{k-Q}\rangle \
+K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{x,\mathbf{Q}} = -V(\mathbf{k}-\mathbf{k}^\prime)\langle
+c,\mathbf{k}|
+v,\mathbf{k}-\mathbf{Q}\rangle\langle
+v^\prime, \mathbf{k}^\prime-\mathbf{Q}|c^\prime\mathbf{k}^\prime-\mathbf{Q}\rangle \<br />
+$$ (eq:kernels)</p>
 </section>
 
     <script type="text/x-thebe-config">

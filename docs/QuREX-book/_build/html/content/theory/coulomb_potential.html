@@ -36,7 +36,6 @@
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
-    <link rel="stylesheet" type="text/css" href="../../_static/proof.css?v=b4b7a797" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
@@ -61,8 +60,6 @@
     <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'content/theory/coulomb_potential';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
@@ -138,7 +135,7 @@
     
   
 
-<a class="navbar-brand logo" href="../intro.html">
+<a class="navbar-brand logo" href="../../intro.html">
   
   
   
@@ -160,7 +157,7 @@
         
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
-                <a class="reference internal" href="../intro.html">
+                <a class="reference internal" href="../../intro.html">
                     QuREX Theoretical Formalism
                 </a>
             </li>
@@ -180,13 +177,20 @@
 </ul>
 </details></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Workflows</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../workflows/workflows.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../workflows/exciton_phonon.html">Exciton-Phonon</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tutorials/tutorials.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/exciton_phonon.html">Exciton-Phonon</a></li>
 
 </ul>
 </details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebooks</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../notebooks/notebooks.html">Notebooks Dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../notebooks/exciton_phonon.html"><span class="xref myst">Exciton-Phonon Tutorial</span></a></li>
+
+
 </ul>
 
     </div>
@@ -309,9 +313,7 @@
 <button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
     <i class="fa-solid fa-magnifying-glass fa-lg"></i>
 </button>
-<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
-    <span class="fa-solid fa-list"></span>
-</button>
+
 </div></div>
       
     </div>
@@ -327,27 +329,6 @@
     <div id="print-main-content">
         <div id="jb-print-toc">
             
-            <div>
-                <h2> Contents </h2>
-            </div>
-            <nav aria-label="Page">
-                <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Model Coulomb potential</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#code-examples">Code examples</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#coulomb-potential-reciprocal-space">Coulomb potential reciprocal space</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#structure-factor-and-coulomb-potential-tb-basis">Structure factor and Coulomb potential TB basis</a></li>
-</ul>
-</li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#small-implementation-example">Small implementation example</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-define-the-reciprocal-lattice-and-g-vectors">Step 1: Define the Reciprocal Lattice and G-Vectors</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-define-the-coulomb-interaction-using-g-vectors">Step 2: Define the Coulomb Interaction Using G-Vectors</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-transform-coulomb-potential-to-bloch-basis">Step 3: Transform Coulomb Potential to Bloch Basis</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-4-construct-and-solve-the-bse-hamiltonian">Step 4: Construct and Solve the BSE Hamiltonian</a></li>
-</ul>
-</li>
-</ul>
-
-            </nav>
         </div>
     </div>
 </div>
@@ -357,158 +338,8 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="model-coulomb-potential">
+  <section id="model-coulomb-potential">
 <h1>Model Coulomb potential<a class="headerlink" href="#model-coulomb-potential" title="Link to this heading">#</a></h1>
-<p><strong>Goal</strong>: Compute the Coulomb potential in the Wannier basis with a cutoff</p>
-<p>We already have the TB hamiltonian <span class="math notranslate nohighlight">\(H_{mn}(R)\)</span> in real space and the Fourier Transform <span class="math notranslate nohighlight">\(H_{mn}(k)\)</span> <code class="docutils literal notranslate"><span class="pre">wannier_model.py</span></code></p>
-<p>We have diagonalized Bloch states:</p>
-<div class="math notranslate nohighlight" id="equation-eq-secular-eqhtb">
-<span class="eqno">(3)<a class="headerlink" href="#equation-eq-secular-eqhtb" title="Link to this equation">#</a></span>\[
-H_{n m}(k) u_m^n(k)=E_n(k) u_n(k)
-\]</div>
-<p>Coulomb interaction in real-space</p>
-<div class="math notranslate nohighlight">
-\[
-V(\mathbf{r})=\frac{e^2}{\epsilon|\mathbf{r}|}
-\]</div>
-<p>The Coulomb interaction in momentum space is expressed as:</p>
-<div class="math notranslate nohighlight">
-\[
-V(G)=\frac{4 \pi e^2}{\epsilon G^2}
-\]</div>
-<p>For 2D materials a valid option is</p>
-<div class="math notranslate nohighlight">
-\[
-V(G)=\frac{2 \pi e^2}{\epsilon G} \tanh (G d)
-\]</div>
-<p>with d the effective thickness of the material.</p>
-<p>You also have to introduce an energy cutoff
-$<span class="math notranslate nohighlight">\(
-|G| \leq G_{\mathrm{cut}}=\sqrt{\frac{2 m E_{\mathrm{cut}}}{\hbar^2}}
-\)</span>$</p>
-<p>However, this is in the plane-wave basis and we need it in the Wannier basis.</p>
-<p>The Coulomb potential in real space can be defined as:</p>
-<p>TB Coulomb matrix elements:</p>
-<div class="math notranslate nohighlight">
-\[
-V_{n m}=\sum_G V(G) S_{n m}(G)
-\]</div>
-<p>S is the structure factor</p>
-<div class="math notranslate nohighlight">
-\[
-S_{n m}(G)=\sum_R e^{i G \cdot R} \phi_n^*(R) \phi_m(R)
-\]</div>
-</section>
-<section class="tex2jax_ignore mathjax_ignore" id="code-examples">
-<h1>Code examples<a class="headerlink" href="#code-examples" title="Link to this heading">#</a></h1>
-<section id="coulomb-potential-reciprocal-space">
-<h2>Coulomb potential reciprocal space<a class="headerlink" href="#coulomb-potential-reciprocal-space" title="Link to this heading">#</a></h2>
-<p>For the BSE we need to transform the Coulomb potential in the Bloch basis</p>
-<div class="math notranslate nohighlight">
-\[
-W_{v c, v^{\prime} c^{\prime}}\left(k, k^{\prime}\right)=\sum_{n m n^{\prime} m^{\prime}} u_n^v(k)^* u_m^c(k) V_{n m, n^{\prime} m^{\prime}}\left(k-k^{\prime}\right) u_{n^{\prime}}^v\left(k^{\prime}\right) u_{m^{\prime}}^c\left(k^{\prime}\right)^*
-\]</div>
-</section>
-<section id="structure-factor-and-coulomb-potential-tb-basis">
-<h2>Structure factor and Coulomb potential TB basis<a class="headerlink" href="#structure-factor-and-coulomb-potential-tb-basis" title="Link to this heading">#</a></h2>
-</section>
-</section>
-<section class="tex2jax_ignore mathjax_ignore" id="small-implementation-example">
-<h1>Small implementation example<a class="headerlink" href="#small-implementation-example" title="Link to this heading">#</a></h1>
-<ol class="arabic simple">
-<li><p>Use G-vectors
-In a periodic system, the Coulomb potential in reciprocal space <span class="math notranslate nohighlight">\(V(q)\)</span> must be expanded using reciprocal lattice vectors G:</p></li>
-</ol>
-<div class="math notranslate nohighlight">
-\[
-V\left(k, k^{\prime}\right)=\sum_G V(G) \delta_{k^{\prime}, k+G}
-\]</div>
-<p>Instead of defining <span class="math notranslate nohighlight">\(V(q)\)</span> only at discrete k-points, we must expand it over G-vectors to ensure periodicity.
-This ensures that <span class="math notranslate nohighlight">\(V(q)\)</span> is defined within the first Brillouin zone (BZ) while still incorporating contributions from higher reciprocal lattice vectors G.</p>
-<ol class="arabic simple" start="2">
-<li><p>Coulomb Potential in Reciprocal Space with G-Vectors
-The screened Coulomb potential in periodic 2D or 3D systems is typically written as:</p></li>
-</ol>
-<div class="math notranslate nohighlight">
-\[
-V(G)=\frac{4 \pi e^2}{\epsilon|G|^2}
-\]</div>
-<p>This accounts for the periodicity of the crystal, ensuring the Coulomb interaction is properly expanded.</p>
-<ol class="arabic simple" start="3">
-<li><p>Implementation in Python
-We now incorporate the G-vector expansion into the BSE Coulomb potential.</p></li>
-</ol>
-<section id="step-1-define-the-reciprocal-lattice-and-g-vectors">
-<h2>Step 1: Define the Reciprocal Lattice and G-Vectors<a class="headerlink" href="#step-1-define-the-reciprocal-lattice-and-g-vectors" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">scipy.linalg</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">la</span>
-
-<span class="c1"># Lattice parameters</span>
-<span class="n">a</span> <span class="o">=</span> <span class="mf">1.0</span>  <span class="c1"># Lattice constant</span>
-<span class="n">N</span> <span class="o">=</span> <span class="mi">50</span>   <span class="c1"># Number of k-points in the BZ</span>
-
-<span class="c1"># Define reciprocal lattice G-vectors (1D case, generalize for 2D/3D)</span>
-<span class="n">G_max</span> <span class="o">=</span> <span class="mi">3</span>  <span class="c1"># Cutoff for reciprocal lattice vectors</span>
-<span class="n">G_vals</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="n">G_max</span><span class="p">,</span> <span class="n">G_max</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="n">a</span>  <span class="c1"># Reciprocal lattice vectors</span>
-
-<span class="c1"># Define k-space grid in the first BZ</span>
-<span class="n">k_vals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="n">a</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="n">a</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-</pre></div>
-</div>
-</section>
-<section id="step-2-define-the-coulomb-interaction-using-g-vectors">
-<h2>Step 2: Define the Coulomb Interaction Using G-Vectors<a class="headerlink" href="#step-2-define-the-coulomb-interaction-using-g-vectors" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Define screened Coulomb potential in reciprocal space with G-expansion</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">coulomb_potential_G</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">epsilon</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span> <span class="n">q_TF</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">G</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">1e-6</span><span class="p">,</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="mf">1.44</span> <span class="o">/</span> <span class="p">(</span><span class="n">epsilon</span> <span class="o">*</span> <span class="p">(</span><span class="n">G</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">q_TF</span><span class="o">**</span><span class="mi">2</span><span class="p">)),</span> <span class="mi">0</span><span class="p">)</span>
-
-<span class="c1"># Compute V(G) for all reciprocal lattice vectors</span>
-<span class="n">V_G</span> <span class="o">=</span> <span class="n">coulomb_potential_G</span><span class="p">(</span><span class="n">G_vals</span><span class="p">)</span>
-
-<span class="c1"># Build full V(k, k&#39;) using G-expansion</span>
-<span class="n">V_k_kprime</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">))</span>
-
-<span class="c1"># Sum over G vectors to construct V(k, k&#39;)</span>
-<span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">k_vals</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_prime</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">k_vals</span><span class="p">):</span>
-        <span class="n">G_diff</span> <span class="o">=</span> <span class="n">k_prime</span> <span class="o">-</span> <span class="n">k</span>  <span class="c1"># Find the corresponding G</span>
-        <span class="n">closest_G</span> <span class="o">=</span> <span class="n">G_vals</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">G_vals</span> <span class="o">-</span> <span class="n">G_diff</span><span class="p">))]</span>  <span class="c1"># Find closest G in grid</span>
-        <span class="n">V_k_kprime</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">coulomb_potential_G</span><span class="p">(</span><span class="n">closest_G</span><span class="p">)</span>
-</pre></div>
-</div>
-</section>
-<section id="step-3-transform-coulomb-potential-to-bloch-basis">
-<h2>Step 3: Transform Coulomb Potential to Bloch Basis<a class="headerlink" href="#step-3-transform-coulomb-potential-to-bloch-basis" title="Link to this heading">#</a></h2>
-<p>Now, we project this onto the tight-binding Bloch states.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Construct TB Hamiltonian in k-space</span>
-<span class="n">t</span> <span class="o">=</span> <span class="mf">1.0</span>  <span class="c1"># Hopping parameter</span>
-<span class="n">H_k</span> <span class="o">=</span> <span class="o">-</span><span class="mi">2</span> <span class="o">*</span> <span class="n">t</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">k_vals</span> <span class="o">*</span> <span class="n">a</span><span class="p">)</span>  <span class="c1"># Dispersion for 1D tight-binding model</span>
-
-<span class="c1"># Diagonalize to get eigenvalues and eigenvectors</span>
-<span class="n">E_tb</span> <span class="o">=</span> <span class="n">H_k</span>
-<span class="n">U_tb</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>  <span class="c1"># Identity because this is a simple model</span>
-
-<span class="c1"># Transform Coulomb interaction to Bloch basis</span>
-<span class="n">V_Bloch</span> <span class="o">=</span> <span class="n">U_tb</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">V_k_kprime</span> <span class="o">@</span> <span class="n">U_tb</span>
-</pre></div>
-</div>
-</section>
-<section id="step-4-construct-and-solve-the-bse-hamiltonian">
-<h2>Step 4: Construct and Solve the BSE Hamiltonian<a class="headerlink" href="#step-4-construct-and-solve-the-bse-hamiltonian" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Select conduction and valence bands</span>
-<span class="n">v_idx</span><span class="p">,</span> <span class="n">c_idx</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span>  <span class="c1"># First valence, last conduction band</span>
-<span class="n">E_v</span><span class="p">,</span> <span class="n">E_c</span> <span class="o">=</span> <span class="n">E_tb</span><span class="p">[</span><span class="n">v_idx</span><span class="p">],</span> <span class="n">E_tb</span><span class="p">[</span><span class="n">c_idx</span><span class="p">]</span>
-
-<span class="c1"># Construct BSE Hamiltonian</span>
-<span class="n">H_BSE</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">E_c</span> <span class="o">-</span> <span class="n">E_v</span><span class="p">)</span> <span class="o">-</span> <span class="n">V_Bloch</span>
-
-<span class="c1"># Solve for excitonic states</span>
-<span class="n">exciton_energies</span><span class="p">,</span> <span class="n">exciton_states</span> <span class="o">=</span> <span class="n">la</span><span class="o">.</span><span class="n">eigh</span><span class="p">(</span><span class="n">H_BSE</span><span class="p">)</span>
-
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Exciton Binding Energies:&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">exciton_energies</span><span class="p">[:</span><span class="mi">5</span><span class="p">],</span> <span class="mi">3</span><span class="p">))</span>
-</pre></div>
-</div>
-</section>
 </section>
 
     <script type="text/x-thebe-config">
@@ -565,35 +396,6 @@ We now incorporate the G-vector expansion into the BSE Coulomb potential.</p></l
             </div>
             
             
-              
-                <dialog id="pst-secondary-sidebar-modal"></dialog>
-                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
-
-
-  <div class="sidebar-secondary-item">
-  <div class="page-toc tocsection onthispage">
-    <i class="fa-solid fa-list"></i> Contents
-  </div>
-  <nav class="bd-toc-nav page-toc">
-    <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Model Coulomb potential</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#code-examples">Code examples</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#coulomb-potential-reciprocal-space">Coulomb potential reciprocal space</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#structure-factor-and-coulomb-potential-tb-basis">Structure factor and Coulomb potential TB basis</a></li>
-</ul>
-</li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#small-implementation-example">Small implementation example</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-define-the-reciprocal-lattice-and-g-vectors">Step 1: Define the Reciprocal Lattice and G-Vectors</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-define-the-coulomb-interaction-using-g-vectors">Step 2: Define the Coulomb Interaction Using G-Vectors</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-transform-coulomb-potential-to-bloch-basis">Step 3: Transform Coulomb Potential to Bloch Basis</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-4-construct-and-solve-the-bse-hamiltonian">Step 4: Construct and Solve the BSE Hamiltonian</a></li>
-</ul>
-</li>
-</ul>
-
-  </nav></div>
-
-</div></div>
               
             
           </div>

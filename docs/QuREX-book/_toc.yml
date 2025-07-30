@@ -30,6 +30,7 @@ parts:
     - file: content/tutorials/tutorials
       sections:
         - file: content/tutorials/exciton_phonon
+        - file: content/tutorials/LiF-tutorial-RR
 
 - caption: Notebooks
   numbered: false
@@ -38,3 +39,5 @@ parts:
   chapters:
     - file: notebooks/notebooks
     - file: notebooks/exciton_phonon
+    - file: notebooks/LiF-minimal-mssp
+    - file: notebooks/wannierberri  

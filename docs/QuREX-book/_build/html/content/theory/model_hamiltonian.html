@@ -36,7 +36,6 @@
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
-    <link rel="stylesheet" type="text/css" href="../../_static/proof.css?v=b4b7a797" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
@@ -61,8 +60,6 @@
     <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'content/theory/model_hamiltonian';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
@@ -138,7 +135,7 @@
     
   
 
-<a class="navbar-brand logo" href="../intro.html">
+<a class="navbar-brand logo" href="../../intro.html">
   
   
   
@@ -160,7 +157,7 @@
         
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
-                <a class="reference internal" href="../intro.html">
+                <a class="reference internal" href="../../intro.html">
                     QuREX Theoretical Formalism
                 </a>
             </li>
@@ -180,13 +177,20 @@
 </ul>
 </details></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Workflows</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../workflows/workflows.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../workflows/exciton_phonon.html">Exciton-Phonon</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tutorials/tutorials.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/exciton_phonon.html">Exciton-Phonon</a></li>
 
 </ul>
 </details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebooks</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../notebooks/notebooks.html">Notebooks Dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../notebooks/exciton_phonon.html"><span class="xref myst">Exciton-Phonon Tutorial</span></a></li>
+
+
 </ul>
 
     </div>
@@ -334,15 +338,14 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="introduction">
+  <section id="introduction">
 <span id="model-ham-intro"></span><h1>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">#</a></h1>
-<p>The workhorse method for tight-binding (TB) parametrization of the electronic properties of a system is the orthogonal MLWF-TB parametrization <span id="id1">[<a class="reference internal" href="../workflows/exciton_phonon.html#id42" title="Nicola Marzari, Arash A Mostofi, Jonathan R Yates, Ivo Souza, and David Vanderbilt. Maximally localized wannier functions: theory and applications. Reviews of Modern Physics, 84(4):1419, 2012.">Marzari <em>et al.</em>, 2012</a>]</span>. In this approach, the electronic TB Hamiltonian (<span class="math notranslate nohighlight">\(H\)</span>) is extracted from a DFT calculation employing, for example, open-source codes such as Quantum Espresso <span id="id2">[<a class="reference internal" href="../workflows/exciton_phonon.html#id71" title="Paolo Giannozzi, Oliviero Andreussi, Thomas Brumme, Oana Bunau, M Buongiorno Nardelli, Matteo Calandra, Roberto Car, Carlo Cavazzoni, Davide Ceresoli, Matteo Cococcioni, and others. Advanced capabilities for materials modelling with quantum espresso. Journal of physics: Condensed matter, 29(46):465901, 2017.">Giannozzi <em>et al.</em>, 2017</a>, <a class="reference internal" href="../workflows/exciton_phonon.html#id9" title="Paolo Giannozzi, Stefano Baroni, Nicola Bonini, Matteo Calandra, Roberto Car, Carlo Cavazzoni, Davide Ceresoli, Guido L Chiarotti, Matteo Cococcioni, Ismaila Dabo, and others. Quantum espresso: a modular and open-source software project for quantum simulations of materials. Journal of physics: Condensed matter, 21(39):395502, 2009.">Giannozzi <em>et al.</em>, 2009</a>]</span> and Wannier90 <span id="id3">[<a class="reference internal" href="../workflows/exciton_phonon.html#id104" title="Arash A Mostofi, Jonathan R Yates, Young-Su Lee, Ivo Souza, David Vanderbilt, and Nicola Marzari. Wannier90: a tool for obtaining maximally-localised wannier functions. Computer physics communications, 178(9):685–699, 2008.">Mostofi <em>et al.</em>, 2008</a>]</span>.
-In this way, one obtains a real space representation of the electronic Hamiltonian <span class="math notranslate nohighlight">\(H_{nm}(\mathbf{R})\)</span>, where <span class="math notranslate nohighlight">\(\mathbf{R}\)</span> are the lattice vectors lying in a supercell conjugate to the <span class="math notranslate nohighlight">\(\mathbf{k}\)</span>-mesh and <span class="math notranslate nohighlight">\(n\)</span>,<span class="math notranslate nohighlight">\(m\)</span> label the electronic band indices.
-Then, one can use via a Slater-Koster interpolation scheme <span id="id4">[<a class="reference internal" href="../workflows/exciton_phonon.html#id105" title="Jonathan R Yates, Xinjie Wang, David Vanderbilt, and Ivo Souza. Spectral and fermi surface properties from wannier interpolation. Physical Review B—Condensed Matter and Materials Physics, 75(19):195121, 2007.">Yates <em>et al.</em>, 2007</a>]</span> the reciprocal space Hamiltonian (<span class="math notranslate nohighlight">\(H_{nm}(\mathbf{k})\)</span>) on a finer mesh of <span class="math notranslate nohighlight">\(\mathbf{k}\)</span>-points with respect to the one used in the DFT calculation as</p>
-<div class="math notranslate nohighlight" id="equation-hr">
-<span class="eqno">(2)<a class="headerlink" href="#equation-hr" title="Link to this equation">#</a></span>\[
-H_{n m}\left(\mathbf{k}\right)=\sum_{\mathbf{R}} \mathrm{e}^{\mathrm{i} \mathbf{k} \cdot \mathbf{R}} H_{n m}(\mathbf{R}) 
-\]</div>
+<p>The workhorse method for tight-binding (TB) parametrization of the electronic properties of a system is the orthogonal MLWF-TB parametrization <span id="id1">[<a class="reference internal" href="../../wannier_exciton.html#id42" title="Nicola Marzari, Arash A Mostofi, Jonathan R Yates, Ivo Souza, and David Vanderbilt. Maximally localized wannier functions: theory and applications. Reviews of Modern Physics, 84(4):1419, 2012.">Marzari <em>et al.</em>, 2012</a>]</span>. In this approach, the electronic TB Hamiltonian ($H$) is extracted from a DFT calculation employing, for example, open-source codes such as Quantum Espresso <span id="id2">[<a class="reference internal" href="../../wannier_exciton.html#id71" title="Paolo Giannozzi, Oliviero Andreussi, Thomas Brumme, Oana Bunau, M Buongiorno Nardelli, Matteo Calandra, Roberto Car, Carlo Cavazzoni, Davide Ceresoli, Matteo Cococcioni, and others. Advanced capabilities for materials modelling with quantum espresso. Journal of physics: Condensed matter, 29(46):465901, 2017.">Giannozzi <em>et al.</em>, 2017</a>, <a class="reference internal" href="../../wannier_exciton.html#id9" title="Paolo Giannozzi, Stefano Baroni, Nicola Bonini, Matteo Calandra, Roberto Car, Carlo Cavazzoni, Davide Ceresoli, Guido L Chiarotti, Matteo Cococcioni, Ismaila Dabo, and others. Quantum espresso: a modular and open-source software project for quantum simulations of materials. Journal of physics: Condensed matter, 21(39):395502, 2009.">Giannozzi <em>et al.</em>, 2009</a>]</span> and Wannier90 <span id="id3">[<a class="reference internal" href="../../wannier_exciton.html#id104" title="Arash A Mostofi, Jonathan R Yates, Young-Su Lee, Ivo Souza, David Vanderbilt, and Nicola Marzari. Wannier90: a tool for obtaining maximally-localised wannier functions. Computer physics communications, 178(9):685–699, 2008.">Mostofi <em>et al.</em>, 2008</a>]</span>.
+In this way, one obtains a real space representation of the electronic Hamiltonian $H_{nm}(\mathbf{R})$, where $\mathbf{R}$ are the lattice vectors lying in a supercell conjugate to the $\mathbf{k}$-mesh and $n$,$m$ label the electronic band indices.
+Then, one can use via a Slater-Koster interpolation scheme <span id="id4">[<a class="reference internal" href="../../wannier_exciton.html#id105" title="Jonathan R Yates, Xinjie Wang, David Vanderbilt, and Ivo Souza. Spectral and fermi surface properties from wannier interpolation. Physical Review B—Condensed Matter and Materials Physics, 75(19):195121, 2007.">Yates <em>et al.</em>, 2007</a>]</span> the reciprocal space Hamiltonian ($H_{nm}(\mathbf{k})$) on a finer mesh of $\mathbf{k}$-points with respect to the one used in the DFT calculation as</p>
+<p>$$
+H_{n m}\left(\mathbf{k}\right)=\sum_{\mathbf{R}} \mathrm{e}^{\mathrm{i} \mathbf{k} \cdot \mathbf{R}} H_{n m}(\mathbf{R})
+$$ (HR)</p>
 <p>After diagonalization the resulting eigenvectors are in the <strong>Hamilton gauge</strong> <a class="reference internal" href="#"><span class="doc">Introduction</span></a></p>
 </section>
 

@@ -36,7 +36,6 @@
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
-    <link rel="stylesheet" type="text/css" href="../../_static/proof.css?v=b4b7a797" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
@@ -61,7 +60,7 @@
     <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script>window.MathJax = {"tex": {"tags": "none", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'content/theory/bse_equation';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
@@ -138,7 +137,7 @@
     
   
 
-<a class="navbar-brand logo" href="../intro.html">
+<a class="navbar-brand logo" href="../../intro.html">
   
   
   
@@ -160,7 +159,7 @@
         
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
-                <a class="reference internal" href="../intro.html">
+                <a class="reference internal" href="../../intro.html">
                     QuREX Theoretical Formalism
                 </a>
             </li>
@@ -180,13 +179,20 @@
 </ul>
 </details></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Workflows</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../workflows/workflows.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../workflows/exciton_phonon.html">Exciton-Phonon</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tutorials/tutorials.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/exciton_phonon.html">Exciton-Phonon</a></li>
 
 </ul>
 </details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebooks</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../notebooks/notebooks.html">Notebooks Dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../notebooks/exciton_phonon.html"><span class="xref myst">Exciton-Phonon Tutorial</span></a></li>
+
+
 </ul>
 
     </div>
@@ -351,75 +357,69 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="bse-equation">
+  <section id="bse-equation">
 <h1>BSE Equation<a class="headerlink" href="#bse-equation" title="Link to this heading">#</a></h1>
 <section id="bethe-salpeter-equation-bse-and-excitonic-effects">
 <h2>Bethe-Salpeter Equation (BSE) and Excitonic Effects<a class="headerlink" href="#bethe-salpeter-equation-bse-and-excitonic-effects" title="Link to this heading">#</a></h2>
 <p>The <strong>Bethe-Salpeter Equation (BSE)</strong> formalism is widely used in <strong>many-body perturbation theory (MBPT)</strong> to describe <strong>neutral excitations</strong> such as excitons. It extends the <strong><a class="reference internal" href="GW.html"><span class="doc std std-doc">GW</span></a> approximation</strong> by incorporating electron-hole interactions, making it essential for calculating <strong>optical spectra</strong> with excitonic effects.</p>
-<p>On this page, we follow the <strong>Ai-MBPT formalism</strong> <span id="id1">[<a class="reference internal" href="../workflows/exciton_phonon.html#id32" title="Andrea Marini, Conor Hogan, Myrta Grüning, and Daniele Varsano. Yambo: an ab initio tool for excited state calculations. Computer Physics Communications, 180(8):1392–1403, 2009.">Marini <em>et al.</em>, 2009</a>, <a class="reference internal" href="../workflows/exciton_phonon.html#id6" title="Davide Sangalli, Andrea Ferretti, Henrique Miranda, Claudio Attaccalite, Ivan Marri, Elena Cannuccia, P Melo, Margherita Marsili, Fulvio Paleari, Antimo Marrazzo, and others. Many-body perturbation theory calculations using the yambo code. Journal of Physics: Condensed Matter, 31(32):325902, 2019.">Sangalli <em>et al.</em>, 2019</a>]</span> and reference its implementation in the <strong>Yambo code</strong>. The input variables related to this calculation can be found <a class="reference internal" href="../software/yambo/yambo_input_flags.html#bse-bsk"><span class="std std-ref">here</span></a>.</p>
+<p>On this page, we follow the <strong>Ai-MBPT formalism</strong> <span id="id1">[<a class="reference internal" href="../../wannier_exciton.html#id32" title="Andrea Marini, Conor Hogan, Myrta Grüning, and Daniele Varsano. Yambo: an ab initio tool for excited state calculations. Computer Physics Communications, 180(8):1392–1403, 2009.">Marini <em>et al.</em>, 2009</a>, <a class="reference internal" href="../../wannier_exciton.html#id6" title="Davide Sangalli, Andrea Ferretti, Henrique Miranda, Claudio Attaccalite, Ivan Marri, Elena Cannuccia, P Melo, Margherita Marsili, Fulvio Paleari, Antimo Marrazzo, and others. Many-body perturbation theory calculations using the yambo code. Journal of Physics: Condensed Matter, 31(32):325902, 2019.">Sangalli <em>et al.</em>, 2019</a>]</span> and reference its implementation in the <strong>Yambo code</strong>. The input variables related to this calculation can be found <a class="reference internal" href="../software/yambo/yambo_input_flags.html#bse-bsk"><span class="std std-ref">here</span></a>.</p>
 <section id="connection-to-the-optical-limit-and-experiments">
 <h3>Connection to the Optical Limit and Experiments<a class="headerlink" href="#connection-to-the-optical-limit-and-experiments" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p>In the <strong>optical limit</strong> ( q = 0 ), we compute the system’s <strong>response to light absorption</strong>.</p></li>
 <li><p>Solving the BSE provides <strong>exciton energies and wavefunctions</strong>, enabling <strong>optical spectra</strong> calculations, which can be directly compared to experimental <strong>absorption spectra</strong> and <strong>electron energy loss spectra (EELS)</strong>.</p></li>
 </ul>
-<p>In the <strong>Tamm-Dancoff approximation (TDA)</strong>, including <strong>local field effects</strong> <span id="id2">[<a class="reference internal" href="../workflows/exciton_phonon.html#id29" title="Giovanni Onida, Lucia Reining, and Angel Rubio. Electronic excitations: density-functional versus many-body green’s-function approaches. Reviews of modern physics, 74(2):601, 2002.">Onida <em>et al.</em>, 2002</a>]</span>, the <strong>two-particle BSE Hamiltonian</strong> for a <strong>non-spin-polarized system</strong> in the <strong>optical limit</strong> ( q = 0 ) is given by:
+<p>In the <strong>Tamm-Dancoff approximation (TDA)</strong>, including <strong>local field effects</strong> <span id="id2">[<a class="reference internal" href="../../wannier_exciton.html#id29" title="Giovanni Onida, Lucia Reining, and Angel Rubio. Electronic excitations: density-functional versus many-body green’s-function approaches. Reviews of modern physics, 74(2):601, 2002.">Onida <em>et al.</em>, 2002</a>]</span>, the <strong>two-particle BSE Hamiltonian</strong> for a <strong>non-spin-polarized system</strong> in the <strong>optical limit</strong> ( q = 0 ) is given by:
 <code class="docutils literal notranslate"><span class="pre">yambo</span> <span class="pre">-o</span> <span class="pre">b</span> <span class="pre">-k</span> <span class="pre">sex</span> <span class="pre">-b</span></code></p>
 <div class="math notranslate nohighlight">
-\[\begin{split}
-H_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}=
+\[\begin{split}H_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}=
 \left(\epsilon_{c \mathbf{k}}-\epsilon_{v \mathbf{k}}\right) \delta_{c, c^{\prime}} \delta_{v, v^{\prime}} \delta_{\mathbf{k k}^{\prime}} 
 + \left(f_{c \mathbf{k}}-f_{v \mathbf{k}}\right)\left[2 \bar{V}_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}} - 
- W_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}\right]
-\end{split}\]</div>
+ W_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}\right]\end{split}\]</div>
 </section>
 <section id="physical-meaning-of-terms">
 <h3>Physical Meaning of Terms<a class="headerlink" href="#physical-meaning-of-terms" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>The indices <strong>vc𝑘</strong> denote the <strong>valence and conduction bands</strong> at <strong>quasiparticle momentum</strong> <span class="math notranslate nohighlight">\( \mathbf{k} \)</span>. <br />
+<li><p>The indices <strong>vc𝑘</strong> denote the <strong>valence and conduction bands</strong> at <strong>quasiparticle momentum</strong> $ \mathbf{k} $. <br />
 Yambo: <code class="docutils literal notranslate"><span class="pre">%</span> <span class="pre">BSEBands</span> <span class="pre">lower</span> <span class="pre">band</span> <span class="pre">|</span> <span class="pre">upper</span> <span class="pre">band</span> <span class="pre">|</span></code> Bands range.</p></li>
-<li><p>The term <span class="math notranslate nohighlight">\( \left(\epsilon_{c \mathbf{k}}-\epsilon_{v \mathbf{k}}\right) \)</span> represents the <strong>quasiparticle energy differences</strong>.<br />
+<li><p>The term $ \left(\epsilon_{c \mathbf{k}}-\epsilon_{v \mathbf{k}}\right) $ represents the <strong>quasiparticle energy differences</strong>.<br />
 Yambo: <code class="docutils literal notranslate"><span class="pre">KfnQPdb=&quot;</span> <span class="pre">E</span> <span class="pre">&lt;</span> <span class="pre">./SAVE/ndb.QP&quot;</span></code> Location of QP corrections database from previous GW calculation.<br />
 <code class="docutils literal notranslate"><span class="pre">%</span> <span class="pre">KfnQP_E</span> <span class="pre">scissor</span> <span class="pre">|</span> <span class="pre">stretch</span> <span class="pre">conduction</span> <span class="pre">|</span> <span class="pre">stretch</span> <span class="pre">valence</span> </code> QP corrections parameter.</p></li>
 <li><p>The second term,
-<span class="math notranslate nohighlight">\(  \left[2 \bar{V}_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}} - W_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}\right]\)</span>
-forms the <strong>kernel</strong> <span class="math notranslate nohighlight">\( K \)</span>, where the key <strong>electron-hole interactions</strong> occur.</p></li>
+$\left[2 \bar{V}<em>{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}} - W</em>{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}\right]$
+forms the <strong>kernel</strong> $ K $, where the key <strong>electron-hole interactions</strong> occur.</p></li>
 </ul>
 <p>For clarity, we decompose the <strong>kernel</strong> into:</p>
 <ol class="arabic simple">
-<li><p>The <strong>exchange part</strong>: <span class="math notranslate nohighlight">\( K^x \)</span> (Hartree potential contribution).</p></li>
-<li><p>The <strong>correlation part</strong>: <span class="math notranslate nohighlight">\( K^c \)</span> (electron-hole attraction).</p></li>
+<li><p>The <strong>exchange part</strong>: $ K^x $ (Hartree potential contribution).</p></li>
+<li><p>The <strong>correlation part</strong>: $ K^c $ (electron-hole attraction).</p></li>
 </ol>
 </section>
 <section id="exchange-and-correlation-kernels">
 <h3>Exchange and Correlation Kernels<a class="headerlink" href="#exchange-and-correlation-kernels" title="Link to this heading">#</a></h3>
-<p>The <strong>exchange kernel</strong> <span class="math notranslate nohighlight">\( K^x \)</span> accounts for the <strong>repulsive electron-hole exchange interaction</strong>, given by:</p>
+<p>The <strong>exchange kernel</strong> $ K^x $ accounts for the <strong>repulsive electron-hole exchange interaction</strong>, given by:</p>
 <div class="math notranslate nohighlight">
-\[\begin{split}
-K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^x=
+\[\begin{split}K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^x=
 \bar{V}_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}=
 \frac{1}{\Omega} \sum_{\mathbf{G, G^{\prime}} \neq \mathbf{0}} v(\mathbf{G})
 \left\langle c \mathbf{k}\left|e^{i \mathbf{G r}}\right| v \mathbf{k}\right\rangle
-\left\langle v^{\prime} \mathbf{k}^{\prime}\left|e^{-i \mathbf{G}^{\prime} \mathbf{r}}\right| c^{\prime} \mathbf{k}^{\prime}\right\rangle
-\end{split}\]</div>
+\left\langle v^{\prime} \mathbf{k}^{\prime}\left|e^{-i \mathbf{G}^{\prime} \mathbf{r}}\right| c^{\prime} \mathbf{k}^{\prime}\right\rangle\end{split}\]</div>
 <ul class="simple">
 <li><p>Yambo: <code class="docutils literal notranslate"><span class="pre">BSENGexx</span> <span class="pre">=</span> </code> G Compontents of Hartree potential included in the summation.</p></li>
 </ul>
-<p>The <strong>correlation kernel</strong> <span class="math notranslate nohighlight">\( K^c \)</span> describes the <strong>screened electron-hole attraction</strong>, incorporating many-body effects via the <strong>inverse dielectric function</strong> <span class="math notranslate nohighlight">\( \varepsilon^{-1}\)</span>:</p>
+<p>The <strong>correlation kernel</strong> $ K^c $ describes the <strong>screened electron-hole attraction</strong>, incorporating many-body effects via the <strong>inverse dielectric function</strong> $ \varepsilon^{-1}$:</p>
 <div class="math notranslate nohighlight">
-\[\begin{split}
-K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^c=
+\[\begin{split}K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^c=
 W_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}=
 \frac{1}{\Omega} \sum_{\mathbf{G}, \mathbf{G}^{\prime}} v(\mathbf{q}+\mathbf{G}) 
 \varepsilon_{\mathbf{G}, \mathbf{G}^{\prime}}^{-1}(\mathbf{q})
 \left\langle c \mathbf{k}\left|e^{i(\mathbf{q}+\mathbf{G}) \mathbf{r}}\right| c^{\prime} \mathbf{k}^{\prime}\right\rangle 
 \left\langle v^{\prime} \mathbf{k}^{\prime}\left|e^{-i\left(\mathbf{q}+\mathbf{G}^{\prime}\right) \mathbf{r}}\right| v \mathbf{k}\right\rangle 
-\delta_{\mathbf{q k}-\mathbf{k}^{\prime}}
-\end{split}\]</div>
+\delta_{\mathbf{q k}-\mathbf{k}^{\prime}}\end{split}\]</div>
 <ul class="simple">
 <li><p>Yambo: <code class="docutils literal notranslate"><span class="pre">BSENGblk</span> <span class="pre">=</span> </code>G included in sum for the screened interaction</p></li>
 </ul>
-<p>The <strong>inverse dielectric screening matrix</strong> <span class="math notranslate nohighlight">\( \varepsilon_{\mathbf{G}, \mathbf{G}^{\prime}}^{-1}(\mathbf{q})\)</span> in <span class="math notranslate nohighlight">\( K^c \)</span> is computed using the <strong>Yambo flag <code class="docutils literal notranslate"><span class="pre">em1s</span></code></strong>.
+<p>The <strong>inverse dielectric screening matrix</strong> $ \varepsilon_{\mathbf{G}, \mathbf{G}^{\prime}}^{-1}(\mathbf{q})$ in $ K^c $ is computed using the <strong>Yambo flag <code class="docutils literal notranslate"><span class="pre">em1s</span></code></strong>.
 This dielectric screening is also a crucial component of the <strong>GW approximation</strong>, linking the BSE formalism to quasiparticle corrections.</p>
 <ul class="simple">
 <li><p>Yambo: <code class="docutils literal notranslate"><span class="pre">%BandsRnXs</span> <span class="pre">lower</span> <span class="pre">bound</span> <span class="pre">|</span> <span class="pre">upper</span> <span class="pre">bound</span> <span class="pre">|</span></code> bands included in screening. <br />
@@ -431,43 +431,37 @@ This dielectric screening is also a crucial component of the <strong>GW approxim
 <section id="eigenvalue-problem">
 <h2>Eigenvalue problem<a class="headerlink" href="#eigenvalue-problem" title="Link to this heading">#</a></h2>
 <p>The BSE can be recast into an eigenvalue equation</p>
-<div class="math notranslate nohighlight" id="equation-eq-bse">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-bse" title="Link to this equation">#</a></span>\[\begin{split}
-\left(\varepsilon_{c\mathbf{k}}
+<div class="math notranslate nohighlight">
+\[\begin{split}\left(\varepsilon_{c\mathbf{k}}
 -\varepsilon_{\mathrm{v}\mathbf{k-Q}}\right)
 A_{\mathrm{vc}\mathbf{k}}^\lambda+\sum_{\mathbf{k}^{\prime}
 c^{\prime} \mathbf{v}^{\prime}}
 K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{\mathbf{Q}}
 A_{v^{\prime} c^{\prime} \mathbf{k}^{\prime}}^{\lambda,\mathbf{Q}}
-=E_{\lambda,\mathbf{Q}} A_{v c \mathbf{k}}^{\lambda,\mathbf{Q}}
-\end{split}\]</div>
-<p><span class="math notranslate nohighlight">\(A^{\lambda}_{v c\mathbf{k}}\)</span> are the eigenvectors, <span class="math notranslate nohighlight">\(E_{\lambda,\mathbf{Q}}\)</span> are
-the energy of excitonic transition <span class="math notranslate nohighlight">\(\lambda\)</span>, and <span class="math notranslate nohighlight">\(\mathbf{Q}\)</span> the momentum transfer between an electron at <span class="math notranslate nohighlight">\(\mathbf{k}\)</span> and a hole at <span class="math notranslate nohighlight">\(\mathbf{k-Q}\)</span>.</p>
+=E_{\lambda,\mathbf{Q}} A_{v c \mathbf{k}}^{\lambda,\mathbf{Q}}\end{split}\]</div>
+<p>$A^{\lambda}<em>{v c\mathbf{k}}$ are the eigenvectors, $E</em>{\lambda,\mathbf{Q}}$ are
+the energy of excitonic transition $\lambda$, and $\mathbf{Q}$ the momentum transfer between an electron at $\mathbf{k}$ and a hole at $\mathbf{k-Q}$.</p>
 <ul class="simple">
 <li><p>Yambo: <code class="docutils literal notranslate"><span class="pre">%</span> <span class="pre">BLongDir</span> <span class="pre">x</span> <span class="pre">|</span> <span class="pre">y</span> <span class="pre">|</span> <span class="pre">z</span> <span class="pre">|</span> <span class="pre">%</span></code> Direction of longitudinal perturbation.</p></li>
 </ul>
 </section>
 <section id="diagonalisation">
 <h2>Diagonalisation<a class="headerlink" href="#diagonalisation" title="Link to this heading">#</a></h2>
-<p>The macroscopic dielectric function is obtained with the excitonic eigenvectors <span class="math notranslate nohighlight">\(A^{\lambda}\)</span> and eigenenergies <span class="math notranslate nohighlight">\(E_{\lambda}\)</span>:</p>
+<p>The macroscopic dielectric function is obtained with the excitonic eigenvectors $A^{\lambda}$ and eigenenergies $E_{\lambda}$:</p>
 <div class="math notranslate nohighlight">
-\[
-\varepsilon_{M}(\omega) = 1 - \text{lim}_{\mathbf{q} \rightarrow 0} \dfrac{8\pi}{|\mathbf{q}|^2\Omega} \sum_{v,c,\mathbf{k}}\sum_{v^{\prime},c^{\prime},\mathbf{k}^{\prime}}
+\[\varepsilon_{M}(\omega) = 1 - \text{lim}_{\mathbf{q} \rightarrow 0} \dfrac{8\pi}{|\mathbf{q}|^2\Omega} \sum_{v,c,\mathbf{k}}\sum_{v^{\prime},c^{\prime},\mathbf{k}^{\prime}}
 \left\langle v \mathbf{k} - \mathbf{q}\left|e^{-i\mathbf{q r}}\right| c \mathbf{k}\right\rangle
 \left\langle c^{\prime} \mathbf{k}^{\prime} - \mathbf{q}\left|e^{i\mathbf{q r}}\right| v^{\prime} \mathbf{k^{\prime}- q}\right\rangle
-\sum_{\lambda}\dfrac{A^{\lambda}_{cv\mathbf{k}}(A^{\lambda}_{cv\mathbf{k}})^*}{\omega - E_{\lambda}}
-\]</div>
-<p>The kernel <span class="math notranslate nohighlight">\(K\)</span> contains the electron-hole Coulomb interaction matrix elements, which is the sum of the direct <span class="math notranslate nohighlight">\(K^{d}\)</span> and exchange <span class="math notranslate nohighlight">\(K^{x}\)</span> terms and can be written as</p>
-<div class="math notranslate nohighlight">
-\[\begin{split}
-K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{\mathbf{Q}} =     K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{d,\mathbf{Q}} +     K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{x,\mathbf{Q}}
-\end{split}\]</div>
-<p>Following the prescription of <span id="id3">[<a class="reference internal" href="../workflows/exciton_phonon.html#id43" title="Alexandre C Dias, Julian FRV Silveira, and Fanyao Qu. Wantibexos: a wannier based tight binding code for electronic band structure, excitonic and optoelectronic properties of solids. Computer Physics Communications, 285:108636, 2023.">Dias <em>et al.</em>, 2023</a>]</span> we can compute the direct and exchange terms as follows:</p>
-<div class="math notranslate nohighlight" id="equation-eq-kernels">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-kernels" title="Link to this equation">#</a></span>\[\begin{split}
-K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{d,\mathbf{Q}} = V(\mathbf{k}-\mathbf{k}^\prime)\langle c,\mathbf{k}|c^\prime,\mathbf{k}^\prime\rangle\langle v^\prime, \mathbf{k}^\prime-\mathbf{Q}|v\mathbf{k-Q}\rangle \\
-K_{\substack{\mathrm{vc\mathbf{k}} \\ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{x,\mathbf{Q}} = -V(\mathbf{k}-\mathbf{k}^\prime)\langle c,\mathbf{k}| v,\mathbf{k}-\mathbf{Q}\rangle\langle v^\prime, \mathbf{k}^\prime-\mathbf{Q}|c^\prime\mathbf{k}^\prime-\mathbf{Q}\rangle \\    
-\end{split}\]</div>
+\sum_{\lambda}\dfrac{A^{\lambda}_{cv\mathbf{k}}(A^{\lambda}_{cv\mathbf{k}})^*}{\omega - E_{\lambda}}\]</div>
+<p>The kernel $K$ contains the electron-hole Coulomb interaction matrix elements, which is the sum of the direct $K^{d}$ and exchange $K^{x}$ terms and can be written as</p>
+<p>$$
+K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{\mathbf{Q}} =     K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{d,\mathbf{Q}} +     K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{x,\mathbf{Q}}
+$$</p>
+<p>Following the prescription of <span id="id3">[<a class="reference internal" href="../../wannier_exciton.html#id43" title="Alexandre C Dias, Julian FRV Silveira, and Fanyao Qu. Wantibexos: a wannier based tight binding code for electronic band structure, excitonic and optoelectronic properties of solids. Computer Physics Communications, 285:108636, 2023.">Dias <em>et al.</em>, 2023</a>]</span> we can compute the direct and exchange terms as follows:</p>
+<p>$$
+K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{d,\mathbf{Q}} = V(\mathbf{k}-\mathbf{k}^\prime)\langle c,\mathbf{k}|c^\prime,\mathbf{k}^\prime\rangle\langle v^\prime, \mathbf{k}^\prime-\mathbf{Q}|v\mathbf{k-Q}\rangle \
+K_{\substack{\mathrm{vc\mathbf{k}} \ v^{\prime} c^{\prime} \mathbf{k}^{\prime}}}^{x,\mathbf{Q}} = -V(\mathbf{k}-\mathbf{k}^\prime)\langle c,\mathbf{k}| v,\mathbf{k}-\mathbf{Q}\rangle\langle v^\prime, \mathbf{k}^\prime-\mathbf{Q}|c^\prime\mathbf{k}^\prime-\mathbf{Q}\rangle \<br />
+$$ (eq:kernels)</p>
 </section>
 </section>
 

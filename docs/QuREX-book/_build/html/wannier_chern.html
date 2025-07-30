@@ -36,7 +36,6 @@
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
-    <link rel="stylesheet" type="text/css" href="_static/proof.css?v=b4b7a797" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
@@ -61,8 +60,6 @@
     <script async="async" src="_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'wannier_chern';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -179,6 +176,21 @@
 <li class="toctree-l2"><a class="reference internal" href="content/software/yambo/yambo_input_flags.html">Yambo Input variables</a></li>
 </ul>
 </details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="content/tutorials/tutorials.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/tutorials/exciton_phonon.html">Exciton-Phonon</a></li>
+
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebooks</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="notebooks/notebooks.html">Notebooks Dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/exciton_phonon.html"><span class="xref myst">Exciton-Phonon Tutorial</span></a></li>
+
+
 </ul>
 
     </div>
@@ -338,27 +350,26 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="exciton-chern-number">
+  <section id="exciton-chern-number">
 <h1>Exciton Chern number<a class="headerlink" href="#exciton-chern-number" title="Link to this heading">#</a></h1>
-<p>To compute the exciton Chern number we need to compute overlaps between the periodic part of the exciton wavefunction. In particular, we have to compute the overlap between at point <span class="math notranslate nohighlight">\(Q\)</span> belonging to a plane and <span class="math notranslate nohighlight">\(Q+\Delta Q_{\hat{i}}/\)</span>, where <span class="math notranslate nohighlight">\(\Delta Q_{\hat{i}}\)</span> (<span class="math notranslate nohighlight">\( i = 1,2\)</span>) denote an increment (of size <span class="math notranslate nohighlight">\(1/N_{Q_{i}}\)</span>) along the first or second direction in the plane.
+<p>To compute the exciton Chern number we need to compute overlaps between the periodic part of the exciton wavefunction. In particular, we have to compute the overlap between at point $Q$ belonging to a plane and $Q+\Delta Q_{\hat{i}}/$, where $\Delta Q_{\hat{i}}$ ($ i = 1,2$) denote an increment (of size $1/N_{Q_{i}}$) along the first or second direction in the plane.
 This method is referred as the plaquette method.</p>
-<p>We want to compute the exciton overlap <span class="math notranslate nohighlight">\(M_{\lambda,\lambda^\prime}(\mathbf{Q},\mathbf{Q}+\mathbf{Q_{\hat{i}}})\)</span>, in terms of the exciton wavefunction written in the center of mass of the exciton <span class="math notranslate nohighlight">\(F_{\lambda,\mathbf{Q}}(\mathbf{R},\mathbf{r})\)</span> <span id="id1">[<a class="reference internal" href="workflows/exciton_phonon.html#id103" title="Jonah B Haber, Diana Y Qiu, Felipe H da Jornada, and Jeffrey B Neaton. Maximally localized exciton wannier functions for solids. Physical Review B, 108(12):125118, 2023.">Haber <em>et al.</em>, 2023</a>]</span> .</p>
-<div class="math notranslate nohighlight" id="equation-plaquette-overlap">
-<span class="eqno">()<a class="headerlink" href="#equation-plaquette-overlap" title="Link to this equation">#</a></span>\[\begin{split}
+<p>We want to compute the exciton overlap $M_{\lambda,\lambda^\prime}(\mathbf{Q},\mathbf{Q}+\mathbf{Q_{\hat{i}}})$, in terms of the exciton wavefunction written in the center of mass of the exciton $F_{\lambda,\mathbf{Q}}(\mathbf{R},\mathbf{r})$ <span id="id1">[<a class="reference internal" href="wannier_exciton.html#id103" title="Jonah B Haber, Diana Y Qiu, Felipe H da Jornada, and Jeffrey B Neaton. Maximally localized exciton wannier functions for solids. Physical Review B, 108(12):125118, 2023.">Haber <em>et al.</em>, 2023</a>]</span> .</p>
+<p>$$
 \begin{align}
-M_{\lambda \lambda^{\prime}}(\mathbf{Q}, \mathbf{Q}+\mathbf{Q_{\hat{i}}})= 
-&amp; \langle F_{\lambda,\mathbf{Q}},\mathbf{Q}+\mathbf{Q_{\hat{i}}}\rangle \nonumber \\
-&amp; =\sum_{c v \mathbf{k}, c^{\prime} v^{\prime} \mathbf{k}^{\prime}} A_{c v \mathbf{k}+\alpha \mathbf{Q}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}^{\prime}+\alpha \mathbf{Q}+\mathbf{Q_{\hat{i}}}}^{\lambda^{\prime} \mathbf{Q}+\mathbf{Q_{\hat{i}}}} \nonumber\\
-&amp;\left[\int_{\mathrm{uc}} d \mathbf{R} \int_{V_{\mathbf{k}}} d \mathbf{r} \chi_{c v \mathbf{k} \mathbf{Q}}^{(\alpha, \beta) \star}(\mathbf{R}, \mathbf{r}) \chi_{c^{\prime} v^{\prime} \mathbf{k}^{\prime} \mathbf{Q}+\mathbf{Q_{\hat{i}}}}^{(\alpha, \mathbf{Q}}(\mathbf{R}, \mathbf{r})\right] \nonumber\\
-&amp; =\sum_{c v c^{\prime} v^{\prime} \mathbf{k}} A_{c v \mathbf{k}+\alpha \mathbf{Q}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}^{\prime}+\alpha \mathbf{Q}+\alpha \mathbf{Q_{\hat{i}}}}^{\lambda^{\prime} \mathbf{Q}+\mathbf{Q_{\hat{i}}}}\left\langle u_{c \mathbf{k}+\alpha \mathbf{Q}} \mid u_{c^{\prime} \mathbf{k}+\alpha \mathbf{Q}+\alpha \mathbf{Q_{\hat{i}}}} \right\rangle_{\mathrm{uc}} \nonumber \\
-&amp;\left\langle u_{v^{\prime} \mathbf{k}-\beta \mathbf{Q}-\beta \mathbf{Q_{\hat{i}}}} \mid u_{v \mathbf{k}-\beta \mathbf{Q}}\right\rangle_{\mathrm{uc}} \delta_{\mathbf{k} \mathbf{k}^{\prime}} \nonumber\\
+M_{\lambda \lambda^{\prime}}(\mathbf{Q}, \mathbf{Q}+\mathbf{Q_{\hat{i}}})=
+&amp; \langle F_{\lambda,\mathbf{Q}},\mathbf{Q}+\mathbf{Q_{\hat{i}}}\rangle \nonumber \
+&amp; =\sum_{c v \mathbf{k}, c^{\prime} v^{\prime} \mathbf{k}^{\prime}} A_{c v \mathbf{k}+\alpha \mathbf{Q}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}^{\prime}+\alpha \mathbf{Q}+\mathbf{Q_{\hat{i}}}}^{\lambda^{\prime} \mathbf{Q}+\mathbf{Q_{\hat{i}}}} \nonumber\
+&amp;\left[\int_{\mathrm{uc}} d \mathbf{R} \int_{V_{\mathbf{k}}} d \mathbf{r} \chi_{c v \mathbf{k} \mathbf{Q}}^{(\alpha, \beta) \star}(\mathbf{R}, \mathbf{r}) \chi_{c^{\prime} v^{\prime} \mathbf{k}^{\prime} \mathbf{Q}+\mathbf{Q_{\hat{i}}}}^{(\alpha, \mathbf{Q}}(\mathbf{R}, \mathbf{r})\right] \nonumber\
+&amp; =\sum_{c v c^{\prime} v^{\prime} \mathbf{k}} A_{c v \mathbf{k}+\alpha \mathbf{Q}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}^{\prime}+\alpha \mathbf{Q}+\alpha \mathbf{Q_{\hat{i}}}}^{\lambda^{\prime} \mathbf{Q}+\mathbf{Q_{\hat{i}}}}\left\langle u_{c \mathbf{k}+\alpha \mathbf{Q}} \mid u_{c^{\prime} \mathbf{k}+\alpha \mathbf{Q}+\alpha \mathbf{Q_{\hat{i}}}} \right\rangle_{\mathrm{uc}} \nonumber \
+&amp;\left\langle u_{v^{\prime} \mathbf{k}-\beta \mathbf{Q}-\beta \mathbf{Q_{\hat{i}}}} \mid u_{v \mathbf{k}-\beta \mathbf{Q}}\right\rangle_{\mathrm{uc}} \delta_{\mathbf{k} \mathbf{k}^{\prime}} \nonumber\
 &amp; =\sum_{c v c^{\prime} v^{\prime} \mathbf{k}} A_{c v \mathbf{k}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}+\alpha \mathbf{Q_{\hat{i}}}}^{\lambda^{\prime} \mathbf{Q}+\mathbf{Q_{\hat{i}}}}\left\langle u_{c \mathbf{k}} \mid u_{c^{\prime} \mathbf{k}+\alpha \mathbf{Q_{\hat{i}}}}\right\rangle_{\mathrm{uc}}\left\langle u_{v^{\prime} \mathbf{k}-\mathbf{Q}-\beta \mathbf{Q_{\hat{i}}}} \mid u_{v \mathbf{k}-\mathbf{Q}}\right\rangle_{\mathrm{uc}} .
 \end{align}
-\end{split}\]</div>
+$$ (plaquette-overlap)</p>
 <span style="color:darkgreen">
 </span>.
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="references">
+<section id="references">
 <h1>References<a class="headerlink" href="#references" title="Link to this heading">#</a></h1>
 <div class="docutils container" id="id2">
 <div role="list" class="citation-list">

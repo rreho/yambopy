@@ -36,7 +36,6 @@
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
-    <link rel="stylesheet" type="text/css" href="_static/proof.css?v=b4b7a797" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
@@ -61,8 +60,6 @@
     <script async="async" src="_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'wannier_exciton';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -179,6 +176,21 @@
 <li class="toctree-l2"><a class="reference internal" href="content/software/yambo/yambo_input_flags.html">Yambo Input variables</a></li>
 </ul>
 </details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="content/tutorials/tutorials.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/tutorials/exciton_phonon.html">Exciton-Phonon</a></li>
+
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebooks</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="notebooks/notebooks.html">Notebooks Dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/exciton_phonon.html"><span class="xref myst">Exciton-Phonon Tutorial</span></a></li>
+
+
 </ul>
 
     </div>
@@ -338,49 +350,46 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="exciton-wavefunction-reference-frame-and-periodic-part">
+  <section id="exciton-wavefunction-reference-frame-and-periodic-part">
 <h1>Exciton wavefunction - reference frame and periodic part<a class="headerlink" href="#exciton-wavefunction-reference-frame-and-periodic-part" title="Link to this heading">#</a></h1>
-<p>The exciton wavefunction <span class="math notranslate nohighlight">\(\Psi_{\lambda\mathbf{Q}} (\mathbf{r_e},\mathbf{r_h})\)</span> can be expressed as sum over noninteracting electron-hole products:</p>
-<div class="math notranslate nohighlight" id="equation-exc-wavefunction-electronframe">
-<span class="eqno">()<a class="headerlink" href="#equation-exc-wavefunction-electronframe" title="Link to this equation">#</a></span>\[
-\Psi_{\lambda \mathbf{Q}}\left(\mathbf{r}_e, \mathbf{r}_h\right)=\sum_{c v \mathbf{k}} A_{c v \mathbf{k}}^{\lambda \mathbf{Q}} \psi_{c \mathbf{k}}\left(\mathbf{r}_e\right) \psi_{v \mathbf{k}-\mathbf{Q}}^{\star}\left(\mathbf{r}_h\right)
-\]</div>
-<p>where <span class="math notranslate nohighlight">\(\Psi_{n\mathbf{k}} = e^{i\mathbf{k}\cdot{\mathbf{r}}} u_{n\mathbf{k}}(\mathbf{r})\)</span> denotes a single-particle Bloch state with band index <span class="math notranslate nohighlight">\(n\)</span> and crystal momentum <span class="math notranslate nohighlight">\(\mathbf{k}\)</span>.</p>
-<p>We want to compute the exciton overlap <span class="math notranslate nohighlight">\(M_{\lambda,\lambda^\prime}(\mathbf{Q},\mathbf{B})\)</span>, in terms of the exciton wavefunction written in the center of mass of the exciton <span class="math notranslate nohighlight">\(F_{\lambda,\mathbf{Q}}(\mathbf{R},\mathbf{r})\)</span> <span id="id1">[<a class="reference internal" href="workflows/exciton_phonon.html#id103" title="Jonah B Haber, Diana Y Qiu, Felipe H da Jornada, and Jeffrey B Neaton. Maximally localized exciton wannier functions for solids. Physical Review B, 108(12):125118, 2023.">Haber <em>et al.</em>, 2023</a>]</span> .</p>
-<div class="math notranslate nohighlight" id="equation-exc-overlap-general">
-<span class="eqno">()<a class="headerlink" href="#equation-exc-overlap-general" title="Link to this equation">#</a></span>\[\begin{split}
+<p>The exciton wavefunction $\Psi_{\lambda\mathbf{Q}} (\mathbf{r_e},\mathbf{r_h})$ can be expressed as sum over noninteracting electron-hole products:</p>
+<p>$$
+\Psi_{\lambda \mathbf{Q}}\left(\mathbf{r}<em>e, \mathbf{r}<em>h\right)=\sum</em>{c v \mathbf{k}} A</em>{c v \mathbf{k}}^{\lambda \mathbf{Q}} \psi_{c \mathbf{k}}\left(\mathbf{r}<em>e\right) \psi</em>{v \mathbf{k}-\mathbf{Q}}^{\star}\left(\mathbf{r}_h\right)
+$$ (exc-wavefunction-electronframe)</p>
+<p>where $\Psi_{n\mathbf{k}} = e^{i\mathbf{k}\cdot{\mathbf{r}}} u_{n\mathbf{k}}(\mathbf{r})$ denotes a single-particle Bloch state with band index $n$ and crystal momentum $\mathbf{k}$.</p>
+<p>We want to compute the exciton overlap $M_{\lambda,\lambda^\prime}(\mathbf{Q},\mathbf{B})$, in terms of the exciton wavefunction written in the center of mass of the exciton $F_{\lambda,\mathbf{Q}}(\mathbf{R},\mathbf{r})$ <span id="id1">[<a class="reference internal" href="#id103" title="Jonah B Haber, Diana Y Qiu, Felipe H da Jornada, and Jeffrey B Neaton. Maximally localized exciton wannier functions for solids. Physical Review B, 108(12):125118, 2023.">Haber <em>et al.</em>, 2023</a>]</span> .</p>
+<p>$$
 \begin{align}
-M_{\lambda \lambda^{\prime}}(\mathbf{Q}, \mathbf{B})= 
-&amp; \langle F_{\lambda,\mathbf{Q}},F_{\lambda,\mathbf{Q+B}}\rangle \nonumber \nonumber\\
-&amp; =\sum_{c v \mathbf{k}, c^{\prime} v^{\prime} \mathbf{k}^{\prime}} A_{c v \mathbf{k}+\alpha \mathbf{Q}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}^{\prime}+\alpha \mathbf{Q}+\alpha \mathbf{B}}^{\lambda^{\prime} \mathbf{Q}+\mathbf{B}} \nonumber\\
-&amp;\left[\int_{\mathrm{uc}} d \mathbf{R} \int_{V_{\mathbf{k}}} d \mathbf{r} \chi_{c v \mathbf{k} \mathbf{Q}}^{(\alpha, \beta) \star}(\mathbf{R}, \mathbf{r}) \chi_{c^{\prime} v^{\prime} \mathbf{k}^{\prime} \mathbf{Q}+\mathbf{B}}^{(\alpha, \mathbf{Q}}(\mathbf{R}, \mathbf{r})\right] \nonumber\\
-&amp; =\sum_{c v c^{\prime} v^{\prime} \mathbf{k}} A_{c v \mathbf{k}+\alpha \mathbf{Q}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}^{\prime}+\alpha \mathbf{Q}+\alpha \mathbf{B}}^{\lambda^{\prime} \mathbf{Q}+\mathbf{B}} \nonumber\\
-&amp;\left\langle u_{c \mathbf{k}+\alpha \mathbf{Q}} \mid u_{c^{\prime} \mathbf{k}+\alpha \mathbf{Q}+\alpha \mathbf{B}}\right\rangle_{\mathrm{uc}}\left\langle u_{v^{\prime} \mathbf{k}-\beta \mathbf{Q}-\beta \mathbf{B}} \mid u_{v \mathbf{k}-\beta \mathbf{Q}}\right\rangle_{\mathrm{uc}} \delta_{\mathbf{k} \mathbf{k}^{\prime}} \nonumber\\
+M_{\lambda \lambda^{\prime}}(\mathbf{Q}, \mathbf{B})=
+&amp; \langle F_{\lambda,\mathbf{Q}},F_{\lambda,\mathbf{Q+B}}\rangle \nonumber \nonumber\
+&amp; =\sum_{c v \mathbf{k}, c^{\prime} v^{\prime} \mathbf{k}^{\prime}} A_{c v \mathbf{k}+\alpha \mathbf{Q}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}^{\prime}+\alpha \mathbf{Q}+\alpha \mathbf{B}}^{\lambda^{\prime} \mathbf{Q}+\mathbf{B}} \nonumber\
+&amp;\left[\int_{\mathrm{uc}} d \mathbf{R} \int_{V_{\mathbf{k}}} d \mathbf{r} \chi_{c v \mathbf{k} \mathbf{Q}}^{(\alpha, \beta) \star}(\mathbf{R}, \mathbf{r}) \chi_{c^{\prime} v^{\prime} \mathbf{k}^{\prime} \mathbf{Q}+\mathbf{B}}^{(\alpha, \mathbf{Q}}(\mathbf{R}, \mathbf{r})\right] \nonumber\
+&amp; =\sum_{c v c^{\prime} v^{\prime} \mathbf{k}} A_{c v \mathbf{k}+\alpha \mathbf{Q}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}^{\prime}+\alpha \mathbf{Q}+\alpha \mathbf{B}}^{\lambda^{\prime} \mathbf{Q}+\mathbf{B}} \nonumber\
+&amp;\left\langle u_{c \mathbf{k}+\alpha \mathbf{Q}} \mid u_{c^{\prime} \mathbf{k}+\alpha \mathbf{Q}+\alpha \mathbf{B}}\right\rangle_{\mathrm{uc}}\left\langle u_{v^{\prime} \mathbf{k}-\beta \mathbf{Q}-\beta \mathbf{B}} \mid u_{v \mathbf{k}-\beta \mathbf{Q}}\right\rangle_{\mathrm{uc}} \delta_{\mathbf{k} \mathbf{k}^{\prime}} \nonumber\
 &amp; =\sum_{c v c^{\prime} v^{\prime} \mathbf{k}} A_{c v \mathbf{k}}^{\lambda \mathbf{Q} \star} A_{c^{\prime} v^{\prime} \mathbf{k}+\alpha \mathbf{B}}^{\lambda^{\prime},\mathbf{Q}
 +\mathbf{B}}\left\langle u_{c \mathbf{k}} \mid u_{c^{\prime} \mathbf{k}+\alpha \mathbf{B}}\right\rangle_{\mathrm{uc}}\left\langle u_{v^{\prime} \mathbf{k}-\mathbf{Q}-\beta \mathbf{B}} \mid u_{v \mathbf{k}-\mathbf{Q}}\right\rangle_{\mathrm{uc}}
 \end{align}
-\end{split}\]</div>
-<p>which for <span class="math notranslate nohighlight">\(\alpha = \beta = 1/2\)</span> becomes:</p>
-<div class="math notranslate nohighlight" id="equation-exc-overlap">
-<span class="eqno">()<a class="headerlink" href="#equation-exc-overlap" title="Link to this equation">#</a></span>\[\begin{split}
+$$ (exc-overlap-general)</p>
+<p>which for $\alpha = \beta = 1/2$ becomes:</p>
+<p>$$
 \begin{align}
-M_{\lambda \lambda^{\prime}}(\mathbf{Q}, \mathbf{B})= 
-&amp; \langle F_{\lambda,\mathbf{Q}},F_{\lambda,\mathbf{Q+B}}\rangle \nonumber \\
-= &amp; \sum_{c c^{\prime} v v^{\prime} \mathbf{k}}\left[A_{c v \mathbf{k}}^{\lambda \mathbf{Q}}\right]^{\star} A_{c^{\prime} v^{\prime} \mathbf{k}+\mathbf{B} / 2}^{\lambda^{\prime} \mathbf{Q}+\mathbf{B}} \\
+M_{\lambda \lambda^{\prime}}(\mathbf{Q}, \mathbf{B})=
+&amp; \langle F_{\lambda,\mathbf{Q}},F_{\lambda,\mathbf{Q+B}}\rangle \nonumber \
+= &amp; \sum_{c c^{\prime} v v^{\prime} \mathbf{k}}\left[A_{c v \mathbf{k}}^{\lambda \mathbf{Q}}\right]^{\star} A_{c^{\prime} v^{\prime} \mathbf{k}+\mathbf{B} / 2}^{\lambda^{\prime} \mathbf{Q}+\mathbf{B}} \
 \nonumber
 &amp; \times \left \langle u_{c \mathbf{k}} \mid u_{c^{\prime} \mathbf{k}+\mathbf{B} / 2}\right\rangle_{\mathrm{uc}} \left \langle u_{v^{\prime} \mathbf{k}-\mathbf{Q}-\mathbf{B} / 2} \mid u_{v \mathbf{k}-\mathbf{Q}}\right\rangle_{\mathrm{uc}}
 \end{align}
-\end{split}\]</div>
+$$ (exc-overlap)</p>
 <p>The exciton wavefunction in the center of mass reference frame is given by
-$<span class="math notranslate nohighlight">\(
+$$
 \begin{align}
 F_{\lambda,\mathbf{Q}}
-= &amp; \frac{1}{\sqrt{N_{\mathbf{k}}}} \sum_{c v \mathbf{k}} A_{c v \mathbf{k}+\mathbf{Q} / 2}^{\lambda \mathbf{Q}} e^{i \mathbf{k} \cdot \mathbf{r}} \\
+= &amp; \frac{1}{\sqrt{N_{\mathbf{k}}}} \sum_{c v \mathbf{k}} A_{c v \mathbf{k}+\mathbf{Q} / 2}^{\lambda \mathbf{Q}} e^{i \mathbf{k} \cdot \mathbf{r}} \
 &amp; \times u_{c \mathbf{k}+\mathbf{Q} / 2}(\mathbf{R}+\mathbf{r} / 2) u_{v \mathbf{k}-\mathbf{Q} / 2}^{\star}(\mathbf{R}-\mathbf{r} / 2)
 \end{align}
-\)</span>$ (exc-wf-periodic)</p>
+$$ (exc-wf-periodic)</p>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="references">
+<section id="references">
 <h1>References<a class="headerlink" href="#references" title="Link to this heading">#</a></h1>
 <div class="docutils container" id="id2">
 <div role="list" class="citation-list">

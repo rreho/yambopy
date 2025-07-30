@@ -36,7 +36,6 @@
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
-    <link rel="stylesheet" type="text/css" href="_static/proof.css?v=b4b7a797" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
@@ -61,8 +60,6 @@
     <script async="async" src="_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'wannier_basis';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -179,6 +176,21 @@
 <li class="toctree-l2"><a class="reference internal" href="content/software/yambo/yambo_input_flags.html">Yambo Input variables</a></li>
 </ul>
 </details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="content/tutorials/tutorials.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/tutorials/exciton_phonon.html">Exciton-Phonon</a></li>
+
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebooks</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="notebooks/notebooks.html">Notebooks Dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/exciton_phonon.html"><span class="xref myst">Exciton-Phonon Tutorial</span></a></li>
+
+
 </ul>
 
     </div>
@@ -346,128 +358,115 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="wannier-representation">
+  <section id="wannier-representation">
 <h1>Wannier representation<a class="headerlink" href="#wannier-representation" title="Link to this heading">#</a></h1>
-<p>We refer to <span class="math notranslate nohighlight">\(|u_{n\mathbf{k}}&gt;\)</span> as the Bloch function computed by the DFT code (i.e. QE).
+<p>We refer to $|u_{n\mathbf{k}}&gt;$ as the Bloch function computed by the DFT code (i.e. QE).
 We distinguish between Bloch-like functions in the <code class="docutils literal notranslate"><span class="pre">Wannier</span> <span class="pre">basis</span></code>, <strong>Wannier gauge</strong> (which for our purpose can be any localized basis set), and the ones expressed in a Bloch-like band basis <strong>Hamiltonian gauge</strong>.</p>
 <ul>
 <li><p><strong>Wannier gauge</strong>:</p>
-<div class="math notranslate nohighlight" id="equation-eq-wannier-bloch-function">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-wannier-bloch-function" title="Link to this equation">#</a></span>\[
-  |u^{W}_{n\mathbf{k}}&gt; = \sum_{\mathbf{R}} e^{-i \mathbf{k} \cdot(\hat{\mathbf{r}}-\mathbf{R})}|\mathbf{R} n\rangle
-  \]</div>
+<p>$$
+|u^{W}<em>{n\mathbf{k}}&gt; = \sum</em>{\mathbf{R}} e^{-i \mathbf{k} \cdot(\hat{\mathbf{r}}-\mathbf{R})}|\mathbf{R} n\rangle
+$$ (eq-wannier-bloch-function)</p>
 </li>
 <li><p><strong>Hamiltonian gauge</strong>:</p>
-<div class="math notranslate nohighlight" id="equation-eq-hamiltonian-bloch-function">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-hamiltonian-bloch-function" title="Link to this equation">#</a></span>\[
-    \left|u_{n \mathbf{k}}^{(\mathrm{H})}\right\rangle=\sum_m\left|u_{m \mathbf{k}}^{(\mathrm{W})}\right\rangle U_{m n}(\mathbf{k})
-  \]</div>
+<p>$$
+\left|u_{n \mathbf{k}}^{(\mathrm{H})}\right\rangle=\sum_m\left|u_{m \mathbf{k}}^{(\mathrm{W})}\right\rangle U_{m n}(\mathbf{k})
+$$ (eq-hamiltonian-bloch-function)</p>
 </li>
 </ul>
-<p>where <span class="math notranslate nohighlight">\(U\)</span> is the unitary matrix that diagonalizes <a class="reference internal" href="#equation-eq-wannier-bloch-function">()</a></p>
+<p>where $U$ is the unitary matrix that diagonalizes <code class="xref eq docutils literal notranslate"><span class="pre">eq-wannier-bloch-function</span></code></p>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="representations-in-band-theory">
+<section id="representations-in-band-theory">
 <h1>Representations in band theory<a class="headerlink" href="#representations-in-band-theory" title="Link to this heading">#</a></h1>
-<p>In 1962 Blount <span id="id1">[<a class="reference internal" href="workflows/exciton_phonon.html#id107" title="EI Blount. Formalisms of band theory. In Solid state physics, volume 13, pages 305–373. Elsevier, 1962.">Blount, 1962</a>]</span> reviewed the formalism of band theory, pointing out the existence of different representations for electronic states: the crystal momentum representation (CMR) developed by Adams, the Kohn-Luttinger CMR or Modified CMR (MCMR), and the Wannier one.
+<p>In 1962 Blount <span id="id1">[<a class="reference internal" href="wannier_exciton.html#id107" title="EI Blount. Formalisms of band theory. In Solid state physics, volume 13, pages 305–373. Elsevier, 1962.">Blount, 1962</a>]</span> reviewed the formalism of band theory, pointing out the existence of different representations for electronic states: the crystal momentum representation (CMR) developed by Adams, the Kohn-Luttinger CMR or Modified CMR (MCMR), and the Wannier one.
 In this work, he focused on the Schroedinger, Pauli and Dirac Hamiltonians but his results are easily generalizable for applications with DFT Hamiltonians:</p>
 <ol class="arabic simple">
-<li><p>Schrödinger: <span class="math notranslate nohighlight">\(H=\frac{p^2}{2 m}+U\)</span></p></li>
-<li><p>Pauli: <span class="math notranslate nohighlight">\(H=\frac{p^2}{2 m}+\frac{e^2}{4 m^2 c^2} \mathbf{p} \cdot \mathbf{\sigma} \times \nabla \mathrm{U}+U\)</span></p></li>
-<li><p>Dirac: <span class="math notranslate nohighlight">\(H=c \boldsymbol{\alpha} \cdot \mathrm{p}+U\)</span></p></li>
+<li><p>Schrödinger: $H=\frac{p^2}{2 m}+U$</p></li>
+<li><p>Pauli: $H=\frac{p^2}{2 m}+\frac{e^2}{4 m^2 c^2} \mathbf{p} \cdot \mathbf{\sigma} \times \nabla \mathrm{U}+U$</p></li>
+<li><p>Dirac: $H=c \boldsymbol{\alpha} \cdot \mathrm{p}+U$</p></li>
 </ol>
 <p>The velocity operator is defined as:</p>
-<div class="math notranslate nohighlight">
-\[
+<p>$$
 \mathfrak{B}=-\frac{i}{\hbar}[\mathbf{x}, H]=\nabla_{\mathbf{p}}H
-\]</div>
-<p>When U is a periodic potential, Bloch’s theorem applies and we classify eigenfunctions <span class="math notranslate nohighlight">\(\psi_{n\mathbf{k}}(\mathbf{x})\)</span> by (<span class="math notranslate nohighlight">\(\mathbf{k}, n\)</span>) quantum numbers</p>
-<div class="math notranslate nohighlight" id="equation-eq-blochwf">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-blochwf" title="Link to this equation">#</a></span>\[
+$$</p>
+<p>When U is a periodic potential, Bloch’s theorem applies and we classify eigenfunctions $\psi_{n\mathbf{k}}(\mathbf{x})$ by ($\mathbf{k}, n$) quantum numbers</p>
+<p>$$
 \psi_{n \mathbf{k}}(\mathbf{x})=e^{(i \mathbf{k} \cdot \mathbf{x})} u_{n \mathbf{k}}(\mathbf{x})
-\]</div>
-<p>with <span class="math notranslate nohighlight">\(u_{n\mathbf{k}}\)</span> the periodic part of the Bloch function.</p>
-<p>We write an EOM for <span class="math notranslate nohighlight">\(u\)</span> in the form
-$<span class="math notranslate nohighlight">\(
+$$ (eq:blochwf)
+with $u_{n\mathbf{k}}$ the periodic part of the Bloch function.</p>
+<p>We write an EOM for $u$ in the form
+$$
 H(\mathbf{k}) u_{n \mathbf{k}}(\mathbf{x})=E_n(\mathbf{k}) u_{n \mathbf{k}}(\mathbf{x})
-\)</span>$ (eq:EOM-u)</p>
+$$ (eq:EOM-u)</p>
 <p>with</p>
-<div class="math notranslate nohighlight">
-\[
+<p>$$
 H(\mathbf{k}) \equiv e^{(-i \mathbf{k} \mathbf{x})} H e^{(i \mathbf{k} \cdot \mathbf{x})}
-\]</div>
-<p>The solutions of <code class="xref eq docutils literal notranslate"><span class="pre">eq:EOM-u</span></code> are peridic. Hence, <span class="math notranslate nohighlight">\(\psi_{n\mathbf{k}}\)</span> and the functions <span class="math notranslate nohighlight">\(\psi_{n\mathbf{k+K}}\)</span> span the same space and it is enough
-to restrict ourself to the first unit cell in <span class="math notranslate nohighlight">\(\mathbf{k}\)</span> k space.</p>
+$$</p>
+<p>The solutions of <code class="xref eq docutils literal notranslate"><span class="pre">eq:EOM-u</span></code> are peridic. Hence, $\psi_{n\mathbf{k}}$ and the functions $\psi_{n\mathbf{k+K}}$ span the same space and it is enough
+to restrict ourself to the first unit cell in $\mathbf{k}$ k space.</p>
 <section id="wavefunction-representations">
 <h2>Wavefunction representations<a class="headerlink" href="#wavefunction-representations" title="Link to this heading">#</a></h2>
-<p>Any wavefunction <span class="math notranslate nohighlight">\(f(\mathbf{x})\)</span> can be expressed as a suporposition of Bloch functions with <span class="math notranslate nohighlight">\(f_{n}(\mathbf{k})\)</span> the wavefunction in the CMR.</p>
-<div class="math notranslate nohighlight">
-\[
+<p>Any wavefunction $f(\mathbf{x})$ can be expressed as a suporposition of Bloch functions with $f_{n}(\mathbf{k})$ the wavefunction in the CMR.</p>
+<p>$$
 f(\mathbf{x})=\sum_n \int d^3 k f_n(\mathbf{k}) \psi_{n \mathbf{k}}(\mathbf{x})
-\]</div>
+$$</p>
 <section id="crystal-momentum">
 <h3>Crystal momentum<a class="headerlink" href="#crystal-momentum" title="Link to this heading">#</a></h3>
-<p>The crystal momentum operator is <span class="math notranslate nohighlight">\(\mathbf{p_e} = \hbar \mathbf{k}\)</span>, with matrix elements</p>
-<div class="math notranslate nohighlight" id="equation-eq-crystalmomentumoperator">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-crystalmomentumoperator" title="Link to this equation">#</a></span>\[
+<p>The crystal momentum operator is $\mathbf{p_e} = \hbar \mathbf{k}$, with matrix elements</p>
+<p>$$
 \mathbf{p}_{e,nn^\prime}(\mathbf{k},\mathbf{k^\prime})
-\]</div>
+$$ (eq:crystalmomentumoperator)</p>
 <p>while the true momentum has the form</p>
-<div class="math notranslate nohighlight">
-\[
-\mathbf{p}_{n n^{\prime}}\left(\mathbf{k}, \mathbf{k}^{\prime}\right)=\delta\left(\mathbf{k}-\mathbf{k}^{\prime}\right)\left(\hbar \mathbf{k} \delta_{n n^{\prime}}-i \hbar \int_{uc} u_n{ }^* \frac{\partial u_{n^{\prime}}}{\partial \mathbf{x}} d \tau\right)
-\]</div>
-<p>the velocity operator has matrix elements <span class="math notranslate nohighlight">\(\mathfrak{B}_{nn\prime}(\mathbf{k})\)</span> (<span class="math notranslate nohighlight">\(n=n\prime\)</span> are intrabands, <span class="math notranslate nohighlight">\(n\neq n^\prime\)</span> are interband)$</p>
+<p>$$
+\mathbf{p}<em>{n n^{\prime}}\left(\mathbf{k}, \mathbf{k}^{\prime}\right)=\delta\left(\mathbf{k}-\mathbf{k}^{\prime}\right)\left(\hbar \mathbf{k} \delta</em>{n n^{\prime}}-i \hbar \int_{uc} u_n{ }^* \frac{\partial u_{n^{\prime}}}{\partial \mathbf{x}} d \tau\right)
+$$</p>
+<p>the velocity operator has matrix elements $\mathfrak{B}_{nn\prime}(\mathbf{k})$ ($n=n\prime$ are intrabands, $n\neq n^\prime$ are interband)$</p>
 </section>
 <section id="position-representation">
 <h3>Position representation<a class="headerlink" href="#position-representation" title="Link to this heading">#</a></h3>
-<p>Representation of <span class="math notranslate nohighlight">\(\mathbf{x}\)</span> involevs evaluating the following integral</p>
-<div class="math notranslate nohighlight" id="equation-eq-posrepr1">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-posrepr1" title="Link to this equation">#</a></span>\[\begin{split}
+<p>Representation of $\mathbf{x}$ involevs evaluating the following integral</p>
+<p>$$
 \begin{align}
-I_{n^{\prime} \mathbf{k}^{\prime} n \mathbf{k}} &amp; =\int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* \mathbf{x} \psi_{n \mathbf{k}} d^3 \mathbf{x} \nonumber\\
-&amp;=\delta_{n n^{\prime}} \sum_R e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{R}\right]} \mathbf{R}+ \nonumber \\
+I_{n^{\prime} \mathbf{k}^{\prime} n \mathbf{k}} &amp; =\int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* \mathbf{x} \psi_{n \mathbf{k}} d^3 \mathbf{x} \nonumber\
+&amp;=\delta_{n n^{\prime}} \sum_R e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{R}\right]} \mathbf{R}+ \nonumber \
 &amp;\sum e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{R}\right]} \xi_{n^{\prime} n}(\mathbf{k})
 \end{align}
-\end{split}\]</div>
+$$ (eq:posrepr1)</p>
 <p>where we used the usual trick of replacing the integration over the whole cell with the integration over the unit cell.</p>
-<div class="math notranslate nohighlight">
-\[
-\mathbf{\xi}_{n^{\prime} n}(k)=\int_{uc} u_{n^{\prime} \mathbf{k}}^* \mathbf{x} u_{n \mathbf{k}} d \tau
-\]</div>
+<p>$$
+\mathbf{\xi}<em>{n^{\prime} n}(k)=\int</em>{uc} u_{n^{\prime} \mathbf{k}}^* \mathbf{x} u_{n \mathbf{k}} d \tau
+$$</p>
 <p><code class="xref eq docutils literal notranslate"><span class="pre">eq:posrep1</span></code> has two problems. The first term is not well defined and the second term depends on the choice of the unit cell.
 A different approach could be to write</p>
-<div class="math notranslate nohighlight" id="equation-eq-posrepr2">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-posrepr2" title="Link to this equation">#</a></span>\[\begin{split}
+<p>$$
 \begin{align}
-I_{n^{\prime} \mathbf{k}^{\prime} n \mathbf{k}} &amp; =\int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* x^\mu \psi_{n \mathbf{k}} d^3 \mathbf{x} \nonumber\\
-&amp;=-i \frac{\partial}{\partial k^\mu} \int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* \psi_{n \mathbf{k}} d^3 x \\
-&amp; \quad+\int u_{n^{\prime} \mathbf{k}^{\prime}}^* e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{x}\right]} \frac{i \partial u_{n \mathbf{k}}}{\partial k^\mu} d^3 x \\
+I_{n^{\prime} \mathbf{k}^{\prime} n \mathbf{k}} &amp; =\int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* x^\mu \psi_{n \mathbf{k}} d^3 \mathbf{x} \nonumber\
+&amp;=-i \frac{\partial}{\partial k^\mu} \int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* \psi_{n \mathbf{k}} d^3 x \
+&amp; \quad+\int u_{n^{\prime} \mathbf{k}^{\prime}}^* e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{x}\right]} \frac{i \partial u_{n \mathbf{k}}}{\partial k^\mu} d^3 x \
 &amp; =-i \frac{\partial}{\partial k^\mu} \Delta_{n^{\prime} n}\left(\mathbf{k}^{\prime}, \mathbf{k}\right)+\delta\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \mathfrak{X}_{n^{\prime} n}^\mu(\mathbf{k})
 \end{align}
-\end{split}\]</div>
-<p>where <span class="math notranslate nohighlight">\(\Delta_{n^{\prime} n}\left(\mathbf{k}^{\prime}, \mathbf{k}\right)=\int \psi_{x^{\prime} \mathbf{k}^{\prime}}^* \psi_{n \mathbf{k}} d^8 x\)</span> (cannot be assumed to be <span class="math notranslate nohighlight">\(\delta\)</span> because we need to differentiate) and <span class="math notranslate nohighlight">\(\mathfrak{X}_{n^{\prime} n}(\mathbf{k})=\int u_{n^{\prime} \mathbf{k}}^* i \frac{\partial u_{n \mathbf{k}}}{\partial \mathbf{k}} d \tau\)</span>.</p>
-<p><span class="math notranslate nohighlight">\(\mathfrak{X}\)</span> is not sensitive to the choice of the unit cell but <span class="math notranslate nohighlight">\(\psi_{n\mathbf{k}}\)</span> is not differential w.r.t. <span class="math notranslate nohighlight">\(\mathbf{k}\)</span></p>
-<p>For all pratical calculation representation <a class="reference internal" href="#equation-eq-posrepr2">()</a> is used.
-The action of <span class="math notranslate nohighlight">\(\mathbf{x}\)</span> on a generic wave function <span class="math notranslate nohighlight">\(f_n(\mathbf{k})\)</span> is given by:</p>
-<div class="math notranslate nohighlight" id="equation-eq-xoff">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-xoff" title="Link to this equation">#</a></span>\[
-\mathbf{x} = i\frac{\partial}{f_n}{\mathbf{k}} + \sum \mathbf{\mathfrak{X}}_{nn^\prime}f_{n^\prime}
-\]</div>
-<p>The arbitrariness in <span class="math notranslate nohighlight">\(\mathfrak{X}\)</span> arises from the arbitrary phase phactor <span class="math notranslate nohighlight">\(e^{-i\phi(\mathbf{k})}\)</span>in the <span class="math notranslate nohighlight">\(u's\)</span>: <span class="math notranslate nohighlight">\(i\frac{\partial u}{\partial\mathbf{k}}\rightarrow e^{-i\phi}(i\frac{\partial u}{\partial{\mathbf{k}}} + u\frac{\partial \phi}{\partial \mathbf{k}})\)</span>
-Under this phase transformation <span class="math notranslate nohighlight">\(\mathfrak{X}_{nn^\prime}\)</span> does not transform as an operator for <span class="math notranslate nohighlight">\(n = n^\prime\)</span>.</p>
-<div class="math notranslate nohighlight">
-\[\begin{split}
+$$ (eq:posrepr2)</p>
+<p>where $\Delta_{n^{\prime} n}\left(\mathbf{k}^{\prime}, \mathbf{k}\right)=\int \psi_{x^{\prime} \mathbf{k}^{\prime}}^* \psi_{n \mathbf{k}} d^8 x$ (cannot be assumed to be $\delta$ because we need to differentiate) and $\mathfrak{X}<em>{n^{\prime} n}(\mathbf{k})=\int u</em>{n^{\prime} \mathbf{k}}^* i \frac{\partial u_{n \mathbf{k}}}{\partial \mathbf{k}} d \tau$.</p>
+<p>$\mathfrak{X}$ is not sensitive to the choice of the unit cell but $\psi_{n\mathbf{k}}$ is not differential w.r.t. $\mathbf{k}$</p>
+<p>For all pratical calculation representation <code class="xref eq docutils literal notranslate"><span class="pre">eq:posrepr2</span></code> is used.
+The action of $\mathbf{x}$ on a generic wave function $f_n(\mathbf{k})$ is given by:</p>
+<p>$$
+\mathbf{x} = i\frac{\partial}{f_n}{\mathbf{k}} + \sum \mathbf{\mathfrak{X}}<em>{nn^\prime}f</em>{n^\prime}
+$$ (eq:xoff)</p>
+<p>The arbitrariness in $\mathfrak{X}$ arises from the arbitrary phase phactor $e^{-i\phi(\mathbf{k})}$in the $u’s$: $i\frac{\partial u}{\partial\mathbf{k}}\rightarrow e^{-i\phi}(i\frac{\partial u}{\partial{\mathbf{k}}} + u\frac{\partial \phi}{\partial \mathbf{k}})$
+Under this phase transformation $\mathfrak{X}_{nn^\prime}$ does not transform as an operator for $n = n^\prime$.</p>
+<p>$$
 \begin{align}
-&amp; \mathfrak{X}_{n n^{\prime}}^{\prime}=\exp \left(i \varphi_n\right) \mathfrak{X}_{n n^{\prime}} \exp \left(-i \varphi_{n^{\prime}}\right) \quad n \neq n^{\prime} \\
-&amp; \mathfrak{X}_{n n}^{\prime}=\mathfrak{X}_{n n}+\frac{\partial \varphi_n}{\partial \mathbf{k}}
+&amp; \mathfrak{X}<em>{n n^{\prime}}^{\prime}=\exp \left(i \varphi_n\right) \mathfrak{X}</em>{n n^{\prime}} \exp \left(-i \varphi_{n^{\prime}}\right) \quad n \neq n^{\prime} \
+&amp; \mathfrak{X}<em>{n n}^{\prime}=\mathfrak{X}</em>{n n}+\frac{\partial \varphi_n}{\partial \mathbf{k}}
 \end{align}
-\end{split}\]</div>
-<p>However, a compensantory term in the first term of <a class="reference internal" href="#equation-eq-xoff">()</a> makes it in such a way that <span class="math notranslate nohighlight">\(\mathbf{x_c} = i\partial/\partial\mathbf{k} + \mathfrak{X}_{nn}\)</span> transforms like an operator. So that <span class="math notranslate nohighlight">\(\mathbf{x} = \)</span>\mathbf{x}_c<span class="math notranslate nohighlight">\( + X\)</span> is a well defined position operator.
-<span class="math notranslate nohighlight">\(X\)</span> has only interband matrix elements equal to <span class="math notranslate nohighlight">\(\mathfrak{X}_{nn^\prime}\)</span> (<span class="math notranslate nohighlight">\(n\neq n^\prime\)</span>)</p>
+$$</p>
+<p>However, a compensantory term in the first term of <code class="xref eq docutils literal notranslate"><span class="pre">eq:xoff</span></code> makes it in such a way that $\mathbf{x_c} = i\partial/\partial\mathbf{k} + \mathfrak{X}_{nn}$ transforms like an operator. So that $\mathbf{x} = $\mathbf{x}<em>c$ + X$ is a well defined position operator.
+$X$ has only interband matrix elements equal to $\mathfrak{X}</em>{nn^\prime}$ ($n\neq n^\prime$)</p>
 </section>
 </section>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="references">
+<section id="references">
 <h1>References<a class="headerlink" href="#references" title="Link to this heading">#</a></h1>
 <div class="docutils container" id="id2">
 <div role="list" class="citation-list">

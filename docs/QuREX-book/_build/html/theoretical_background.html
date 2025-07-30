@@ -36,7 +36,6 @@
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
-    <link rel="stylesheet" type="text/css" href="_static/proof.css?v=b4b7a797" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
@@ -61,8 +60,6 @@
     <script async="async" src="_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>window.MathJax = {"tex": {"tags": "all", "tagSide": "right", "tagIndent": "0.8em"}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'theoretical_background';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -179,6 +176,21 @@
 <li class="toctree-l2"><a class="reference internal" href="content/software/yambo/yambo_input_flags.html">Yambo Input variables</a></li>
 </ul>
 </details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="content/tutorials/tutorials.html">Workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/tutorials/exciton_phonon.html">Exciton-Phonon</a></li>
+
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebooks</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="notebooks/notebooks.html">Notebooks Dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/exciton_phonon.html"><span class="xref myst">Exciton-Phonon Tutorial</span></a></li>
+
+
 </ul>
 
     </div>
@@ -340,7 +352,7 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="theoretical-background">
+  <section id="theoretical-background">
 <h1>Theoretical Background<a class="headerlink" href="#theoretical-background" title="Link to this heading">#</a></h1>
 <p>This section includes the theoretical formalism needed to understand and contribute to the QuREX library:</p>
 <ul class="simple">
@@ -351,25 +363,25 @@
 <li><p><a class="reference internal" href="wannier_exciton.html"><span class="doc std std-doc">Wannier Exciton</span></a></p></li>
 </ul>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="introduction">
+<section id="introduction">
 <h1>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">#</a></h1>
-<p>Density Functional Theory (DFT)<span id="id1">[<a class="reference internal" href="workflows/exciton_phonon.html#id61" title="Walter Kohn and Lu Jeu Sham. Self-consistent equations including exchange and correlation effects. Physical review, 140(4A):A1133, 1965.">Kohn and Sham, 1965</a>]</span> is the workhorse for materials simulation in nanoscale systems. It allows for a quantitative microscopic description of the ground state properties of a material from first principles, where only the crystal structure and the atomic species are provided as an input to the code.
-The excited state cannot be described by DFT, and the Ab Initio Many Body Perturbation theory (Ai-MBPT)<span id="id2">[<a class="reference internal" href="workflows/exciton_phonon.html#id29" title="Giovanni Onida, Lucia Reining, and Angel Rubio. Electronic excitations: density-functional versus many-body green’s-function approaches. Reviews of modern physics, 74(2):601, 2002.">Onida <em>et al.</em>, 2002</a>]</span> has been developed, over the years, to predict the physical properties of excited systems under an external perturbing potential.
-The Ai-MBPT exploits perturbation techniques based on a Green’s function approach, for the description of the propagation of particles. Theoretical spectroscopy studies the interaction of matter with light. State of the art calculations employs the GW approximation and Bethe-Salpeter equation (BSE) to describe the absorption spectra of materials, and these methods have been developed in open-source codes such as <code class="docutils literal notranslate"><span class="pre">yambo</span></code> <span id="id3">[<a class="reference internal" href="workflows/exciton_phonon.html#id32" title="Andrea Marini, Conor Hogan, Myrta Grüning, and Daniele Varsano. Yambo: an ab initio tool for excited state calculations. Computer Physics Communications, 180(8):1392–1403, 2009.">Marini <em>et al.</em>, 2009</a>, <a class="reference internal" href="workflows/exciton_phonon.html#id6" title="Davide Sangalli, Andrea Ferretti, Henrique Miranda, Claudio Attaccalite, Ivan Marri, Elena Cannuccia, P Melo, Margherita Marsili, Fulvio Paleari, Antimo Marrazzo, and others. Many-body perturbation theory calculations using the yambo code. Journal of Physics: Condensed Matter, 31(32):325902, 2019.">Sangalli <em>et al.</em>, 2019</a>]</span>.
-Simulating complex systems (such as van der Waals heterostructures) requires large simulation cells (hundred atoms), hence becoming extremely demanding in terms of computational time and memory. These challenges can be overcome either with the advent of the exascale era (1018 double precision floating point operations per second) or through the development of more cost-effective theoretical models that maintain high accuracy and precision, such as Wannierized models ~<span id="id4">[<a class="reference internal" href="workflows/exciton_phonon.html#id42" title="Nicola Marzari, Arash A Mostofi, Jonathan R Yates, Ivo Souza, and David Vanderbilt. Maximally localized wannier functions: theory and applications. Reviews of Modern Physics, 84(4):1419, 2012.">Marzari <em>et al.</em>, 2012</a>]</span>. The Wannierization technique offers a refined description of quantum Hilbert space using a subset of localized basis functions, significantly reducing computational expenses. While many ground state DFT codes currently integrate the Wannierization process, a similar integration is desirable for first principles ab initio codes that treat excited systems and are capable of including correlations and excitonic effects~<span id="id5">[<a class="reference internal" href="workflows/exciton_phonon.html#id103" title="Jonah B Haber, Diana Y Qiu, Felipe H da Jornada, and Jeffrey B Neaton. Maximally localized exciton wannier functions for solids. Physical Review B, 108(12):125118, 2023.">Haber <em>et al.</em>, 2023</a>]</span>.
-The description of excitonic effect requires constructing and solving the two-particle Hamiltonian (<span class="math notranslate nohighlight">\(H_{2p}\)</span>, composed of the difference in energy between the valence and conduction electronic states and the many body kernel <span class="math notranslate nohighlight">\(K\)</span>.
+<p>Density Functional Theory (DFT)<span id="id1">[<a class="reference internal" href="wannier_exciton.html#id61" title="Walter Kohn and Lu Jeu Sham. Self-consistent equations including exchange and correlation effects. Physical review, 140(4A):A1133, 1965.">Kohn and Sham, 1965</a>]</span> is the workhorse for materials simulation in nanoscale systems. It allows for a quantitative microscopic description of the ground state properties of a material from first principles, where only the crystal structure and the atomic species are provided as an input to the code.
+The excited state cannot be described by DFT, and the Ab Initio Many Body Perturbation theory (Ai-MBPT)<span id="id2">[<a class="reference internal" href="wannier_exciton.html#id29" title="Giovanni Onida, Lucia Reining, and Angel Rubio. Electronic excitations: density-functional versus many-body green’s-function approaches. Reviews of modern physics, 74(2):601, 2002.">Onida <em>et al.</em>, 2002</a>]</span> has been developed, over the years, to predict the physical properties of excited systems under an external perturbing potential.
+The Ai-MBPT exploits perturbation techniques based on a Green’s function approach, for the description of the propagation of particles. Theoretical spectroscopy studies the interaction of matter with light. State of the art calculations employs the GW approximation and Bethe-Salpeter equation (BSE) to describe the absorption spectra of materials, and these methods have been developed in open-source codes such as <code class="docutils literal notranslate"><span class="pre">yambo</span></code> <span id="id3">[<a class="reference internal" href="wannier_exciton.html#id32" title="Andrea Marini, Conor Hogan, Myrta Grüning, and Daniele Varsano. Yambo: an ab initio tool for excited state calculations. Computer Physics Communications, 180(8):1392–1403, 2009.">Marini <em>et al.</em>, 2009</a>, <a class="reference internal" href="wannier_exciton.html#id6" title="Davide Sangalli, Andrea Ferretti, Henrique Miranda, Claudio Attaccalite, Ivan Marri, Elena Cannuccia, P Melo, Margherita Marsili, Fulvio Paleari, Antimo Marrazzo, and others. Many-body perturbation theory calculations using the yambo code. Journal of Physics: Condensed Matter, 31(32):325902, 2019.">Sangalli <em>et al.</em>, 2019</a>]</span>.
+Simulating complex systems (such as van der Waals heterostructures) requires large simulation cells (hundred atoms), hence becoming extremely demanding in terms of computational time and memory. These challenges can be overcome either with the advent of the exascale era (1018 double precision floating point operations per second) or through the development of more cost-effective theoretical models that maintain high accuracy and precision, such as Wannierized models ~<span id="id4">[<a class="reference internal" href="wannier_exciton.html#id42" title="Nicola Marzari, Arash A Mostofi, Jonathan R Yates, Ivo Souza, and David Vanderbilt. Maximally localized wannier functions: theory and applications. Reviews of Modern Physics, 84(4):1419, 2012.">Marzari <em>et al.</em>, 2012</a>]</span>. The Wannierization technique offers a refined description of quantum Hilbert space using a subset of localized basis functions, significantly reducing computational expenses. While many ground state DFT codes currently integrate the Wannierization process, a similar integration is desirable for first principles ab initio codes that treat excited systems and are capable of including correlations and excitonic effects~<span id="id5">[<a class="reference internal" href="wannier_exciton.html#id103" title="Jonah B Haber, Diana Y Qiu, Felipe H da Jornada, and Jeffrey B Neaton. Maximally localized exciton wannier functions for solids. Physical Review B, 108(12):125118, 2023.">Haber <em>et al.</em>, 2023</a>]</span>.
+The description of excitonic effect requires constructing and solving the two-particle Hamiltonian ($H_{2p}$, composed of the difference in energy between the valence and conduction electronic states and the many body kernel $K$.
 The many body kernel account for the direct and exchange Coulomb interaction, screened by the dielectric environment. The computation of the dielectric screening function from first-principles is computational expensive in terms of memory and computing time. Approaches, based on model dielectric functions and Coulomb potentials, have been employed in the literature but we find out to fail for the description of complex systems such as 2D van der Waals (vDW) transition metal dichalcogenides heterostructures (TMDs HS).
-In this manuscript, we review the theoretical framework of maximally localized exciton Wannier functions (MLXWF) and describe the implementation done in the <a class="reference external" href="https://github.com/rreho/yambopy">yambopy Python library</a>. Our method allows to build and solve the <span class="math notranslate nohighlight">\({H_{2p}}\)</span> via model Coulomb potentials or extracting the many body kernel <span class="math notranslate nohighlight">\({K}\)</span> from first-principles.</p>
+In this manuscript, we review the theoretical framework of maximally localized exciton Wannier functions (MLXWF) and describe the implementation done in the <a class="reference external" href="https://github.com/rreho/yambopy">yambopy Python library</a>. Our method allows to build and solve the ${H_{2p}}$ via model Coulomb potentials or extracting the many body kernel ${K}$ from first-principles.</p>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="gauge-issues-in-non-linear-optical-responses">
+<section id="gauge-issues-in-non-linear-optical-responses">
 <h1>Gauge issues in Non Linear Optical Responses<a class="headerlink" href="#gauge-issues-in-non-linear-optical-responses" title="Link to this heading">#</a></h1>
 <p>In the study of NLOR the long-range wavelength limit is assumed. This implies that the spatial dependence of the radiation electric field is neglected.
 Hence, one has to deal with two representation of the radiation field <span id="id6">[]</span>:</p>
 <ol class="arabic simple">
 <li><p>Velocity gauge or vector potential approach
-$<span class="math notranslate nohighlight">\(
-\mathbf{E}(t) = -\frac{\partial \mathbf{A}}{\partial t} 
-\)</span>$ (eq:vel-gauge)</p></li>
+$$
+\mathbf{E}(t) = -\frac{\partial \mathbf{A}}{\partial t}
+$$ (eq:vel-gauge)</p></li>
 </ol>
 <ul class="simple">
 <li><p>✅ keeps crystal translational symmetry</p></li>
@@ -377,29 +389,27 @@ $<span class="math notranslate nohighlight">\(
 </ul>
 <ol class="arabic simple" start="2">
 <li><p>Length gauge
-$<span class="math notranslate nohighlight">\(
+$$
 V(r) = e\mathbf{E}(t)\cdot\mathbf{r}
-\)</span>$ (eq:length-gauge)</p></li>
+$$ (eq:length-gauge)</p></li>
 </ol>
 <ul class="simple">
 <li><p>❌ breaks crystal translational symmetry</p></li>
 <li><p>✅ no numerical divergencies and used in actual calculation</p></li>
 </ul>
-<p>The two gauges are related by unitary transformation <span class="math notranslate nohighlight">\(\mathcal{U}(t)\)</span>:</p>
-<div class="math notranslate nohighlight" id="equation-eq-uvel-lengthgauge">
-<span class="eqno">()<a class="headerlink" href="#equation-eq-uvel-lengthgauge" title="Link to this equation">#</a></span>\[
+<p>The two gauges are related by unitary transformation $\mathcal{U}(t)$:</p>
+<p>$$
 \mathcal{U}(t)=\exp \left[i \frac{e}{\hbar} \int d^d \mathbf{r} \mathbf{A}(t) \cdot \mathbf{r} \rho(\mathbf{r})\right],
-\]</div>
-<p>whcih can be used to go from vector/velocity <span class="math notranslate nohighlight">\(A\)</span> to length/dipole <span class="math notranslate nohighlight">\(E\)</span> gauges
-$<span class="math notranslate nohighlight">\(
+$$ (eq:Uvel-lengthgauge)</p>
+<p>whcih can be used to go from vector/velocity $A$ to length/dipole $E$ gauges
+$$
 \mathcal{U}(t) H_A(t) \mathcal{U}^{\dagger}(t)+i \hbar \frac{d \mathcal{U}(t)}{d t} \mathcal{U}^{\dagger}(t)=H_E(t)
-\)</span>$</p>
-<div class="math notranslate nohighlight">
-\[
+$$</p>
+<p>$$
 O_E:=\mathcal{U}(t) O_A(t) \mathcal{U}^{\dagger}(t)
-\]</div>
+$$</p>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="references">
+<section id="references">
 <h1>References<a class="headerlink" href="#references" title="Link to this heading">#</a></h1>
 <div class="docutils container" id="id7">
 <div role="list" class="citation-list">
