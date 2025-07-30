@@ -162,7 +162,6 @@ class NNKP_Grids(KPointGenerator):
         self.b_list = Bvecs_sorted
         self.kpb_grid = np.take_along_axis(kpb_grid, sort_idx[:,:,None], axis=1)
         self.kpb_grid_table = np.take_along_axis(kpb_grid_table, sort_idx[:,:,None], axis=1)
-        nb = self.b_list.shape[1]
         self.kmb_grid = self.kpb_grid[:,::-1,:] # Because the b-vecs are sorted this works
         self.kmb_grid_table = self.kpb_grid_table[:,::-1,:]
 
@@ -184,6 +183,8 @@ class NNKP_Grids(KPointGenerator):
         self.b_list = Bvecs_sorted
         self.qpb_grid = np.take_along_axis(qpb_grid, sort_idx[:,:,None], axis=1)
         self.qpb_grid_table = np.take_along_axis(qpb_grid_table, sort_idx[:,:,None], axis=1)
+        self.qmb_grid = self.qpb_grid[:,::-1,:] # Because the b-vecs are sorted this works
+        self.qmb_grid_table = self.qpb_grid_table[:,::-1,:]
 
 
     def get_wannier90toyambo(self, lat_k, yambo=False):

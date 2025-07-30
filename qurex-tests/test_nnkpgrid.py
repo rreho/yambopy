@@ -35,14 +35,14 @@ def test_kmq_grid():
     '''k - q'''
     nnkp_kgrid, nnkp_qgrid = load_grids()
     result = nnkp_kgrid.kmq_grid
-    reference = np.load("qurex-tests/data-tests/ref-data/kmq_grid.npy")
+    reference = np.load("qurex-tests/data-tests/ref-data/nnkp_kmq_grid.npy")
     assert np.allclose(result, reference, atol=1e-8)
 
 def test_qmb_grid():
     '''q - B'''
     nnkp_kgrid, nnkp_qgrid = load_grids()
-    result = nnkp_qgrid.qpb_grid
-    reference = np.load("qurex-tests/data-tests/ref-data/qpb_grid.npy")
+    result = nnkp_qgrid.qmb_grid
+    reference = nnkp_qgrid.qpb_grid[:,::-1,:] # Because the b-vecs are sorted this works
     assert np.allclose(result, reference, atol=1e-8)
 
 def test_qpb_grid():
