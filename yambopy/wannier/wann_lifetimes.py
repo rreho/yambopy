@@ -54,7 +54,7 @@ class TB_lifetimes(TB_dipoles):
         return tau
 
     def _get_tau1D(self, tb_dipoles):
-        tau = np.zeros((tb_dipoles.ntransitions, 3, 3))
+        tau = np.zeros((tb_dipoles.ntransitions))
         F_kcv = tb_dipoles.F_kcv
         vc = np.linalg.norm(self.latdb.lat[0]*BOHR2ANG**2)
         h2peigvec = tb_dipoles.h2peigvec / HA2EV
