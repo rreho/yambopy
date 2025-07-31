@@ -583,6 +583,7 @@ class H2P():
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
                                 self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
+        self.tb_dipoles = tb_dipoles
         # compute osc strength
         if(self.ktype=='IP'):
             F_kcv = tb_dipoles.F_kcv
@@ -609,6 +610,7 @@ class H2P():
         else:
             F_kcv = tb_dipoles.F_kcv
             self.F_kcv = F_kcv
+            
             # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
             self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
             ediff = h2peigv[:, np.newaxis]-w[np.newaxis, :]
@@ -691,24 +693,11 @@ class H2P():
         # self.eps_0 = eps_0
         return w, eps
 
-    # def _get_exc_overlap_ttp(self, t, tp , iq, ikq, ib):
-    #     '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk}A^{*SpQ}_{cpvpk+B/2}*<u_{ck}|u_{cpk+B/2}><u_{vp-Q-B/2}|u_{vk-Q}>'''     
-    #     Mssp_ttp = 0
-    #     for it in range(self.dimbse):
-    #         for itp in range(self.dimbse):
-    #             ik = self.BSE_table[it][0]
-    #             iv = self.BSE_table[it][1] 
-    #             ic = self.BSE_table[it][2] 
-    #             ikp = self.BSE_table[itp][0]
-    #             ivp = self.BSE_table[itp][1] 
-    #             icp = self.BSE_table[itp][2] 
-    #             iqpb = self.kmpgrid.qpb_grid_table[iq, ib][1]
-    #             ikmq = self.kmpgrid.kmq_grid_table[ik,iq][1]
-    #             ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib][1]
-    #             ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib][1]
-    #             Mssp_ttp += np.conjugate(self.h2peigvec_vck[ikq,t,self.bse_nv-self.nv+iv,ic-self.nv,ik])*self.h2peigvec_vck[iqpb,tp,self.bse_nv-self.nv+ivp,icp-self.nv, ikpbover2]*\
-    #                             np.vdot(self.eigvec[ik,:, ic], self.eigvec[ikpbover2,:, icp])*np.vdot(self.eigvec[ikmqmbover2,:,ivp], self.eigvec[ikmq,:,iv]) 
-    #     return Mssp_ttp
+    def get_tau(self, dim):
+        from wannier.wann_lifetimes import TB_lifetimes
+        tb_lifetimes = TB_lifetimes(self.tb_dipoles)
+        tb_lifetimes
+
     def _get_exc_overlap_ttp(self, t, tp, iq, ib):
         '''
         Calculate M_SSp(Q,B) = ∑_{cc'vv'k} A^{SQ*}_{cvk} A^{S'Q+B}_{c'v'k+B}
@@ -789,31 +778,6 @@ class H2P():
 
         return Mssp_ttp
 
-        # else:
-
-        #     for ik, iv, ic in zip(ik_chunks, iv_chunks, ic_chunks): #\sum_{cvk}
-        #         ik = np.array(ik)[:, np.newaxis]
-        #         iv = np.array(iv)[:, np.newaxis]
-        #         ic = np.array(ic)[:, np.newaxis]
-        #         for ivp, icp in zip(iv_chunks,ic_chunks):   #\sum_{cpvp}
-        #             #ivp = iv
-        #             #icp = icp
-
-        #             iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1] #points belong to qgrid
-        #             #iqpb_ibz_ink = self.qgrid_toibzk[iqpb] # qpb point belonging in the IBZ going expressed in k grid
-        #             ikmq = self.kminusq_table[ik, iq, 1] # points belong to k grids
-        #             ikpbover2 = self.kmpgrid.kpbover2_grid_table[ik, ib, 1] # points belong to k grids
-        #             ikmqmbover2 = self.kmpgrid.kmqmbover2_grid_table[ik, iq, ib, 1] # points belong to k grids
-        #             #A^{*SQ}_{cvk}
-        #             term1 = np.conjugate(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-        #             #A^{SpQ+B}_{cpvpk+B/2}
-        #             term2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + ivp, icp - self.nv, ikpbover2]
-        #             #<u_{ck}|u_{cpk+B/2}>_{uc}
-        #             term3 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ik, :, ic]), self.eigvec[ikpbover2, :, icp])
-        #             #<u_{vpk-Q-B/2}|u_{vk-Q}>_{uc}
-        #             term4 = np.einsum('ijk,ijk->ij', np.conjugate(self.eigvec[ikmqmbover2, :, ivp]), self.eigvec[ikmq, :, iv])
-        #             Mssp_ttp += np.sum(term1 * term2 * term3 * term4)
-        # return Mssp_ttp
 
     def convert_to_wannier90(self):
         '''
@@ -891,51 +855,9 @@ class H2P():
             vec_vck[q, :, :, :, :] *= np.exp(-1j * current_phase[:,None,None,None])
 
 
-        # # Step 1: Global phase fix — make first significant element real and positive
-        # ref_idx = np.argmax(np.abs(A_flat), axis=2)
-        # ref_vals = np.take_along_axis(A_flat, ref_idx[:, :, None], axis=2)[:, :, 0]
-        # global_phase = ref_vals / np.abs(ref_vals)
-        # A_flat = A_flat * np.conj(global_phase[:, :, None])
-
-        # # Step 2: Relative phase alignment — align all Q to Q=0
-        # A0 = A_flat[0]  # shape (nS, ntrans)
-        # for q in range(1, nQ):
-        #     for s in range(nS):
-        #         dot = np.vdot(A0[s], A_flat[q, s])  # complex scalar
-        #         rel_phase = dot / np.abs(dot)
-        #         A_flat[q, s] *= np.conj(rel_phase)
-
         print("*** Fixed global and relative phases across Q ***")
         return vec, vec_vck
     
-
-    def fast_exc_overlap_vectorized(self, t, tp, iq, ib):
-        # Indices from BSE table
-        ik  = self.BSE_table[:, 0]
-        iv  = self.BSE_table[:, 1]
-        ic  = self.BSE_table[:, 2]
-        
-        # Q and Q+B
-        iqpb = self.qmpgrid.qpb_grid_table[iq, ib, 1]
-        ikpb = self.kmpgrid.kpb_grid_table[ik, ib, 1]
-        ikmq = self.kmpgrid.kmq_grid_table[ik, ib, 1]
-
-        # Fetch relevant A vectors
-        A1 = np.conj(self.h2peigvec_vck[iq, t, self.bse_nv - self.nv + iv, ic - self.nv, ik])
-        A2 = self.h2peigvec_vck[iqpb, tp, self.bse_nv - self.nv + iv, ic - self.nv, ikpb]
-
-        # Compute overlap terms efficiently
-        # term3: ⟨u_c(k)|u_c(k+B)⟩
-        u_c  = self.eigvec[ik, :, ic[:,None]]      # shape (n, norb)
-        u_cp = self.eigvec[ikpb, :, ic[None,:]]    # shape (n, norb)
-        term3 = np.einsum('ijk,ijk->ij', np.conj(u_c), u_cp)
-
-        # term4: ⟨u_v(k-Q)|u_v(k-Q)⟩
-        u_v  = self.eigvec[ikmq, :, iv[:,None]]    # shape (n, norb)
-        u_vp = self.eigvec[ikmq, :, iv[None,:]]    # same index, because ivp = iv
-        term4 = np.einsum('ijk,ijk->ij', np.conj(u_vp), u_v)
-
-        return np.sum(A1[:,None] * A2[None,:] * term3 * term4)
 
     def get_exc_overlap(self, trange=[0], tprange=[0]):
         '''Calculate M_SSp(Q,B) = \sum_{ccpvvpk}A^{*SQ}_{cvk} A^{SpQ+B}_{cpvpk+B/2} \times <u_{ck}|u_{cpk+B/2}>_{uc}<u_{vpk-Q-B/2}|u_{vk-Q}>_{uc}'''
@@ -954,20 +876,8 @@ class H2P():
             vectorized_overlap_ttp_2 = np.vectorize(self._get_exc_overlap_ttp, signature='(),(),(),()->()')
         if self.alpha==0:
             vectorized_overlap_ttp_2 = np.vectorize(self._get_exc_overlap_ttp_beta, signature='(),(),(),()->()')
-
-        # it itp: transition range
-        # iq is the q index in the qgrid
-        # kindices_table[iq] returns the index of the q-point in the k-grid
-        # ib is the index of the neighbour in qgrid
-        # Mssp_1 = vectorized_overlap_ttp_1(it, itp, iq, ib)/(self.ntransitions)**2  
         Mssp_2 = vectorized_overlap_ttp_2(it, itp, iq, ib)
-        # self.check_A_norms(Mssp_1)
-        # self.check_A_norms(Mssp_2/(self.ntransitions)**2)
-        # self.check_hermitian(Mssp_1)
         self.check_hermitian(Mssp_2)
-
-        # print(print("Δ =", np.abs(Mssp_1 - Mssp_2)))        
-        # self.Mssp = Mssp_2/(np.sqrt(self.ntransitions/2))      # under review
         self.Mssp = Mssp_2#/(self.ntransitions*self.bse_nc*self.bse_nv)      # under review
 
 
@@ -990,7 +900,6 @@ class H2P():
     def check_A_norms(self,A):
         norms = np.linalg.norm(A, axis=(2,4))  # assuming shape: [nQ, nS, nv, nc=1, nk]
         print("Max deviation from 1:", np.max(np.abs(norms - 1)))
-
 
 
     def _get_amn_ttp(self, t, tp, iq):
@@ -1183,13 +1092,6 @@ class H2P():
         
         return degenerate_eigenvectors    
 
-    # def ensure_conjugate_symmetry(self,matrix):
-    #     n = matrix.shape[0]
-    #     for i in range(n):
-    #         for j in range(i+1, n):
-    #             if np.isclose(matrix[i, j].real, matrix[j, i].real) and np.isclose(matrix[i, j].imag, -matrix[j, i].imag):
-    #                 matrix[j, i] = np.conjugate(matrix[i, j])
-    #     return matrix
     def _get_aux_maps(self):
         yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q1')
         aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
