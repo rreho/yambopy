@@ -7,7 +7,8 @@
 #
 # This file is part of the yambopy project
 #
-from yambopy.units import ha2ev,speed_of_light
+from yambopy.units import ha2ev, speed_of_light, autime2s
+import numpy as np
 
 def ExcRadLifetimes(yexcdb,statelist=None,degen_step=0.001,gauge='length',verbosity=0,no_cutoff=False):
     """
