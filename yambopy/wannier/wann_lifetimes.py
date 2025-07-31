@@ -1,6 +1,8 @@
 import numpy as np
 from yambopy.wannier.wann_dipoles import TB_dipoles
-from yambopy.wannier.wann_utils import HA2EV
+from yambopy.wannier.wann_utils import HA2EV, BOHR2ANG
+
+
 
 class TB_lifetimes(TB_dipoles):
     ''' compute the lifetimes of excitons for 3D, 2D and 1D systems
@@ -14,57 +16,48 @@ class TB_lifetimes(TB_dipoles):
     \tau_{1 D, \alpha, \beta}^n=\frac{c \hbar^2 l_1 N_{\mathbf{k}}}{2 \pi \chi\left(E_0^n\right)^2 F_{\alpha, \beta}^{n, B S E}}
     $$
     '''
-    
-    def __init__(self , dim, h2peigv, latdb, ntransitions, nc, nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, h2peigvec = None, method = 'real'):
-        super().__init__(ntransitions, nc, nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, h2peigvec = None, method = 'real')
+    def __init__(self, tb_dipoles, dim):
         self.dim = dim
-        self.latdb = latdb
-        try:
-            self.h2peigvec = h2peigvec
-        except ValueError:
-            print('\nError! Before computing lifetimes you need the excitonic energies, therefore to solve the BSE\n')
-        if (self.dim == '3D'):
-            self.tau3D = self._get_tau3D()
-        elif(self.dim == '2D'):
-            self.tau2D = self._get_tau2D()
-        elif(self.dim == '1D'):
-            self.tau1D = self._get_tau1D()
-    
-    @classmethod
-    def _get_tau3D(cls):
-        tau_3D = np.zeros(cls.ntransitions,3,3)
-        F_kcv = cls.F_kcv
-        #h2peigvec are in eV-> convert in atomic units for formula, return seconds
-        h2peigvec = cls.h2peigvec/HA2EV
-        for t in range(0,cls.ntransitions):
-            tau_3D[t,:,:] = 3*cls.nkpoints/(4*cls.h2peigvec[t]**3*F_kcv[t,:,:])
-        
-        return tau_3D
 
-    @classmethod
-    def _get_tau2D(cls):
-        tau_2D = np.zeros(cls.ntransitions,3,3)
-        F_kcv = cls.F_kcv
-        # compute area of unit cell (assuming in plane are first and second lattice vector)
-        vc = np.linalg.norm(np.cross(cls.latdb.alat[0],cls.latdb.alat[1]))
-        #h2peigvec are in eV-> convert in atomic units for formula, return seconds
-        h2peigvec = cls.h2peigvec/HA2EV
-        for t in range(0,cls.ntransitions):
-            tau_2D[t,:,:] = vc*cls.nkpoints/(8*np.pi*cls.h2peigvec[t]*F_kcv[t,:,:])
-        
-        return tau_2D
-    
-    @classmethod
-    def _get_tau1D(cls):
-        tau_1D = np.zeros(cls.ntransitions,3,3)
-        F_kcv = cls.F_kcv
-        # compute length of 1D system (assuming lattice vector to be the relevant one)
-        vc = np.linalg.norm(cls.latdb.alat[0])
-        #h2peigvec are in eV-> convert in atomic units for formula, return seconds
-        h2peigvec = cls.h2peigvec/HA2EV
-        for t in range(0,cls.ntransitions):
-            tau_1D[t,:,:] = vc*cls.nkpoints/(2*np.pi*cls.h2peigvec[t]**2*F_kcv[t,:,:])
-        
-        return tau_1D
+        if hasattr(tb_dipoles, 'cpot') and hasattr(tb_dipoles.cpot, 'lattice'):
+            self.latdb = tb_dipoles.cpot.lattice
+        else:
+            raise AttributeError("TB_dipoles does not have the expected 'cpot.lattice' attribute")
+
+        if hasattr(tb_dipoles, 'h2peigvec'):
+            self.h2peigvec = tb_dipoles.h2peigvec
+        else:
+            raise AttributeError('Before computing lifetimes you need the excitonic energies.')
+
+        if self.dim == '3D':
+            self.tau = self._get_tau3D(tb_dipoles)
+        elif self.dim == '2D':
+            self.tau = self._get_tau2D(tb_dipoles)
+        elif self.dim == '1D':
+            self.tau = self._get_tau1D(tb_dipoles)
+
+    def _get_tau3D(self, tb_dipoles):
+        tau = np.zeros((tb_dipoles.ntransitions, 3, 3))
+        F_kcv = tb_dipoles.F_kcv
+        h2peigvec = tb_dipoles.h2peigvec / HA2EV
+        dipvec = np.einsum('tp,txy->txy',h2peigvec**3,F_kcv)
+        tau = 3 * tb_dipoles.nkpoints / (4 * dipvec)
+        return tau
+
+    def _get_tau2D(self, tb_dipoles):
+        tau = np.zeros((tb_dipoles.ntransitions, 3, 3))
+        F_kcv = tb_dipoles.F_kcv
+        vc = np.linalg.norm(np.cross(self.latdb.lat[0], self.latdb.lat[1])*BOHR2ANG**2)
+        h2peigvec = tb_dipoles.h2peigvec / HA2EV
+        dipvec = np.einsum('tp,txy->txy',h2peigvec,F_kcv)
+        tau = vc * tb_dipoles.nkpoints / (8 * np.pi * dipvec)
+        return tau
+
+    def _get_tau1D(self, tb_dipoles):
+        tau = np.zeros((tb_dipoles.ntransitions, 3, 3))
+        F_kcv = tb_dipoles.F_kcv
+        vc = np.linalg.norm(self.latdb.lat[0]*BOHR2ANG**2)
+        h2peigvec = tb_dipoles.h2peigvec / HA2EV
+        dipvec = np.einsum('tp,txy->txy',h2peigvec**2,F_kcv)
+        tau = vc * tb_dipoles.nkpoints / (2 * np.pi * dipvec)
+        return tau

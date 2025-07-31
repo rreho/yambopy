@@ -583,6 +583,7 @@ class H2P():
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
                                 self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck=h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
+        self.tb_dipoles = tb_dipoles
         # compute osc strength
         if(self.ktype=='IP'):
             F_kcv = tb_dipoles.F_kcv
@@ -745,20 +746,6 @@ class H2P():
             vec_vck[q, :, :, :, :] *= np.exp(-1j * current_phase[:,None,None,None])
 
 
-        # # Step 1: Global phase fix — make first significant element real and positive
-        # ref_idx = np.argmax(np.abs(A_flat), axis=2)
-        # ref_vals = np.take_along_axis(A_flat, ref_idx[:, :, None], axis=2)[:, :, 0]
-        # global_phase = ref_vals / np.abs(ref_vals)
-        # A_flat = A_flat * np.conj(global_phase[:, :, None])
-
-        # # Step 2: Relative phase alignment — align all Q to Q=0
-        # A0 = A_flat[0]  # shape (nS, ntrans)
-        # for q in range(1, nQ):
-        #     for s in range(nS):
-        #         dot = np.vdot(A0[s], A_flat[q, s])  # complex scalar
-        #         rel_phase = dot / np.abs(dot)
-        #         A_flat[q, s] *= np.conj(rel_phase)
-
         print("*** Fixed global and relative phases across Q ***")
         return vec, vec_vck
 
@@ -793,13 +780,6 @@ class H2P():
         
         return degenerate_eigenvectors    
 
-    # def ensure_conjugate_symmetry(self,matrix):
-    #     n = matrix.shape[0]
-    #     for i in range(n):
-    #         for j in range(i+1, n):
-    #             if np.isclose(matrix[i, j].real, matrix[j, i].real) and np.isclose(matrix[i, j].imag, -matrix[j, i].imag):
-    #                 matrix[j, i] = np.conjugate(matrix[i, j])
-    #     return matrix
     def _get_aux_maps(self):
         yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q1')
         aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
