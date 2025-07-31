@@ -9,29 +9,43 @@ from yambopy.wannier.wann_occupations import TB_occupations
 class ExcitonBands(H2P):
     def __init__(self, h2p: 'H2P', path_qpoints: 'Path', method="Boltz", Tel=0.0, Tbos=300.0, sigma=0.1):
         # Get the __init__ argument names of the parent class (excluding 'self')
-        if not isinstance(path_qpoints, Path):
-            raise TypeError('Argument must be an instance of Path')
-        if not isinstance(h2p, H2P):
-            raise TypeError('Argument must be an instance of H2P')
-        parent_init_params = inspect.signature(H2P.__init__).parameters.keys()
-        parent_init_params = [param for param in parent_init_params if param != "self"]
-
-        # Filter attributes in the instance that match the parent's __init__ arguments
-        parent_args = {key: getattr(h2p, key) for key in parent_init_params if hasattr(h2p, key)}
-
-        # Call the parent's __init__ with the filtered arguments
-        super().__init__(**parent_args)
-        self.path_qpoints = path_qpoints
-        self.nq_list = len(path_qpoints.get_klist())
-        self.red_kpoints = self.path_qpoints.get_klist()[:,0:3]
-        self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)*ang2bohr # result in Bohr
-        self.nq_double = self.nq_list
+        self.kmpgrid = h2p.kmpgrid
+        self.cpot = h2p.cpot
+        self.ctype = h2p.ctype
+        self.dimbse = h2p.dimbse
+        self.model = h2p.model
+        self.nk = h2p.nk
+        self.nb = h2p.nb
+        self.eigv = h2p.eigv
+        self.eigvec = h2p.eigvec
+        self.BSE_table = h2p.BSE_table
+        self.f_kn = h2p.f_kn
+        self.bse_nc = h2p.bse_nc
+        self.bse_nv = h2p.bse_nv
+        self.nv = h2p.nv
+        self.nc = h2p.nc
+        self.ntransitions = h2p.ntransitions
+        self.latdb = h2p.latdb
+        self.qmpgrid = h2p.qmpgrid        
         self.method = method
         self.Tel = Tel
         self.Tbos = Tbos
         self.sigma = sigma
-        self.H2P = self.buildH2P_qlist()
+        self.H2P = h2p.H2P
         self.h2p = h2p
+        if not isinstance(path_qpoints, Path):
+            print('No Path was provided, gamma point only')
+        else:
+            
+            self.path_qpoints = path_qpoints
+            self.nq_list = len(path_qpoints.get_klist())
+            self.nq_double = self.nq_list
+            self.red_kpoints = self.path_qpoints.get_klist()[:,0:3]
+            self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)*ang2bohr # result in Bohr
+            self.H2P = self.buildH2P_qlist()
+        if not isinstance(h2p, H2P):
+            raise TypeError('Argument must be an instance of H2P')
+        
 
     def buildH2P_qlist(self):        
         H2P = np.zeros((self.nq_list, self.dimbse, self.dimbse), dtype=np.complex128)
@@ -211,7 +225,7 @@ class ExcitonBands(H2P):
         weights_bz_sum = weights_bz_sum[:,kmesh_idx].swapaxes(0,1)
         return x,y,weights_bz_sum
     
-    def plot_exciton_2D_ax(self,ax,q=0,n=None,f=None,mode='hexagon',limfactor=0.8,spin_pol=None,**kwargs):
+    def plot_exciton_2D_ax(self,ax=None,q=0,n=None,f=None,mode='hexagon',limfactor=0.8,spin_pol=None,**kwargs):
         """
         Plot the exciton weights in a 2D Brillouin zone
        
@@ -232,7 +246,8 @@ class ExcitonBands(H2P):
            x,y,weights_bz_sum = self.get_exciton_2D(f=f,n=n)
 
         weights_bz_sum=weights_bz_sum[:,q]/np.max(weights_bz_sum[:,q])
-        
+        if ax is None:
+            fig,ax = plt.subplots(figsize=(12,8),dpi=300)
         #filter points outside of area
         lim = np.max(self.latdb.rlat)*limfactor
         dlim = lim*1.1
