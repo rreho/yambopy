@@ -1,7 +1,7 @@
 import numpy as np
 from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_utils import HA2EV, BOHR2ANG
-
+from yambopy.units import speed_of_light, autime2s
 
 
 class TB_lifetimes(TB_dipoles):
@@ -46,12 +46,31 @@ class TB_lifetimes(TB_dipoles):
 
     def _get_tau2D(self, tb_dipoles):
         tau = np.zeros((tb_dipoles.ntransitions, 3, 3))
-        F_kcv = tb_dipoles.F_kcv
-        vc = np.linalg.norm(np.cross(self.latdb.lat[0], self.latdb.lat[1])*BOHR2ANG**2)
-        h2peigvec = tb_dipoles.h2peigvec / HA2EV
-        dipvec = np.einsum('tp,txy->txy',h2peigvec,F_kcv)
-        tau = vc * tb_dipoles.nkpoints / (8 * np.pi * dipvec)
-        return tau
+        # F_kcv = tb_dipoles.F_kcv
+        # vc = np.linalg.norm(np.cross(self.latdb.lat[0], self.latdb.lat[1]))*speed_of_light*self.nkpoints
+        # h2peigvec = tb_dipoles.h2peigvec / HA2EV
+        # dipvec = np.einsum('tp,txy->txy',h2peigvec**2,F_kcv)
+        # tau = vc * tb_dipoles.nkpoints / (4 * np.pi * dipvec).real
+        
+        gamma0 = 0
+        tau0_tot = np.zeros(shape=(tb_dipoles.ntransitions,3,3))
+        ES = tb_dipoles.h2peigv/HA2EV
+            # [FP]: is this gauge treatment correct?
+        
+                # [RR] if you inspect the Yambo code you might expect 
+                # another 1/((2*np.pi)**3) but I think that 
+                # d3k_factor/((2np.pi)**3) is actually 1/Omega
+        q0_norm = 1e-5
+        muS2 = tb_dipoles.F_kcv/(q0_norm**2) 
+        vc = np.linalg.norm(np.cross(self.latdb.lat[0], self.latdb.lat[1]))*speed_of_light*tb_dipoles.nkpoints
+
+
+        gg = 4.*np.pi*ES[:,None,None]*(muS2/tb_dipoles.nkpoints)/(vc*speed_of_light)
+        gamma0 += gg
+        #compute tau, i.e. the radiative lifetime in seconds
+        tau0_tot = autime2s/(gamma0.real)
+
+        return tau0_tot
 
     def _get_tau1D(self, tb_dipoles):
         tau = np.zeros((tb_dipoles.ntransitions, 3, 3))

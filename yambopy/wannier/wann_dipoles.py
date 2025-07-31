@@ -9,7 +9,7 @@ class TB_dipoles():
     def __init__(self , nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
                  eta, hlm, T_table, BSE_table, h2peigvec,eigv_diff_ttp=None, eigvecc_t=None,eigvecv_t=None,\
                  mpgrid=None, cpot=None, \
-                 h2peigv_vck = None, h2peigvec_vck = None, method = 'real',\
+                 h2peigv_vck = None, h2peigvec_vck = None,h2peigv=None, method = 'real',\
                  rmn = None,ktype='IP'):
         # hk, hlm are TBMODEL hamiltonians
         self.mpgrid = mpgrid
@@ -54,6 +54,7 @@ class TB_dipoles():
             self.h2peigvec_vck = h2peigvec_vck
             self.h2peigv_vck = h2peigv_vck
             self.h2peigvec = h2peigvec
+            self.h2peigv = h2peigv
             # self.dipoles_bse = self._get_dipoles_bse(method)
             self.BSE_table = BSE_table
             if(self.ktype=='IP'):
