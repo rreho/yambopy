@@ -44,7 +44,7 @@ def ExcRadLifetimes(yexcdb,statelist=None,degen_step=0.001,gauge='length',verbos
     excE = sorted( np.ma.asarray(yexcdb.eigenvalues.real) )
     excI = np.ma.asarray(yexcdb.l_residual * yexcdb.r_residual)
 
-    tau0_tot = np.zeros(shape=(len(statelist),3,3))
+    tau0_tot = np.zeros(shape=(len(statelist)))
     merged_states = np.empty(shape=len(statelist), dtype='object')
     
     # q0 norm factor 
