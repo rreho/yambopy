@@ -64,23 +64,23 @@ class CoulombPotentials:
         ed = (ediel[0] + ediel[2]) / 2.0
 
         # Compute the potential using vectorized operations
-
-	# if (modk .lt. tolr) then
-	# 	v2dk = vbz*(cic/ed)*(a0*sqrt(gridaux1)/(2.*pi))*(alpha1+auxi*alpha2+alpha3*auxi**2)
-	# 	v2dk = vbz*(cic/ed)*(1./(modk*(1+(r0*modk))))
         safe_modk = np.where(modk < self.tolr, np.inf, modk)
         v2dk = (vbz * (self.alpha/ed) * (a0 * np.sqrt(gridaux1))/(2.*np.pi) * (alpha1 + auxi * alpha2 + alpha3 * auxi**2))
         v2dk = np.where(modk < self.tolr, v2dk,vbz * (self.alpha/ed) * (1.0 / (safe_modk * (1.0 + (r0 * safe_modk)))))
         return v2dk
 
     def vcoul(self, kpt1, kpt2):
-        modk = modvec(kpt1, kpt2)
+        kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+        kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+        modk = scipy.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
+        
         vbz = self.rec_vol
         ed = self.ediel[1]  # The dielectric constant is set to 1.0
-        if modk < self.tolr:
-            vcoul = self.v0
-        else:
-            vcoul = vbz * (self.alpha / ed) * (1.0 / (modk ** 2))
+
+        safe_modk = np.where(modk < self.tolr, np.inf, modk)
+        vcoul = vbz * (self.alpha / ed) * (1.0 / (safe_modk ** 2))
+        vcoul = np.where(modk < self.tolr, self.v0, vcoul)
+
 
         return vcoul
 
@@ -194,17 +194,18 @@ class CoulombPotentials:
     
     def v0dt(self,kpt1,kpt2):
 
+        kpt1_broadcasted = kpt1[:, np.newaxis, :]  # Shape (N1, 1, 3)
+        kpt2_broadcasted = kpt2[np.newaxis, :, :]  # Shape (1, N2, 3)
+        modk = scipy.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
         vbz = 1.0/(np.prod(self.ngrid)*self.dir_vol)
         modk = modvec(kpt1,kpt2)
         rmin = np.min(np.linalg.norm(self.lattice.lat,axis=1))
         cr = 0.5 * rmin
 
-        factor = 0.0
-
-        if modk < self.tolr:
-            v0dt = 1/2.*self.alpha*vbz*cr**2
-        else:
-            v0dt = self.alpha*vbz*factor/(modk**2)*(1-np.cos(cr*modk))
+        factor = 1.0
+        safe_modk = np.where(modk < self.tolr, np.inf, modk)
+        v0dt = self.alpha*vbz*factor/(modk**2)*(1-np.cos(cr*safe_modk))
+        v0dt = np.where(modk < self.tolr, 1/2.*self.alpha*vbz*cr**2, v0dt)
         return v0dt
 
     def v2doh(self, kpt1, kpt2):
@@ -219,39 +220,6 @@ class CoulombPotentials:
         else :
             v2doh = self.alpha*vbz*np.exp(-w*modk)*(1.0/(ez*modk))
         return v2doh
-    
-    # def v2dt_vectorized(self, k_diffs):
-    #     # this function might be useful to avoid do loops
-    #     vc = self.dir_vol
-    #     vbz = 1.0 / (np.prod(self.ngrid) * vc)
-    #     gz = np.abs(k_diffs[:, 2])
-    #     gpar = np.sqrt(k_diffs[:, 0]**2 + k_diffs[:, 1]**2)
-    #     rc = 0.5 * self.rlat[2, 2]
-    #     factor = 1.0 
-
-    #     modk = self.modvec_vectorized(k_diffs)
-
-    #     v2dt = np.zeros_like(gz)
-
-    #     # Case where gpar and gz are below tolerance
-    #     mask_tol = (gpar < self.tolr) & (gz < self.tolr)
-    #     v2dt[mask_tol] = (vbz * 2 * self.pi) * (1/8.0 * rc * rc)
-
-    #     # Case where gpar is below tolerance and gz is above tolerance
-    #     mask_gpar_tol = (gpar < self.tolr) & (gz >= self.tolr)
-    #     v2dt[mask_gpar_tol] = (vbz * 2 * self.pi) * (factor / modk[mask_gpar_tol]**2) * (1.0 - np.cos(gz[mask_gpar_tol] * rc) - (gz[mask_gpar_tol] * rc * np.sin(gz[mask_gpar_tol] * rc)))
-
-    #     # General case
-    #     # ~ stands for NOT and | for OR in mask numpy arrays
-    #     mask_general = ~(mask_tol | mask_gpar_tol)
-    #     aux1 = gz[mask_general] / gpar[mask_general]
-    #     aux2 = gpar[mask_general] * rc
-    #     aux3 = gz[mask_general] * rc
-    #     aux4 = aux1 * np.sin(aux3)
-    #     aux5 = np.cos(aux3)
-    #     v2dt[mask_general] = (vbz * 2 * self.pi) * (factor / modk[mask_general]**2) * (1.0 + (np.exp(-aux2) * (aux4 - aux5)))
-
-    #     return v2dt * ha2ev
 
     def modvec_vectorized(self, k_diffs):
         # Vectorized modvec function 
