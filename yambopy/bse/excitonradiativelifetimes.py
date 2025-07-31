@@ -44,8 +44,8 @@ def ExcRadLifetimes(yexcdb,statelist=None,degen_step=0.001,gauge='length',verbos
     excE = sorted( np.ma.asarray(yexcdb.eigenvalues.real) )
     excI = np.ma.asarray(yexcdb.l_residual * yexcdb.r_residual)
 
-    tau0_tot = np.zeros(len(statelist))
-    merged_states = np.empty(len(statelist), dtype='object')
+    tau0_tot = np.zeros(shape=(len(statelist),3,3))
+    merged_states = np.empty(shape=len(statelist), dtype='object')
     
     # q0 norm factor 
     # [BEWARE: if you are using the Coulomb cutoff, you need to have read ndb.cutoff
@@ -54,7 +54,7 @@ def ExcRadLifetimes(yexcdb,statelist=None,degen_step=0.001,gauge='length',verbos
     else:                                    q0_norm = yexcdb.q_cutoff
 
     for l, state in enumerate(statelist):
-        state_internal = state
+        state_internal = state-1
 
         # find states within degen_step window from state
         mask = np.logical_and(excE>=excE[state_internal]-degen_step,excE<=excE[state_internal]+degen_step)
