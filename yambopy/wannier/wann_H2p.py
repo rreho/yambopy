@@ -405,9 +405,9 @@ class H2P():
         f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
         gc.collect()
         
-        H2P = f_diff/self.nk * K_direct
+        H2P = f_diff * K_direct
         if K_Ex is not None:
-            H2P += f_diff/self.nk * K_Ex[:,:,np.newaxis]
+            H2P += f_diff * K_Ex[:,:,np.newaxis]
         # del f_diff, K_Ex, K_direct
         self.K_Ex = K_Ex
         self.K_direct = K_direct
