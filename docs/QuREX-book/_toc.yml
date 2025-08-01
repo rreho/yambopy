@@ -23,7 +23,10 @@ parts:
     - file: content/software/software
       sections:
         - file: content/software/yambo/yambo
-        - file: content/software/yambo/yambo_input_flags 
+        - file: content/software/yambo/yambo_input_flags
+        - file: content/software/qe/qe_compilation 
+        - file: content/software/wannier90/wannier90_compilation
+        - file: content/software/wannier_tools/wannier_tools
 - caption: Tutorials
   numbered: false
   chapters:
@@ -39,5 +42,5 @@ parts:
   chapters:
     - file: notebooks/notebooks
     - file: notebooks/exciton_phonon
-    - file: notebooks/LiF-minimal-mssp
-    - file: notebooks/wannierberri  
+    - file: notebooks/LiF-minimal_mssp
+    - file: notebooks/wannberri  

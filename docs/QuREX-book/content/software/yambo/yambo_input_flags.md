@@ -1,4 +1,4 @@
-# Yambo Input variables
+# Yambo Input Flags
 
 
 All the default input flags parsed to ``yambo`` 
