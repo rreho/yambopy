@@ -176,6 +176,7 @@ class ExcitonBands(H2P):
                 # alpha=alpha_value
             )
         self.path_qpoints.set_xticks(ax)
+        ax.set_ylabel(f"Energy [eV]")
         ax.set_xlim(np.min(xpath), np.max(xpath))
         ax.set_xlim(min(xpath), max(xpath))
         ax.set_ylim(ax.get_ylim()[0], ax.get_ylim()[1])
