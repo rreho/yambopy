@@ -313,12 +313,12 @@ class TB_dipoles():
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
         self.F_kcv = F_kcv        
-        print(f"Oscillation strenght computed succesfully in {time.time()-t0:.2f}s")
+        print(f"Oscillation strength computed succesfully in {time.time()-t0:.2f}s")
 
     def _get_osc_strength_IP(self,method):
         '''computes osc strength from dipoles
         '''
-        print('Computing oscillator strenght')
+        print('Computing oscillator strength')
         import time
         t0 = time.time()
         dipoles_bse_kcv = self.dipoles_bse_kcv
@@ -363,4 +363,4 @@ class TB_dipoles():
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
         self.F_kcv = F_kcv        
-        print(f"Oscillation strenght computed succesfully in {time.time()-t0:.2f}s")
+        print(f"Oscillation strength computed succesfully in {time.time()-t0:.2f}s")
