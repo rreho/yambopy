@@ -24,6 +24,8 @@ from yambopy.tools.skw import SkwInterpolator
 from yambopy.dbs.latticedb import YamboLatticeDB
 from yambopy.dbs.electronsdb import YamboElectronsDB
 from yambopy.dbs.qpdb import YamboQPDB
+from yambopy.io.cubetools import write_cube
+from yambopy.bse.realSpace_excitonwf import ex_wf2Real
 
 class ExcitonList():
     """
@@ -80,15 +82,18 @@ class YamboExcitonDB(object):
         self.car_qpoint = car_qpoint
         self.q_cutoff = q_cutoff
         self.table = table
+        self.bs_bands = np.array([np.min(self.table[:,1]),np.max(self.table[:,2])]) # set range of bse bands
         self.eigenvectors = eigenvectors
         self.spin_pol = spin_pol
 
     @classmethod
-    def from_db_file(cls,lattice,filename='ndb.BS_diago_Q1',folder='.',Load_WF=True):
+    def from_db_file(cls,lattice,filename='ndb.BS_diago_Q1',folder='.',Load_WF=True, neigs=-1):
         """ 
         Initialize this class from a file
 
         Set `Read_WF=False` to avoid reading eigenvectors for faster IO and memory efficiency.
+        If neigs < 0 ; all eigen values (vectors) are loaded or else first neigs are loaded 
+        " In case of non-TDA, we load right eigenvectors.
         """
         path_filename = os.path.join(folder,filename)
         if not os.path.isfile(path_filename):
@@ -98,6 +103,13 @@ class YamboExcitonDB(object):
         Qpt = filename.split("Q",1)[1]
 
         with Dataset(path_filename) as database:
+            #energies
+            eig =  database.variables['BS_Energies'][...].data*ha2ev
+            eigenvalues = eig[:,0]+eig[:,1]*I
+            neig_full = len(eigenvalues)
+            if neigs < 0 or neigs > neig_full: neigs = neig_full
+            eigenvalues = eigenvalues[:neigs]
+
             if 'BS_left_Residuals' in list(database.variables.keys()):
                 # MN: using complex views instead of a+I*b copies to avoid memory duplication
                 # Old (yet instructive) memory duplication code
@@ -105,35 +117,31 @@ class YamboExcitonDB(object):
                 #rer,imr = database.variables['BS_right_Residuals'][:].T
                 #l_residual = rel+iml*I
                 #r_residual = rer+imr*I
-                l_residual = database.variables['BS_left_Residuals'][:]
-                r_residual = database.variables['BS_right_Residuals'][:]
+                l_residual = database['BS_left_Residuals'][:neigs,...].data
+                r_residual = database['BS_right_Residuals'][:neigs,...].data
                 l_residual = l_residual.view(dtype=CmplxType(l_residual)).reshape(len(l_residual))
                 r_residual = r_residual.view(dtype=CmplxType(r_residual)).reshape(len(r_residual))
             if 'BS_Residuals' in list(database.variables.keys()):
                 # Compatibility with older Yambo versions
-                rel,iml,rer,imr = database.variables['BS_Residuals'][:].T
+                rel,iml,rer,imr = database['BS_Residuals'][:neigs,...].data.T
                 l_residual = rel+iml*I
                 r_residual = rer+imr*I
 
             car_qpoint = None
-            if 'Q-point' in list(database.variables.keys()):
+            if 'BS_Q' in list(database.variables.keys()):
                 # Finite momentum
-                car_qpoint = database.variables['Q-point'][:]/lattice.alat
+                car_qpoint = database.variables['BS_Q'][...].data/lattice.alat
             if Qpt=="1": car_qpoint = np.zeros(3)
 
-            #energies
-            eig =  database.variables['BS_Energies'][:]*ha2ev
-            eigenvalues = eig[:,0]+eig[:,1]*I
-                
             #eigenvectors
             table = None
             eigenvectors = None
             if Load_WF and 'BS_EIGENSTATES' in database.variables:
-                eiv = database.variables['BS_EIGENSTATES'][:]
+                eiv = database['BS_EIGENSTATES'][:neigs,...].data
                 #eiv = eiv[:,:,0] + eiv[:,:,1]*I
                 #eigenvectors = eiv
                 eigenvectors = eiv.view(dtype=CmplxType(eiv)).reshape(eiv.shape[:-1])
-                table = database.variables['BS_TABLE'][:].T.astype(int)
+                table = np.rint(database.variables['BS_TABLE'][:].T).astype(int)
 
             spin_vars = [int(database.variables['SPIN_VARS'][:][0]), int(database.variables['SPIN_VARS'][:][1])]
             if spin_vars[0] == 2 and spin_vars[1] == 1:
@@ -145,7 +153,7 @@ class YamboExcitonDB(object):
         q_cutoff = None
         if os.path.isfile(path_cutoff):
             with Dataset(path_cutoff) as database:
-                bare_qpg = database.variables['CUT_BARE_QPG'][:]
+                bare_qpg = database.variables['CUT_BARE_QPG'][...].data
                 bare_qpg = bare_qpg[:,:,0]+bare_qpg[:,:,1]*I
                 q_cutoff = np.abs(bare_qpg[0,int(Qpt)-1])
 
@@ -230,6 +238,117 @@ class YamboExcitonDB(object):
             for i,n in sort_i:
                 f.write("%3d %12.8lf %12.8e\n"%(n+1,eig[n],i)) 
 
+    def get_Akcv(self):
+        """
+        Convert eigenvectors from (neigs,BS_table) -> (neigs,k,c,v)
+        For now, only works for nspin = 1. nspinor = 1/2 also works.
+        """
+
+        assert self.spin_pol == 'no', "Rearrange_Akcv works only for nspin = 1"
+        #
+        tmp_akcv = getattr(self, 'Akcv', None) 
+        if tmp_akcv is not None: return tmp_akcv 
+        #
+        if self.eigenvectors is None: return None
+        eig_wfcs = self.eigenvectors
+        #
+        nk = self.nkpoints
+        nv = self.nvbands
+        nc = self.ncbands
+        # Make sure nc * nv * nk = BS_TABLE length
+        table_len = nk*nv*nc
+        assert table_len == self.table.shape[0], "BS_TABLE length not equal to nc * nv * nk"
+        #
+        v_min = np.min(self.table[:,1])
+        c_min = np.min(self.table[:,2])
+        bs_table0 = self.table[:,0]-1
+        bs_table1 = self.table[:,1] - v_min
+        bs_table2 = self.table[:,2] - c_min
+        #
+        eig_wfcs_returned = np.zeros(eig_wfcs.shape,dtype=eig_wfcs.dtype)
+        #
+        sort_idx = bs_table0*nc*nv + bs_table2*nv + bs_table1
+        #
+        eig_wfcs_returned[:,sort_idx] = eig_wfcs[...,:table_len]
+        # check if this is coupling .
+        if eig_wfcs.shape[-1]//table_len == 2:
+            eig_wfcs_returned[:,sort_idx+table_len] = eig_wfcs[...,table_len:]
+            # NM : Note that here v and c are inverted i.e 
+            # psi_S = Akcv * phi_v(r_e) * phi_c^*(r_h)
+            eig_wfcs_returned = eig_wfcs_returned.reshape(-1,2,nk,nc,nv)
+        else :
+            eig_wfcs_returned = eig_wfcs_returned.reshape(-1,nk,nc,nv)
+        #
+        self.Akcv = eig_wfcs_returned
+        return self.Akcv
+    
+    def real_wf_to_cube(self, iexe, wfdb, fixed_postion=[0,0,0], supercell=[1,1,1], degen_tol=1e-2,
+                        wfcCutoffRy=-1, fix_particle='h', phase=False, block_size=256):
+        """
+        Function to compute and save real-space exciton wavefunctions and 
+        dump to cube file
+
+        Args:
+            iexe: index of excitonic states (python indexing. so starts with 0)
+            wfcb: wavefunction database.
+            fixed_postion (list): Position of fixed particle in crystal coordinates
+            supercell (list): Supercell dimensions [nx,ny,nz]
+            degen_tol (float): degeneracy threshold (in eV). default 0.01 eV
+            fix_particle (str): 'e' to fix electron, 'h' to fix hole (default)
+            wfcCutoffRy (float): Wavefunction cutoff in Rydberg (-1 for full cutoff)
+            phase (bool): If True, include phase information i.e multiply the density with
+                     sign of real part of the wavefunction
+            block_size (int): Block size for memory-efficient computation. leave it to default
+                        unless you are in exteremely low memory situation.
+
+        Returns:
+            None (write cube file to disk)
+        """
+        #
+        # first get all degenerate states
+        iexe_degen_states = np.array(self.get_degenerate(iexe+1,eps=degen_tol))-1
+        print("Degenerate states: ",iexe_degen_states+1)
+        # nicely arrange eigvectors to Akcv
+        Akcv = self.get_Akcv()[iexe_degen_states]
+        excQpt = self.car_qpoint
+        # Convert the q-point to crystal coordinates
+        Qpt = wfdb.ydb.lat @ excQpt
+        #
+        if fix_particle == 'h': name_file = 'electron'
+        else: name_file = 'hole'
+
+        if phase and real_wfc.shape[1] != 1:
+            print("phase plot only works for nspin = 1 and nspinor == 1")
+            phase = False
+        if phase and len(iexe_degen_states) > 1:
+            phase = False
+            print("Warning: phase plots donot work for degenerate states")
+
+        print('Computing exciton wavefunction (%s density) to real space.' %(name_file))
+        sc_latvecs, atom_nums, atom_pos, real_wfc = ex_wf2Real(Akcv, Qpt, wfdb, [np.min(self.table[:, 1]),
+                                                    np.max(self.table[:, 2])], fixed_postion=fixed_postion,
+                                                    fix_particle=fix_particle, supercell=supercell,
+                                                    wfcCutoffRy=wfcCutoffRy, block_size=block_size)
+        # Compute the absoulte^2
+        density = np.abs(real_wfc)**2
+        # Multiply with phase if necessary
+        if phase:
+            phase = np.sign(real_wfc.real) #np.sign(np.angle(real_wfc))
+            density *= phase
+        #
+        # sum over spinor indices and degenerate states
+        real_wfc = np.sum(density,axis=(0,1,2))
+        # normalize with max value
+        max_normalize_val = np.max(np.abs(real_wfc))
+        print('Max Normalization value: ',max_normalize_val)
+        real_wfc *= (1.0/max_normalize_val)
+        # write to cube file 
+        print('Writing to .cube file')
+        write_cube('exe_wf_%s_%d.cube' %(name_file,iexe+1),
+                   real_wfc, sc_latvecs, atom_pos, atom_nums,
+                   header='Real space exciton wavefunction')
+
+
     def get_nondegenerate(self,eps=1e-4):
         """
         get a list of non-degenerate excitons
@@ -276,12 +395,9 @@ class YamboExcitonDB(object):
         Args:
             eps: maximum energy difference to consider the two excitons degenerate in eV
         """
-        energy = self.eigenvalues[index-1]
-        excitons = [] 
-        for n,e in enumerate(self.eigenvalues):
-            if np.isclose(energy,e,atol=eps):
-                excitons.append(n+1)
-        return excitons
+        energy = self.eigenvalues[index-1].real
+        excitons = np.where(np.isclose(self.eigenvalues.real, energy, atol=eps))[0] + 1
+        return excitons.tolist()
 
     def exciton_bs(self,energies,path,excitons=(0,),debug=False):
         """
@@ -666,8 +782,8 @@ class YamboExcitonDB(object):
 
             #add weights
             sum_weights = 0
-            for t,kcv in enumerate(self.table):
-                k,c,v = kcv[0:3]-1
+            for t,kvc in enumerate(self.table):
+                k,v,c = kvc[0:3]-1
                 this_weight = abs2(eivec[t])
                 weights[k,c] += this_weight
                 weights[k,v] += this_weight
@@ -684,8 +800,8 @@ class YamboExcitonDB(object):
             eivec = self.eigenvectors[exciton-1]
             #add weights
             sum_weights = 0
-            for t,kcv in enumerate(self.table):
-                k,c,v = kcv[0:3]
+            for t,kvc in enumerate(self.table):
+                k,v,c = kvc[0:3]
                 total_weights[k-1] += abs2(eivec[t])
             if abs(sum(total_weights) - 1) > 1e-3: raise ValueError('Excitonic weights does not sum to 1 but to %lf.'%sum_weights)
  
@@ -704,8 +820,8 @@ class YamboExcitonDB(object):
             eivec = self.eigenvectors[exciton-1]
             #add weights
             #sum_weights = 0
-            for t,kcv in enumerate(self.table):
-                k,c,v = kcv-1                             
+            for t,kvc in enumerate(self.table):
+                k,v,c = kvc-1                             
                 #k,v,c = kcv-1                 # bug?? Double-check
                 this_weight = abs2(eivec[t])
                 w_k_v_to_c[k,v-v_min,c-c_min] = this_weight   # new
@@ -1213,7 +1329,7 @@ class YamboExcitonDB(object):
         nkpoints = len(car_kpoints)
         print(nkpoints)
         amplitudes = np.zeros([nkpoints])
-        phases     = np.zeros([nkpoints],dtype=np.complex64)
+        phases     = np.zeros([nkpoints],dtype=self.eigenvalues.dtype)
         for exciton in excitons:
             #the the eigenstate
             eivec = self.eigenvectors[exciton-1]
@@ -1247,7 +1363,7 @@ class YamboExcitonDB(object):
             print("broadening: %lf eV"%broad)
 
         #initialize the susceptibility intensity
-        chi = np.zeros_like(w,dtype=np.complex64)
+        chi = np.zeros_like(w,dtype=self.eigenvalues.dtype)
 
         # Oscillator strengths (residuals)
         EL1 = self.l_residual
@@ -1312,7 +1428,7 @@ class YamboExcitonDB(object):
             print("energy steps: %lf"%nenergies)
 
         #initialize the susceptibility intensity
-        pl = np.zeros([len(w)],dtype=np.complex64)
+        pl = np.zeros([len(w)],dtype=self.eigenvalues.dtype)
 
         if dipoles is None:
             #get dipole
@@ -1547,14 +1663,14 @@ class YamboExcitonDB(object):
     
         """get weight of state in each band for spin-polarized case"""
         table_up, table_dw, table_updw = [] , [], []
-        for t,kcv in enumerate(self.table):
-            k,c,v,c_s,v_s = kcv-1   # We substract 1 to be consistent with python numbering of arrays
+        for t,kvc in enumerate(self.table):
+            k,v,c,v_s,c_s = kvc-1   # We substract 1 to be consistent with python numbering of arrays
             if c_s == 0 and v_s == 0:
-               table_up.append(np.array(kcv[0:3]))
+               table_up.append(np.array(kvc[0:3]))
             if c_s == 1 and v_s == 1:
-               table_dw.append(np.array(kcv[0:3]))
+               table_dw.append(np.array(kvc[0:3]))
             if c_s == 1 and v_s == 0:
-               table_updw.append(np.array(kcv[0:3]))
+               table_updw.append(np.array(kvc[0:3]))
         table_up=np.array(table_up)
         table_dw=np.array(table_dw)
         table_updw=np.array(table_updw)
@@ -1576,8 +1692,8 @@ class YamboExcitonDB(object):
             eivec = self.eigenvectors[exciton-1]
             #add weights
             sum_weights = 0
-            for t,kcv in enumerate(self.table):
-                k,c,v,c_s,v_s = kcv-1   # We substract 1 to be consistent with python numbering of arrays
+            for t,kvc in enumerate(self.table):
+                k,v,c,v_s,c_s = kvc-1   # We substract 1 to be consistent with python numbering of arrays
                 this_weight = abs2(eivec[t])
                 if c_s == 0 and v_s == 0:
                    weights_up[k,c] += this_weight

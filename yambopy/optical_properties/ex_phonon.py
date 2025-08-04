@@ -1,0 +1,363 @@
+import warnings
+from numba import njit, prange
+import os
+from netCDF4 import Dataset
+from yambopy.letzelphc_interface.lelphcdb import LetzElphElectronPhononDB
+from yambopy.dbs.latticedb import YamboLatticeDB
+from yambopy.dbs.wfdb import YamboWFDB
+from yambopy.dbs.excitondb import YamboExcitonDB
+from yambopy.dbs.dipolesdb import YamboDipolesDB
+from yambopy.bse.exciton_matrix_elements import exciton_X_matelem
+from yambopy.units import *
+from yambopy.bse.rotate_excitonwf import rotate_exc_wf
+try:
+    from pykdtree.kdtree import KDTree 
+    ## pykdtree is much faster and is recommanded
+    ## pip install pykdtree
+    ## useful in Dmat computation
+except ImportError as e:
+    from scipy.spatial import KDTree
+from yambopy.kpoints import build_ktree, find_kpt
+from tqdm import tqdm
+from time import time
+warnings.filterwarnings('ignore')
+
+class ExcitonPhonon(object):
+    def __init__(self, path=None, save='SAVE', lelph_db=None, latdb=None, wfdb=None, \
+                 ydipdb=None, bands_range=[], BSE_dir='bse', LELPH_dir='lelph', \
+                 DIP_dir='gw',save_files=True):
+        if path is None:
+            path = os.getcwd()        
+        self.path = path
+        self.SAVE_dir  = os.path.join(path, save)
+        self.BSE_dir   = os.path.join(path,BSE_dir)
+        self.LELPH_dir = os.path.join(path,LELPH_dir)
+        self.DIP_dir   = os.path.join(path,DIP_dir) # usually dip_dir is in gw run
+        self.latdb = latdb
+        self.lelph_db = lelph_db
+        self.wfdb = wfdb
+        self.ydipdb = ydipdb
+        
+        self.read(lelph_db=lelph_db, latdb=latdb, wfdb=wfdb, \
+                  ydipdb=ydipdb, bands_range=bands_range)
+        
+        self.save_files =save_files # whether the user wants to save files in .npy database
+
+        # Tricks for caching
+        if not hasattr(self, '_Ak_cache'):
+            self._Ak_cache = {}
+        if not hasattr(self, '_eph_mat_cache'):
+            self._eph_mat_cache = {}
+
+    def read(self, lelph_db=None, latdb=None, wfdb=None,\
+             ydipdb = None, bands_range = []):
+        # Open the ns.db1 database to get essential data
+        SAVE_dir = self.SAVE_dir
+        # readlatdb        
+        try:
+            ns_db1_fname = os.path.join(SAVE_dir, 'ns.db1')
+            if latdb :
+                if not hasattr(latdb,'ibz_kpoints'): latdb.expand_kpoints()
+                self.ydb = latdb
+            else :
+                self.ydb = YamboLatticeDB.from_db_file(ns_db1_fname, Expand=True)        
+        except Exception as e:
+            raise IOError(f'Cannot read ns.db1 file: {e}')
+
+        self.lat_vecs = self.ydb.lat
+        self.nibz = self.ydb.ibz_nkpoints
+        self.symm_mats = self.ydb.sym_car
+        self.ele_time_rev = self.ydb.time_rev
+        self.blat_vecs = self.ydb.rlat.T
+
+        #readwfdb
+        try:
+            ns_wfdb_fname = os.path.join(SAVE_dir, 'ns.wf')
+            if wfdb :
+                if not hasattr(latdb,'save_Dmat'): wfdb.Dmat()
+                self.wfdb = wfdb
+            else :
+                self.wfdb = YamboWFDB(filename = ns_wfdb_fname, Expand=True, latdb=self.ydb, bands_range=bands_range)  
+        except Exception as e:
+            raise IOError(f'Cannot read ns.wf file: {e}')
+        #Read dimensions
+        self.nkpoints = self.wfdb.nkpoints # Number of k-points in iBZ
+        self.nspin    = self.wfdb.nspin       # Number of spin components
+        self.nspinor  = self.wfdb.nspinor   # Number of spinor components
+        self.nbands   = self.wfdb.nbands     # Number of bands
+       
+        nbnds = max(bands_range)-min(bands_range)
+        start_bnd_idx = 0
+        end_bnd = start_bnd_idx + nbnds
+        self.Dmats = self.wfdb.Dmat()[:,:,0,:,:]
+        #self.nbands = max(bands_range) - self.min_bnd
+        self.bands_range = bands_range
+        
+
+        # set kmap
+        kmap = np.zeros((self.wfdb.nkBZ,2), dtype=int)
+        kmap[:,0]=self.ydb.kpoints_indexes
+        kmap[:,1]=self.ydb.symmetry_indexes
+        self.kmap=kmap
+        # read exciton database
+        self.bs_bands, self.BS_eigs, self.BS_wfcs, self.excQpt = self.read_excdb(self.BSE_dir)
+
+        #read LetzElPhC
+        try:
+            ndb_lelph_fname = os.path.join(self.LELPH_dir, 'ndb.elph')
+            if lelph_db :
+                self.lelph_db = lelph_db
+            else :
+                self.lelph_db = LetzElphElectronPhononDB(filename = ndb_lelph_fname)        
+        except Exception as e:
+            raise IOError(f'Cannot read ndb.elph file: {e}')        
+        
+        self.kpts = self.lelph_db.kpoints
+        self.qpts = self.lelph_db.qpoints
+        self.elph_bnds_range = self.lelph_db.bands
+        self.ph_freq = self.lelph_db.ph_energies/ha2ev # yambopy gives energies in Ry, I work in Hartree
+        #read YamboDipolesDb
+        try:
+            ndb_dipoles_fname = os.path.join(self.DIP_dir, 'ndb.dipoles')
+            if ydipdb :
+                self.ydipdb = ydipdb
+            else :
+                self.ydipdb = YamboDipolesDB(self.ydb, save='',filename = ndb_dipoles_fname, dip_type='iR',\
+                                           field_dir=[1,1,1],project=False, expand=False,bands_range=bands_range,\
+                                            )        
+        except Exception as e:
+            raise IOError(f'Cannot read ndb.dipoles file: {e}')
+        if(self.ydipdb.spin == 2):
+            self.ele_dips = self.ydipdb.dipoles.conjugate().transpose(1,2,3,4,0)
+        if(self.ydipdb.spin == 1):
+            self.ele_dips = self.ydipdb.dipoles.conjugate().transpose(0,2,3,1)
+
+        ### build a kdtree for kpoints
+        print('Building kD-tree for kpoints')
+        kpt_tree = build_ktree(self.kpts)
+        self.kpt_tree = kpt_tree
+        ### fomd tje omdoces pf qpoints in kpts
+        self.qidx_in_kpts = find_kpt(self.kpt_tree, self.kpts)
+        # Remember b_lat @ red_kpoints = car_kpoints -> red_kpoins = inv(b_lat) @ car_kpoints
+        # (inv_blat) = (ydb.lat.T)
+        temp = np.matmul(self.symm_mats, self.blat_vecs)  # shape (n, j, l)
+        # temp: (n, j, l)
+        # lat_vecs: (i, j)
+        # reshape lat_vecs for batched matmul: (1, i, j)
+        # use matmul: (1, i, j) @ (n, j, l) → (n, i, l)
+        sym_red = np.matmul(self.lat_vecs[None, :, :], temp)  # result (n, i, l)
+        self.sym_red = np.rint(sym_red).astype(int)
+
+    def read_excdb(self, BSE_dir):
+        """Read yambo exciton database for each Q-point"""
+        bs_bands = [] # bands involved in BSE
+        BS_eigs  = [] #eigenenergies BSE
+        BS_wfcs = [] # exciton wavefunctions
+        excQpt  = [] #Q-point of BSE -> The q o A^{\lambda Q}_{cvk}
+        for iq in tqdm(range(self.nibz), desc="Loading Ex-wfcs "):
+            try:
+                bse_db_iq = YamboExcitonDB.from_db_file(self.ydb, folder=BSE_dir,filename=f'ndb.BS_diago_Q{iq+1}')
+            except Exception as e:
+                raise IOError(f'Cannot read ndb.BS_diago_Q{iq} file: {e}')
+            bs_bands=bse_db_iq.nbands
+            tmp_eigs = bse_db_iq.eigenvalues
+            tmp_wfcs = bse_db_iq.get_Akcv()
+            tmp_qpt = self.ydb.lat @ bse_db_iq.car_qpoint
+            BS_eigs.append(tmp_eigs)
+            BS_wfcs.append(tmp_wfcs)
+            excQpt.append(tmp_qpt)
+        return bs_bands, (np.array(BS_eigs)/ha2ev).astype(self.wfdb.wf.dtype), np.array(BS_wfcs).astype(self.wfdb.wf.dtype), excQpt
+    
+    def compute_Exph(self, gamma_only = True):
+        """Top-level method to compute exciton-phonon coupling"""
+        from time import time
+
+        # Timing key/value
+        self.timings = {
+        'elph_io': 0,
+        'ex_rot': 0,
+        'exph': 0,
+        'exph_io': 0,            
+        }
+
+        # Precomputations
+        self._prepare_kdtree()
+        self._find_qidx_in_kpts()
+        self._find_qplusQ_indices()
+
+        # Main computation
+        if gamma_only:
+            ex_ph = self._compute_gamma_only_exph()
+        else:
+            ex_ph = self._compute_full_exph()
+
+        # I/O
+        self.ex_ph = self._save_or_load_exph(ex_ph)
+        
+        # Profiling
+        print('** Timings **')
+        for key, val in self.timings.items():
+            print(f'{key.upper():<10}: {val:.4f} s')
+        print('*' * 30, ' Program ended ', '*' * 30)
+
+    def _prepare_kdtree(self):
+        print('Build KD-tree for k-points...')
+        self.kpt_tree = build_ktree(self.kpts)
+    
+    def _find_qidx_in_kpts(self):
+        self.qidx_in_kpts = find_kpt(self.kpt_tree,self.kpts)
+
+    def _find_qplusQ_indices(self):
+        nq = self.kpts.shape[0]
+        nQ = len(self.excQpt)
+        self.qplusQ_in_kpts = np.zeros((nQ, nq), dtype=int)
+        for iQ in range(nQ):
+            self.qplusQ_in_kpts[iQ] = find_kpt(self.kpt_tree, self.kpts + self.excQpt[iQ])
+
+    def _compute_gamma_only_exph(self):
+        'ex-ph matrix elements only at the \u0393 point'
+        nq = self.qidx_in_kpts.shape[0]
+        nb = self.BS_eigs.shape[1]
+        nm = self.lelph_db.nm
+        ex_ph = np.zeros((1, nq, nm, nb, nb), dtype=self.BS_eigs.dtype)
+
+        print("Computing exciton-phonon matrix elements at \u0393 point...")
+
+        for iq in tqdm(range(nq), desc="Exciton-phonon \u0393"):
+            # Validate q -> k mapping
+            kq_diff = self.qpts[iq] - self.kpts[self.qidx_in_kpts[iq]]
+            kq_diff -= np.rint(kq_diff)
+            assert np.linalg.norm(kq_diff) < 1e-5, f"Inconsistent q→k mapping at q index {iq}"
+
+            # Load elph matrix
+            t0 = time()
+            eph_mat_iq = self._load_elph_matrix(iq)
+            self.timings['elph_io'] += time() - t0
+
+            # Rotate exciton wavefunctions
+            t0 = time()
+            Ak, Akq = self._rotate_exciton_pair(iq, iQ=0)
+            self.timings['ex_rot'] += time() - t0
+
+            # Compute ex-ph element
+            t0 = time()
+            ex_ph[0, iq] = exciton_X_matelem(
+                                    self.excQpt[0],         # Q
+                                    self.kpts[self.qidx_in_kpts[iq]],  # q
+                                    Akq, Ak, eph_mat_iq, self.kpts,
+                                    contribution='b'
+                                    )
+            self.timings['exph'] += time() - t0
+
+        return ex_ph
+
+    def _compute_full_exph(self):
+        '''Compute ex-ph matrix elements for all Q (IBZ) and q points'''
+        nq = self.qidx_in_kpts.shape[0]
+        nQ = len(self.excQpt)
+        nb = self.BS_eigs.shape[1]
+        nm = self.lelph_db.nm
+        ex_ph = np.zeros((nQ, nq, nm, nb, nb), dtype=self.BS_eigs.dtype)
+        print("Computing exciton-phonon matrix elements for all Q points...")
+
+        for iQ in tqdm(range(nQ), desc="Exciton-phonon Q"):
+            for iq in range(nq):
+                # Check q consistency
+                kq_diff = self.qpts[iq] - self.kpts[self.qidx_in_kpts[iq]]
+                kq_diff -= np.rint(kq_diff)
+                assert np.linalg.norm(kq_diff) < 1e-5, f"Inconsistent q→k at q={iq}, Q={iQ}"
+
+                # Load elph matrix
+                t0 = time()
+                eph_mat_iq = self._load_elph_matrix(iq)
+                self.timings['elph_io'] += time() - t0
+
+                # Rotate exciton wavefunctions
+                t0 = time()
+                Ak, Akq = self._rotate_exciton_pair(iq, iQ)
+                self.timings['ex_rot'] += time() - t0
+
+                # Compute ex-ph element
+                t0 = time()
+                #Evaluate the exciton-phonon matrix element ⟨Akq|g(q)|Ak⟩.
+                ex_ph[iQ, iq] = exciton_X_matelem(
+                                    self.excQpt[iQ],         # Q
+                                    self.kpts[self.qidx_in_kpts[iq]],  # q
+                                    Akq, Ak, eph_mat_iq, self.kpts,
+                                    contribution='b'
+                                    )
+                self.timings['exph'] += time() - t0
+
+        return ex_ph
+
+    def _load_elph_matrix(self, iq):
+        """
+        Load the electron-phonon coupling matrix for a given q-point index `iq`.
+        At the end we transpose for row indexing efficiency and back-compatibility with following methods
+        """
+        if iq in self._eph_mat_cache:
+            return self._eph_mat_cache[iq]
+
+        _, eph_mat_iq = self.lelph_db.read_iq(iq, bands_range=self.bands_range, convention='standard')
+        self._eph_mat_cache[iq] = eph_mat_iq[:, :, 0, :, :].transpose(1, 0, 3, 2)
+        # Select spin 0 and transpose axes: (spin, mode, m, n) → (mode, m, n)
+        # Original shape: (nb1, nb2, 2 spins, nm, nk) → we keep only spin 0 and swap bands for compatibility
+        return eph_mat_iq[:, :, 0, :, :].transpose(1, 0, 3, 2)
+    
+    def _rotate_exciton_pair(self, iq, iQ):
+        """
+        Returns rotated  (A^{S,Q}_{cvk}, A^{S,Q+q}_{cvk}) for a given phonon index i and exciton Q index iQ.
+        """
+        # For q-point k
+        ik_ibz, isym = self.kmap[self.qidx_in_kpts[iq]]
+        Ak = self._rotate_exciton_wavefunction(ik_ibz, isym)
+
+        # For q + Q point
+        ik_ibz_qplusQ, isym_qplusQ = self.kmap[self.qplusQ_in_kpts[iQ, iq]]
+        Akq = self._rotate_exciton_wavefunction(ik_ibz_qplusQ, isym_qplusQ)
+
+        return Ak, Akq
+
+    def _rotate_exciton_wavefunction(self, ik_ibz, isym):
+        """
+        Rotate exciton wavefunction from IBZ point using symmetry operation.
+        A^{S,RQ}_{cvk} = \sum_{k'i'j'} \mathcal{U}^{Q}_{k'i'j'kij}(g)A^{S,Q}_{k'i'j'}
+        """
+        key = (ik_ibz, isym)
+        # The same time a key pair appears we save time and do not call rotate_exc_wf
+        if key in self._Ak_cache:
+            return self._Ak_cache[key]
+
+        is_sym_time_rev = isym >= self.symm_mats.shape[0] // (int(self.ele_time_rev) + 1)
+
+        Ak = rotate_exc_wf(
+            self.BS_wfcs[ik_ibz],
+            self.sym_red[isym],
+            self.kpts.data,
+            self.wfdb.kpts_iBZ[ik_ibz],
+            self.Dmats[isym],
+            is_sym_time_rev,
+            ktree=self.kpt_tree
+        )
+
+        self._Ak_cache[key] = Ak
+        return Ak
+
+    def _save_or_load_exph(self, ex_ph):
+        from time import time
+        import os
+
+        if self.save_files:
+            print('Saving exciton-phonon matrix elements...')
+            t0 = time()
+            np.save('Ex-ph.npy', ex_ph.astype(self.BS_wfcs.dtype))
+            self.timings['exph_io'] += time() - t0
+            return ex_ph
+        else:
+            print('Loading exciton-phonon matrix elements...')
+            t0 = time()
+            if not os.path.exists('Ex-ph.npy'):
+                raise FileNotFoundError("Cannot load 'Ex-ph.npy' - file does not exist.")
+            ex_ph_loaded = np.load('Ex-ph.npy')
+            self.timings['exph_io'] += time() - t0
+            return ex_ph_loaded
