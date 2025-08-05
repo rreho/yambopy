@@ -343,14 +343,14 @@ def ex_wf2Real_kernel(Akcv, Qpt, wfcdb, bse_bnds, fixed_postion,
             exp_kx_r = np.exp(2*np.pi*1j*FFFboxs.reshape(-1,3)@ft_kvec).reshape(FFFboxs.shape[:3])
             ft_wfcr *= exp_kx_r[None,None,None,...]
             #
-            Akcv = Akcv.astype(np.complex64)
+            #Akcv = Akcv.astype(np.complex64)
             fx_wfc = fx_wfc.astype(np.complex64)
             ft_wfcr = ft_wfcr.astype(np.complex64)
             if fix_particle == 'h':
-                np.einsum('ncv,vy,cxijk->nxyijk',Akcv[:,ik,...],fx_wfc[0],ft_wfcr[0],
+                np.einsum('ncv,vy,cxijk->nxyijk',Akcv[:,ik,...].astype(np.complex64),fx_wfc[0],ft_wfcr[0],
                           optimize=True,out=exe_tmp_wf[:,:,:,ik-ikstart])
             else :
-                np.einsum('ncv,cx,vyijk->nxyijk',Akcv[:,ik,...],fx_wfc[0],ft_wfcr[0],
+                np.einsum('ncv,cx,vyijk->nxyijk',Akcv[:,ik,...].astype(np.complex64),fx_wfc[0],ft_wfcr[0],
                           optimize=True,out=exe_tmp_wf[:,:,:,ik-ikstart])
             #
             #exe_tmp_wf[:,:,:,ik-ikstart] *= exp_kx_r[...].reshape(FFFboxs.shape[:3])[None,None,None]
