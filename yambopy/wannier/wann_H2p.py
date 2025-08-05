@@ -1104,7 +1104,38 @@ class H2P():
     def _get_occupations(self, eigv, fermie):
         occupations = fermi_dirac(eigv,fermie)
         return np.real(occupations)
-    
+
+    def convert_to_yambo_table(self, nv_ks):
+        # nv_ks is the number of valence bands in the kohn-sham ground state calculation. Not the subspace used my wannier
+        nv_factor = nv_ks - self.nv
+        nk_col = self.BSE_table[:,0]+1
+        nv_col = self.BSE_table[:,1] + nv_factor +1
+        nc_col = self.BSE_table[:,2] + nv_factor +1
+
+        new_table = np.zeros((self.BSE_table.shape[0],5), dtype = int)
+        arr_ones = np.ones(shape=(self.BSE_table.shape[0]),dtype=int)
+        new_table = np.column_stack([nk_col,nv_col, nc_col,arr_ones,arr_ones])
+        return  new_table
+
+    def write_exc_wf_cube(self, wf_path,iexe, car_qpoint=None, **args):
+        from yambopy.dbs.wfdb import YamboWFDB
+        wfdb = None
+        if wf_path is None:
+            try:
+                wfdb = YamboWFDB(path=self.electronsdb_path,latdb=self.latdb, bands_range=[])
+            except: print("Provide a correct path where the wavefunction dbs can be found.")
+        else:
+            wfdb = YamboWFDB(path=wf_path,latdb=self.latdb, bands_range=[])
+
+        wfdb.expand_fullBZ()
+        if car_qpoint is None:
+            Qpt= self.q0index
+            car_qpoint = np.array([0,0,0])
+        ydb = YamboExcitonDB(lattice=self.latdb,Qpt=0, eigenvalues=self.h2peigv[0],l_residual=self.F_kcv,r_residual=1, table=self.convert_to_yambo_table(self.electronsdb.nelectrons),car_qpoint=np.array(car_qpoint))
+        ydb.eigenvectors =self.h2peigvec
+        ydb.real_wf_to_cube(iexe=iexe, wfdb=wfdb, **args)
+
+
 def chunkify(lst, n):
     """Divide list `lst` into `n` chunks."""
     return [lst[i::n] for i in range(n)]    
