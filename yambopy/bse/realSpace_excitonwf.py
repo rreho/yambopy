@@ -346,7 +346,6 @@ def ex_wf2Real_kernel(Akcv, Qpt, wfcdb, bse_bnds, fixed_postion,
             Akcv = Akcv.astype(np.complex64)
             fx_wfc = fx_wfc.astype(np.complex64)
             ft_wfcr = ft_wfcr.astype(np.complex64)
-            exe_tmp_wf = exe_tmp_wf.astype(np.complex64)
             if fix_particle == 'h':
                 np.einsum('ncv,vy,cxijk->nxyijk',Akcv[:,ik,...],fx_wfc[0],ft_wfcr[0],
                           optimize=True,out=exe_tmp_wf[:,:,:,ik-ikstart])
