@@ -16,7 +16,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install .
+        pip install .[dev]
 
     - name: Run all qurex-test
       run: |
