@@ -23,6 +23,13 @@ def test_grids():
     ref_kminusq = np.load("qurex-tests/data-tests/ref-data/mp_kmq_grid_table.npy")
     ref_qplusk = np.load("qurex-tests/data-tests/ref-data/mp_qpk_grid_table.npy")
     ref_qminusk = np.load("qurex-tests/data-tests/ref-data/mp_qmk_grid_table.npy")
+    diff = qplusk_table != ref_qplusk
+    print("First 5 mismatches:")
+    mismatch_indices = np.argwhere(diff)
+    for idx in mismatch_indices[:5]:
+        print(f"Index {idx}: actual={qplusk_table[tuple(idx)]}, expected={ref_qplusk[tuple(idx)]}")
+
+    
     np.testing.assert_allclose(kplusq_table, ref_kplusq, atol=1e-6, err_msg="Mismatch in kplusq_table vs ref")
     np.testing.assert_allclose(kminusq_table, ref_kminusq, atol=1e-6, err_msg="Mismatch in kminusq_table vs ref")
     np.testing.assert_allclose(qplusk_table, ref_qplusk, atol=1e-6, err_msg="Mismatch in qplusk_table vs ref")
