@@ -397,9 +397,15 @@ class YamboDipolesDB():
 
                 # these are the expanded+projected dipoles already
                 dips = dipoles[s]
-                if self.project:     
-                    dip2= np.einsum('j,ij->i', self.field_dir , np.abs(dips[:,:,c,v]))**2
-                if not self.project: dip2 = np.einsum('j,ij->i', self.field_dir , np.abs(dips[:,:,c,v]))**2
+                dip2 = np.zeros(nkpoints, dtype=np.float64)
+                e = [(np.array([1/np.sqrt(2), 1j/np.sqrt(2), 0], np.complex64)/np.sqrt(2),1.0)]
+                for e_vec, w in e:           # ⇐ NEW
+                    #  ┌──── e_vec (3,) , dips_slice (nk,3)  ─────┐
+                    proj = np.einsum('d,kd->k', e_vec, dips[:,:,c,v])   # shape (nk,)
+                    dip2 += w*np.abs(proj)**2
+
+                # if self.project:     dip2= np.abs( np.sum( dips[:,0,c,v]+1j*dips[:,1,c,v], axis=1) )**2.
+                # if not self.project: dip2 = np.abs( np.einsum('j,ij->i', self.field_dir , dips[:,:,c,v]) )**2
 
                 #make dimensions match
                 dip2a = dip2[na,:]
