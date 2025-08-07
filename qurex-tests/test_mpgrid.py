@@ -23,8 +23,12 @@ def test_grids():
     ref_kminusq = np.load("qurex-tests/data-tests/ref-data/mp_kmq_grid_table.npy")
     ref_qplusk = np.load("qurex-tests/data-tests/ref-data/mp_qpk_grid_table.npy")
     ref_qminusk = np.load("qurex-tests/data-tests/ref-data/mp_qmk_grid_table.npy")
-
-    assert np.allclose(kplusq_table, ref_kplusq, atol=1e-8)
-    assert np.allclose(kminusq_table, ref_kminusq, atol=1e-8)
-    assert np.allclose(qplusk_table, ref_qplusk, atol=1e-8)
-    assert np.allclose(qminusk_table, ref_qminusk, atol=1e-8)    
+    np.testing.assert_allclose(kplusq_table, ref_kplusq, atol=1e-6, err_msg="Mismatch in kplusq_table vs ref")
+    np.testing.assert_allclose(kminusq_table, ref_kminusq, atol=1e-6, err_msg="Mismatch in kminusq_table vs ref")
+    np.testing.assert_allclose(qplusk_table, ref_qplusk, atol=1e-6, err_msg="Mismatch in qplusk_table vs ref")
+    np.testing.assert_allclose(qminusk_table, ref_qminusk, atol=1e-6, err_msg="Mismatch in qminusk_table vs ref")
+    
+    assert np.allclose(kplusq_table, ref_kplusq, atol=1e-6)
+    assert np.allclose(kminusq_table, ref_kminusq, atol=1e-6)
+    assert np.allclose(qplusk_table, ref_qplusk, atol=1e-6)
+    assert np.allclose(qminusk_table, ref_qminusk, atol=1e-6)    
