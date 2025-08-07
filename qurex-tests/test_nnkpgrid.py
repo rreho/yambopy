@@ -22,7 +22,7 @@ def test_kpb_grid():
     nnkp_kgrid, nnkp_qgrid = load_grids()
     result = nnkp_kgrid.kpb_grid_table
     reference = np.take_along_axis(nnkp_kgrid.nnkp, nnkp_kgrid.sort_idx[:,:,None], axis=1)
-    assert np.allclose(result, reference, atol=rtol=1e-6, atol=1e-7)
+    assert np.allclose(result, reference, rtol=1e-6, atol=1e-7)
 
 def test_kmb_grid():
     '''k - b or k - B/2'''
