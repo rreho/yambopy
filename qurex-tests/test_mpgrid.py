@@ -19,10 +19,10 @@ def test_grids():
     mp_kgrid, mp_qgrid = load_grids()
     (kplusq_table, kminusq_table) = mp_kgrid.get_kq_tables(mp_qgrid) 
     (qplusk_table, qminusk_table) = mp_qgrid.get_kq_tables(mp_kgrid, sign="-")  # minus sign to have k-q  
-    ref_kplusq = np.load("qurex-tests/data-tests/ref-data/mp_kpq_grid_table.npy")
-    ref_kminusq = np.load("qurex-tests/data-tests/ref-data/mp_kmq_grid_table.npy")
-    ref_qplusk = np.load("qurex-tests/data-tests/ref-data/mp_qpk_grid_table.npy")
-    ref_qminusk = np.load("qurex-tests/data-tests/ref-data/mp_qmk_grid_table.npy")
+    ref_kplusq = np.load("qurex-tests/data-tests/ref-data/mp_kpq_grid_table.npy",allow_pickle=False)
+    ref_kminusq = np.load("qurex-tests/data-tests/ref-data/mp_kmq_grid_table.npy",allow_pickle=False)
+    ref_qplusk = np.load("qurex-tests/data-tests/ref-data/mp_qpk_grid_table.npy",allow_pickle=False)
+    ref_qminusk = np.load("qurex-tests/data-tests/ref-data/mp_qmk_grid_table.npy",allow_pickle=False)
     diff = qplusk_table != ref_qplusk
     print("First 5 mismatches:")
     mismatch_indices = np.argwhere(diff)
