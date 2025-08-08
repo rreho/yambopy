@@ -148,6 +148,9 @@ class ExcitonGroupTheory(BaseOpticalProperties):
 
         # Handle symmetry matrices and kmap specific to group theory
         self._setup_symmetry_data()
+        
+        # Setup D-matrices for spgrep analysis (will be computed when needed)
+        self.spglib_Dmats = None
 
     def _setup_symmetry_data(self):
         """Setup symmetry data specific to group theory analysis."""
@@ -166,13 +169,14 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                 elph_file.close()
             except Exception as e:
                 print(f"Warning: Could not read symmetry from elph file: {e}")
-                self.frac_trans = np.zeros((self.symm_mats.shape[0], 3))
-                # Fallback to lattice database kmap
-                self.kmap = self.kmap
+                print("Attempting to get fractional translations from spglib...")
+                self._setup_symmetry_from_spglib()
         else:
-            self.frac_trans = np.zeros((self.symm_mats.shape[0], 3))
+            print("Reading symmetry from ns.db1 file...")
             # Use lattice database kmap and kpoints from lelph_db
             self.kpts = self.lelph_db.kpoints
+            # Try to get fractional translations from spglib
+            self._setup_symmetry_from_spglib()
 
         # Use existing k-point tree from base class
         if hasattr(self.wfdb, 'ktree'):
@@ -189,6 +193,156 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             ik_ibz, isym = self.kmap[i]
             if isym == 0:
                 self.kpts_iBZ[ik_ibz, :] = self.kpts[i]
+    
+    def _setup_symmetry_from_spglib(self):
+        """Setup symmetry data using spglib when elph file is not available."""
+        try:
+            import spglib
+            
+            # Get crystal structure
+            lattice, positions, numbers = self._get_crystal_structure()
+            if lattice is not None and positions is not None and numbers is not None:
+                cell = (lattice, positions, numbers)
+                symmetry = spglib.get_symmetry(cell, symprec=1e-5)
+                
+                if symmetry:
+                    # Get fractional translations from spglib
+                    spg_translations = symmetry['translations']
+                    spg_rotations = symmetry['rotations']
+                    
+                    # Match spglib operations with Yambo operations
+                    if hasattr(self, 'symm_mats') and self.symm_mats is not None:
+                        # Try to match operations and extract corresponding translations
+                        self.frac_trans = self._match_translations(spg_rotations, spg_translations)
+                    else:
+                        # If no Yambo symmetries available, use spglib directly
+                        print("Using spglib symmetries directly")
+                        self.symm_mats = spg_rotations.astype(float)
+                        self.frac_trans = spg_translations
+                        # Convert to crystal coordinates
+                        self.frac_trans = np.einsum('ij,nj->ni', self.blat_vecs.T, self.frac_trans)
+                        
+                    print(f"Extracted {len(self.frac_trans)} fractional translations from spglib")
+                    return
+            
+            # Fallback: zero translations
+            print("spglib fallback failed, using zero fractional translations")
+            if hasattr(self, 'symm_mats') and self.symm_mats is not None:
+                self.frac_trans = np.zeros((self.symm_mats.shape[0], 3))
+            else:
+                self.frac_trans = np.zeros((24, 3))  # Default assumption
+                
+        except ImportError:
+            print("spglib not available, using zero fractional translations")
+            if hasattr(self, 'symm_mats') and self.symm_mats is not None:
+                self.frac_trans = np.zeros((self.symm_mats.shape[0], 3))
+            else:
+                self.frac_trans = np.zeros((24, 3))
+        except Exception as e:
+            print(f"spglib setup failed: {e}")
+            if hasattr(self, 'symm_mats') and self.symm_mats is not None:
+                self.frac_trans = np.zeros((self.symm_mats.shape[0], 3))
+            else:
+                self.frac_trans = np.zeros((24, 3))
+    
+    def _match_translations(self, spg_rotations, spg_translations):
+        """Match spglib translations with Yambo symmetry operations."""
+        matched_translations = np.zeros((self.symm_mats.shape[0], 3))
+        
+        for i, yambo_rot in enumerate(self.symm_mats):
+            # Find matching rotation in spglib operations
+            best_match_idx = -1
+            min_diff = float('inf')
+            
+            for j, spg_rot in enumerate(spg_rotations):
+                diff = np.linalg.norm(yambo_rot - spg_rot.astype(float))
+                if diff < min_diff:
+                    min_diff = diff
+                    best_match_idx = j
+            
+            # If we found a good match (within tolerance)
+            if min_diff < 1e-6 and best_match_idx >= 0:
+                matched_translations[i] = spg_translations[best_match_idx]
+            else:
+                # No match found, use zero translation
+                matched_translations[i] = np.zeros(3)
+        
+        # Convert to crystal coordinates
+        return np.einsum('ij,nj->ni', self.blat_vecs.T, matched_translations)
+    
+    def _compute_spglib_dmats(self, spglib_rotations):
+        """Compute D-matrices for spglib symmetry operations using wfdb.Dmat() method."""
+        try:
+            # Use the wfdb.Dmat() method with spglib symmetries
+            # This should be called after we have the spglib rotations
+            print("Computing D-matrices for spglib symmetries...")
+            
+            # Convert spglib rotations to the format expected by wfdb.Dmat()
+            spglib_symm_mats = spglib_rotations.astype(float)
+            
+            # Call wfdb.Dmat() with the spglib symmetries
+            # The method accepts symm_mat (singular), frac_vec, and time_rev parameters
+            if hasattr(self.wfdb, 'Dmat') and callable(getattr(self.wfdb, 'Dmat')):
+                # Try to compute D-matrices with spglib symmetries
+                # Get corresponding fractional translations for spglib operations
+                spglib_frac_trans = self._get_spglib_fractional_translations(spglib_rotations)
+                
+                self.spglib_Dmats = self.wfdb.Dmat(
+                    symm_mat=spglib_symm_mats,
+                    frac_vec=spglib_frac_trans,
+                    time_rev=(self.ele_time_rev == 1)
+                )[:,:,0,:,:]
+                print(f"Computed D-matrices for {len(spglib_rotations)} spglib operations")
+            else:
+                print("wfdb.Dmat() method not available, using Yambo D-matrices")
+                self.spglib_Dmats = self.Dmats
+                
+        except Exception as e:
+            print(f"Failed to compute spglib D-matrices: {e}")
+            print("Falling back to Yambo D-matrices")
+            self.spglib_Dmats = self.Dmats
+    
+    def _get_spglib_fractional_translations(self, spglib_rotations):
+        """Get fractional translations corresponding to spglib rotations."""
+        try:
+            import spglib
+            
+            # Get crystal structure and symmetry operations
+            lattice, positions, numbers = self._get_crystal_structure()
+            if lattice is not None and positions is not None and numbers is not None:
+                cell = (lattice, positions, numbers)
+                symmetry = spglib.get_symmetry(cell, symprec=1e-5)
+                
+                if symmetry:
+                    spg_rotations = symmetry['rotations']
+                    spg_translations = symmetry['translations']
+                    
+                    # Match the provided spglib_rotations with the full set
+                    matched_translations = []
+                    for rot in spglib_rotations:
+                        # Find matching rotation in full spglib set
+                        best_match_idx = -1
+                        min_diff = float('inf')
+                        
+                        for j, spg_rot in enumerate(spg_rotations):
+                            diff = np.linalg.norm(rot - spg_rot)
+                            if diff < min_diff:
+                                min_diff = diff
+                                best_match_idx = j
+                        
+                        if min_diff < 1e-6 and best_match_idx >= 0:
+                            matched_translations.append(spg_translations[best_match_idx])
+                        else:
+                            matched_translations.append(np.zeros(3))
+                    
+                    return np.array(matched_translations)
+            
+            # Fallback: zero translations
+            return np.zeros((len(spglib_rotations), 3))
+            
+        except Exception as e:
+            print(f"Failed to get spglib fractional translations: {e}")
+            return np.zeros((len(spglib_rotations), 3))
 
     def read_excdb_single(self, BSE_dir, iQ, nstates):
         """
@@ -266,10 +420,10 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         print('Reading BSE eigen vectors')
         bands_range, BS_eigs, BS_wfcs = self.read_excdb_single(self.BSE_dir, iQ-1, nstates)
         
-        # Convert energies to eV for analysis (following original algorithm exactly)
+        # Convert energies to eV for analysis 
         BS_eigs_eV = BS_eigs * ha2ev
         
-        # Get unique values up to threshold (following original algorithm exactly)
+        # Get unique values up to threshold 
         uni_eigs, degen_eigs = np.unique((BS_eigs_eV / degen_thres).astype(int),
                                         return_counts=True)
         uni_eigs = uni_eigs * degen_thres
@@ -278,13 +432,13 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         print('Group theory analysis for Q point : ', self.kpts_iBZ[iQ - 1])
         print('*' * 40)
 
-        # Find little group (following original algorithm exactly)
+        # Find little group 
         trace_all_real = []
         trace_all_imag = []
         little_group = []
         # Loop over symmetries (excluding time reversal operations)
         for isym in range(int(self.sym_red.shape[0] / (self.ele_time_rev + 1))):
-            # Check if Sq = q (following original algorithm exactly)
+            # Check if Sq = q 
             Sq_minus_q = np.einsum('ij,j->i', self.sym_red[isym],
                                   self.kpts_iBZ[iQ - 1]) - self.kpts_iBZ[iQ - 1]
             Sq_minus_q = Sq_minus_q - np.rint(Sq_minus_q)
@@ -308,11 +462,11 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                 ktree=self.kpt_tree
             )
             
-            # Compute representation matrix (following original algorithm exactly)
+            # Compute representation matrix 
             rep = np.einsum('n...,m...->nm', wfc_tmp, BS_wfcs.conj(),
                            optimize=True) * tau_dot_k
             
-            # Compute traces for each degenerate subspace (following original algorithm)
+            # Compute traces for each degenerate subspace
             irrep_sum = 0
             real_trace = []
             imag_trace = []
@@ -495,8 +649,13 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                         # Extract point group operations (rotations without translations)
                         rotations = symmetry['rotations']
                         
-                        # Use spgrep with the proper spglib symmetries
-                        return self._analyze_with_spglib_symmetries(rotations, little_group_yambo)
+                        # For Γ point analysis, we need the little group, not the full space group
+                        # Filter operations that leave Q=0 invariant (all operations do for Γ)
+                        # But we need to identify the proper point group subset
+                        little_group_rotations = self._extract_little_group_operations(rotations, spacegroup_info)
+                        
+                        # Use spgrep with the proper little group symmetries
+                        return self._analyze_with_spglib_symmetries(little_group_rotations, little_group_yambo)
             
             # Fallback if spglib analysis fails
             print("spglib analysis failed, using operation matching")
@@ -508,6 +667,111 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         except Exception as e:
             print(f"spglib analysis failed: {e}")
             return self._match_operations_to_point_group(little_group_yambo)
+    
+    def _extract_little_group_operations(self, rotations, spacegroup_info):
+        """
+        Extract the proper little group operations for Γ point analysis.
+        
+        For hexagonal systems like hBN, the little group at Γ should be D3h (12 operations)
+        rather than the full space group D6h (24 operations).
+        """
+        import numpy as np
+        
+        # Parse space group number from spacegroup_info
+        sg_number = int(spacegroup_info.split('(')[1].split(')')[0])
+        
+        # General approach: extract little group operations for Γ point
+        # For hexagonal systems, we typically want to reduce from D6h to D3h
+        # For other systems, we may use all operations or apply different rules
+        
+        little_group_ops = []
+        
+        # Classify all operations first
+        operation_classes = self._classify_operations(rotations)
+        
+        # Apply little group selection rules based on space group family
+        if sg_number in [194, 186, 191, 193]:  # Hexagonal space groups
+            little_group_ops = self._select_hexagonal_little_group(rotations, operation_classes)
+        else:
+            # For other space groups, use a more general approach
+            little_group_ops = self._select_general_little_group(rotations, operation_classes)
+        
+        print(f"Extracted {len(little_group_ops)} operations for little group")
+        return np.array(little_group_ops)
+    
+    def _classify_operations(self, rotations):
+        """Classify symmetry operations by type."""
+        classes = []
+        for rot in rotations:
+            det = np.linalg.det(rot)
+            trace = np.trace(rot)
+            
+            if np.allclose(rot, np.eye(3)):
+                classes.append('E')
+            elif np.allclose(rot, -np.eye(3)):
+                classes.append('i')
+            elif det > 0:  # Proper rotations
+                if np.isclose(trace, 0):
+                    classes.append('C3')
+                elif np.isclose(trace, 1):
+                    classes.append('C6')
+                elif np.isclose(trace, -1):
+                    classes.append('C2')
+                else:
+                    classes.append('Cn')
+            else:  # Improper rotations
+                if np.isclose(trace, 1):
+                    # Reflection - determine type
+                    eigenvals, eigenvecs = np.linalg.eig(rot)
+                    normal_idx = np.argmin(np.abs(eigenvals + 1))
+                    normal = np.real(eigenvecs[:, normal_idx])
+                    if np.abs(normal[2]) > 0.9:
+                        classes.append('σh')
+                    else:
+                        classes.append('σv')
+                elif np.isclose(trace, -2):
+                    classes.append('S3')
+                elif np.isclose(trace, -1):
+                    classes.append('S6')
+                else:
+                    classes.append('Sn')
+        
+        return classes
+    
+    def _select_hexagonal_little_group(self, rotations, classes):
+        """Select D3h little group operations from D6h space group."""
+        selected_ops = []
+        c2_count = 0
+        sv_count = 0
+        
+        for i, (rot, op_class) in enumerate(zip(rotations, classes)):
+            if op_class == 'E':
+                selected_ops.append(rot)
+            elif op_class == 'C3':
+                selected_ops.append(rot)
+            elif op_class == 'C2' and c2_count < 3:
+                # Select only C2 operations in xy-plane
+                eigenvals, eigenvecs = np.linalg.eig(rot)
+                axis_idx = np.argmin(np.abs(eigenvals - 1))
+                axis = np.real(eigenvecs[:, axis_idx])
+                if np.abs(axis[2]) < 0.1:  # Axis in xy-plane
+                    selected_ops.append(rot)
+                    c2_count += 1
+            elif op_class == 'σh':
+                selected_ops.append(rot)
+            elif op_class == 'σv' and sv_count < 3:
+                selected_ops.append(rot)
+                sv_count += 1
+            elif op_class == 'S3':
+                selected_ops.append(rot)
+        
+        return selected_ops
+    
+    def _select_general_little_group(self, rotations, classes):
+        """General little group selection for non-hexagonal systems."""
+        # For now, use all operations
+        # This can be refined based on specific space group requirements
+        return list(rotations)
     
     def _get_crystal_structure(self):
         """
@@ -567,6 +831,11 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             # Convert spglib rotations to the format expected by spgrep
             # spglib gives integer matrices in the standard crystallographic setting
             print(f"Using {len(spglib_rotations)} symmetry operations from spglib")
+            
+            # Compute D-matrices for spglib symmetries if needed
+            # This should be done safely after we have the spglib rotations
+            if self.spglib_Dmats is None:
+                self._compute_spglib_dmats(spglib_rotations)
             
             # Use spgrep with the proper spglib symmetries
             pg_label, classes, class_dict, char_tab, irreps = get_pg_info(
