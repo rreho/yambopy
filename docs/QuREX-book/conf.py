@@ -31,7 +31,7 @@ html_theme = 'sphinx_book_theme'
 html_theme_options = {'search_bar_text': 'Search this book...', 'launch_buttons': {'notebook_interface': 'classic', 'binderhub_url': '', 'jupyterhub_url': '', 'thebe': False, 'colab_url': '', 'deepnote_url': ''}, 'path_to_docs': '', 'repository_url': 'https://github.com/executablebooks/jupyter-book', 'repository_branch': 'master', 'extra_footer': '', 'home_page_in_toc': True, 'announcement': '', 'analytics': {'google_analytics_id': '', 'plausible_analytics_domain': '', 'plausible_analytics_url': 'https://plausible.io/js/script.js'}, 'use_repository_button': False, 'use_edit_page_button': False, 'use_issues_button': False}
 html_title = 'QuREX Documentation'
 latex_engine = 'pdflatex'
-myst_enable_extensions = ['colon_fence', 'dollarmath', 'linkify', 'substitution', 'tasklist', 'eval-rst']
+myst_enable_extensions = ['colon_fence', 'dollarmath', 'linkify', 'substitution', 'tasklist']
 myst_url_schemes = ['mailto', 'http', 'https']
 nb_execution_allow_errors = False
 nb_execution_cache_path = ''
@@ -66,3 +66,5 @@ autosummary_imported_members = True
 import sys
 import os
 sys.path.insert(0, os.path.abspath('../../yambopy'))
+
+

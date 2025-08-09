@@ -16,17 +16,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'yambopy'))
 
 def generate_simple_class_api(module_name, class_name, output_file, description=""):
-    """Generate simple, working API documentation for a class."""
+    """Generate simple, working API documentation for a class using reStructuredText."""
     
-    content = f"""# {class_name} API Reference
+    # Change extension to .rst
+    output_file = str(output_file).replace('.md', '.rst')
+    
+    content = f"""{class_name} API Reference
+{'=' * (len(class_name) + 17)}
 
 {description}
 
-This page contains API documentation for the `{class_name}` class.
+This page contains API documentation for the ``{class_name}`` class.
 
-## Class Documentation
+Class Documentation
+-------------------
 
-```{{eval-rst}}
 .. currentmodule:: {module_name}
 
 .. autoclass:: {class_name}
@@ -34,21 +38,22 @@ This page contains API documentation for the `{class_name}` class.
    :undoc-members:
    :show-inheritance:
    :special-members: __init__
-```
 
-## Usage Example
+Usage Example
+-------------
 
-```python
-from {module_name} import {class_name}
+.. code-block:: python
 
-# Initialize the class
-instance = {class_name}()
+   from {module_name} import {class_name}
 
-# Use the methods
-result = instance.method_name()
-```
+   # Initialize the class
+   instance = {class_name}()
 
-## Notes
+   # Use the methods
+   result = instance.method_name()
+
+Notes
+-----
 
 - This documentation is automatically generated from source code docstrings
 - For detailed examples, see the tutorials and example notebooks

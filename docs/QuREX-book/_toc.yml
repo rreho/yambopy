@@ -46,15 +46,15 @@ parts:
   chapters:
     - file: content/api/index
       sections:
-        - file: content/api/baseopticalproperties_api
-        - file: content/api/excitongrouptheory_api
-        - file: content/api/excitondipole_api
-        - file: content/api/excitonphonon_api
-        - file: content/api/luminescence_api
-        - file: content/api/letzelphelectronphonondb_api
-        - file: content/api/spgrep_point_group_ops_api
-        - file: content/api/utils_api
-        - file: content/api/lelph2y_api
+        - file: content/api/baseopticalproperties_api.rst
+        - file: content/api/excitongrouptheory_api.rst
+        - file: content/api/excitondipole_api.rst
+        - file: content/api/excitonphonon_api.rst
+        - file: content/api/luminescence_api.rst
+        - file: content/api/letzelphelectronphonondb_api.rst
+        - file: content/api/spgrep_point_group_ops_api.rst
+        - file: content/api/utils_api.rst
+        - file: content/api/lelph2y_api.rst
 
 - caption: Interactive Examples
   numbered: false
