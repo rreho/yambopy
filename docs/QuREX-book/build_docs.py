@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 """
-Script to build the QuREX-book documentation.
+Simple, working script to build the QuREX-book documentation.
 
-This script:
-1. Generates auto-generated API documentation
-2. Builds the Jupyter Book
-3. Provides helpful output about the build process
-
-Usage:
-    python build_docs.py [--clean]
+This script generates API documentation and builds the Jupyter Book
+with proper error handling and clear output.
 """
 
 import os
@@ -17,7 +12,7 @@ import subprocess
 import argparse
 from pathlib import Path
 
-def run_command(cmd, description):
+def run_command(cmd, description, check_output=False):
     """Run a command and handle errors."""
     print(f"\n{'='*60}")
     print(f"🔧 {description}")
@@ -25,20 +20,24 @@ def run_command(cmd, description):
     print(f"Running: {cmd}")
     
     try:
-        result = subprocess.run(cmd, shell=True, check=True, 
-                              capture_output=True, text=True)
-        if result.stdout:
-            print("Output:")
-            print(result.stdout)
+        if check_output:
+            result = subprocess.run(cmd, shell=True, check=True, 
+                                  capture_output=True, text=True)
+            if result.stdout:
+                print("Output:")
+                print(result.stdout)
+        else:
+            result = subprocess.run(cmd, shell=True, check=True)
+        
         print(f"✅ {description} completed successfully!")
         return True
     except subprocess.CalledProcessError as e:
         print(f"❌ {description} failed!")
-        print(f"Error: {e}")
-        if e.stdout:
+        print(f"Error code: {e.returncode}")
+        if hasattr(e, 'stdout') and e.stdout:
             print("STDOUT:")
             print(e.stdout)
-        if e.stderr:
+        if hasattr(e, 'stderr') and e.stderr:
             print("STDERR:")
             print(e.stderr)
         return False
@@ -59,14 +58,9 @@ def main():
     print(f"📁 Working directory: {docs_dir}")
     
     # Step 1: Generate API documentation
-    if not run_command("python generate_api_docs.py", 
-                      "Generating ExcitonGroupTheory API documentation"):
-        print("⚠️  ExcitonGroupTheory API documentation generation failed, but continuing...")
-    
-    # Step 1b: Generate comprehensive API documentation
-    if not run_command("python generate_comprehensive_api_docs.py", 
-                      "Generating comprehensive API documentation"):
-        print("⚠️  Comprehensive API documentation generation failed, but continuing...")
+    if not run_command("python generate_working_api_docs.py", 
+                      "Generating working API documentation", check_output=True):
+        print("⚠️  API documentation generation failed, but continuing...")
     
     if args.api_only:
         print("\n✅ API documentation generation completed!")
@@ -78,8 +72,13 @@ def main():
             print("⚠️  Clean failed, but continuing...")
     
     # Step 3: Build the book
-    if not run_command("jupyter-book build .", "Building Jupyter Book"):
+    if not run_command("jupyter-book build . --all", "Building Jupyter Book"):
         print("❌ Documentation build failed!")
+        print("\n🔍 Troubleshooting tips:")
+        print("1. Check that all required Python packages are installed")
+        print("2. Verify that yambopy is in the Python path")
+        print("3. Check for syntax errors in the generated files")
+        print("4. Try building with --all flag for verbose output")
         sys.exit(1)
     
     # Step 4: Success message
@@ -88,15 +87,10 @@ def main():
     print(f"{'='*60}")
     print(f"📖 Documentation available at: {docs_dir}/_build/html/index.html")
     print(f"🌐 Open in browser: file://{docs_dir.absolute()}/_build/html/index.html")
-    print("\n📝 What was built:")
-    print("  ✅ Auto-generated API documentation from docstrings")
-    print("  ✅ Theoretical background pages")
-    print("  ✅ Tutorial and example notebooks")
-    print("  ✅ Complete QuREX-book with navigation")
     
     print(f"\n🔄 To update documentation:")
     print(f"  • Modify docstrings in source code")
-    print(f"  • Run: python build_docs.py")
+    print(f"  • Run: python build_working_docs.py")
     print(f"  • API docs will be automatically regenerated")
 
 if __name__ == '__main__':

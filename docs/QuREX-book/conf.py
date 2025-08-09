@@ -49,3 +49,20 @@ sys_path = ['../../yambopy']
 templates_path = ['_templates']
 use_jupyterbook_latex = True
 use_multitoc_numbering = True
+
+# Autodoc configuration
+autodoc_default_options = {
+    'members': True,
+    'undoc-members': True,
+    'show-inheritance': True,
+    'special-members': '__init__',
+}
+
+# Autosummary configuration
+autosummary_generate = True
+autosummary_imported_members = True
+
+# Add Python path
+import sys
+import os
+sys.path.insert(0, os.path.abspath('../../yambopy'))
