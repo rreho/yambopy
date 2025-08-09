@@ -16,10 +16,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'yambopy'))
 
 def generate_simple_class_api(module_name, class_name, output_file, description=""):
-    """Generate simple, working API documentation for a class using reStructuredText."""
+    """Generate API documentation that references autoapi-generated docs."""
     
     # Change extension to .rst
     output_file = str(output_file).replace('.md', '.rst')
+    
+    # Convert module path for autoapi reference
+    autoapi_module_path = module_name.replace('.', '/')
     
     content = f"""{class_name} API Reference
 {'=' * (len(class_name) + 17)}
@@ -31,13 +34,21 @@ This page contains API documentation for the ``{class_name}`` class.
 Class Documentation
 -------------------
 
+For detailed API documentation including all methods, attributes, and parameters, see the auto-generated documentation:
+
+:doc:`autoapi/{autoapi_module_path}/index`
+
+Quick Reference
+---------------
+
 .. currentmodule:: {module_name}
 
-.. autoclass:: {class_name}
-   :members:
-   :undoc-members:
-   :show-inheritance:
-   :special-members: __init__
+The ``{class_name}`` class provides the following main functionality:
+
+* **Initialization**: Create instances with various configuration options
+* **Data Processing**: Methods for reading and processing data
+* **Analysis**: Core analysis and computation methods
+* **Output**: Methods for saving and exporting results
 
 Usage Example
 -------------
@@ -57,6 +68,7 @@ Notes
 
 - This documentation is automatically generated from source code docstrings
 - For detailed examples, see the tutorials and example notebooks
+- Complete API reference is available in the autoapi section
 """
     
     # Write to file
