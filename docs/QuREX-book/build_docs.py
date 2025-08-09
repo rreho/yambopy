@@ -58,8 +58,8 @@ def main():
     print(f"📁 Working directory: {docs_dir}")
     
     # Step 1: Generate API documentation
-    if not run_command("python generate_working_api_docs.py", 
-                      "Generating working API documentation", check_output=True):
+    if not run_command("python generate_api_docs.py", 
+                      "Generating API documentation", check_output=True):
         print("⚠️  API documentation generation failed, but continuing...")
     
     if args.api_only:
@@ -90,7 +90,7 @@ def main():
     
     print(f"\n🔄 To update documentation:")
     print(f"  • Modify docstrings in source code")
-    print(f"  • Run: python build_working_docs.py")
+    print(f"  • Run: python build_docs.py")
     print(f"  • API docs will be automatically regenerated")
 
 if __name__ == '__main__':
