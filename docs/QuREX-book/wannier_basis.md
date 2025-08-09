@@ -4,15 +4,17 @@ We distinguish between Bloch-like functions in the `Wannier basis`, **Wannier ga
 
 - **Wannier gauge**: 
   
-  $$
-  |u^{W}_{n\mathbf{k}}> = \sum_{\mathbf{R}} e^{-i \mathbf{k} \cdot(\hat{\mathbf{r}}-\mathbf{R})}|\mathbf{R} n\rangle
-  $$ (eq-wannier-bloch-function)
+  ```{math}
+:label: eq:wannier-bloch-function
+|u^{W}_{n\mathbf{k}}> = \sum_{\mathbf{R}} e^{-i \mathbf{k} \cdot(\hat{\mathbf{r}}-\mathbf{R})}|\mathbf{R} n\rangle
+```
   
 - **Hamiltonian gauge**:
   
-  $$
-    \left|u_{n \mathbf{k}}^{(\mathrm{H})}\right\rangle=\sum_m\left|u_{m \mathbf{k}}^{(\mathrm{W})}\right\rangle U_{m n}(\mathbf{k})
-  $$ (eq-hamiltonian-bloch-function)
+  ```{math}
+:label: eq:hamiltonian-bloch-function
+\left|u_{n \mathbf{k}}^{(\mathrm{H})}\right\rangle=\sum_m\left|u_{m \mathbf{k}}^{(\mathrm{W})}\right\rangle U_{m n}(\mathbf{k})
+```
 
 where $U$ is the unitary matrix that diagonalizes {eq}`eq-wannier-bloch-function` 
 
@@ -32,21 +34,24 @@ $$
 
 When U is a periodic potential, Bloch's theorem applies and we classify eigenfunctions $\psi_{n\mathbf{k}}(\mathbf{x})$ by ($\mathbf{k}, n$) quantum numbers
 
-$$
+```{math}
+:label: eq:blochwf
 \psi_{n \mathbf{k}}(\mathbf{x})=e^{(i \mathbf{k} \cdot \mathbf{x})} u_{n \mathbf{k}}(\mathbf{x})
-$$ (eq:blochwf)
+```
 with $u_{n\mathbf{k}}$ the periodic part of the Bloch function.
 
 We write an EOM for $u$ in the form
-$$
+```{math}
+:label: eq:EOM-u
 H(\mathbf{k}) u_{n \mathbf{k}}(\mathbf{x})=E_n(\mathbf{k}) u_{n \mathbf{k}}(\mathbf{x})
-$$ (eq:EOM-u)
+```
 
 with
 
-$$
+```{math}
+:label: eq:H-k-operator
 H(\mathbf{k}) \equiv e^{(-i \mathbf{k} \mathbf{x})} H e^{(i \mathbf{k} \cdot \mathbf{x})}
-$$
+```
 
 The solutions of {eq}`eq:EOM-u` are peridic. Hence, $\psi_{n\mathbf{k}}$ and the functions $\psi_{n\mathbf{k+K}}$ span the same space and it is enough
 to restrict ourself to the first unit cell in $\mathbf{k}$ k space.
@@ -54,35 +59,39 @@ to restrict ourself to the first unit cell in $\mathbf{k}$ k space.
 ## Wavefunction representations
 Any wavefunction $f(\mathbf{x})$ can be expressed as a suporposition of Bloch functions with $f_{n}(\mathbf{k})$ the wavefunction in the CMR.
 
-$$
+```{math}
+:label: eq:wavefunction-expansion
 f(\mathbf{x})=\sum_n \int d^3 k f_n(\mathbf{k}) \psi_{n \mathbf{k}}(\mathbf{x})
-$$
+```
 
 ### Crystal momentum
 The crystal momentum operator is $\mathbf{p_e} = \hbar \mathbf{k}$, with matrix elements
 
-$$
-\mathbf{p}_{e,nn^\prime}(\mathbf{k},\mathbf{k^\prime})
-$$ (eq:crystalmomentumoperator)
+```{math}
+:label: eq:crystalmomentumoperator
+\mathbf{p}_{e,nn^\prime}(\mathbf{k},\mathbf{k^\prime}) = \hbar \mathbf{k} \delta_{nn'} \delta(\mathbf{k}-\mathbf{k'})
+```
 
 while the true momentum has the form
 
-$$
+```{math}
+:label: eq:true-momentum
 \mathbf{p}_{n n^{\prime}}\left(\mathbf{k}, \mathbf{k}^{\prime}\right)=\delta\left(\mathbf{k}-\mathbf{k}^{\prime}\right)\left(\hbar \mathbf{k} \delta_{n n^{\prime}}-i \hbar \int_{uc} u_n{ }^* \frac{\partial u_{n^{\prime}}}{\partial \mathbf{x}} d \tau\right)
-$$
+```
 
 the velocity operator has matrix elements $\mathfrak{B}_{nn\prime}(\mathbf{k})$ ($n=n\prime$ are intrabands, $n\neq n^\prime$ are interband)$
 
 ### Position representation
 Representation of $\mathbf{x}$ involevs evaluating the following integral
 
-$$
+```{math}
+:label: eq:posrep1
 \begin{align}
 I_{n^{\prime} \mathbf{k}^{\prime} n \mathbf{k}} & =\int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* \mathbf{x} \psi_{n \mathbf{k}} d^3 \mathbf{x} \nonumber\\
 &=\delta_{n n^{\prime}} \sum_R e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{R}\right]} \mathbf{R}+ \nonumber \\
 &\sum e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{R}\right]} \xi_{n^{\prime} n}(\mathbf{k})
 \end{align}
-$$ (eq:posrepr1)
+```
 
 where we used the usual trick of replacing the integration over the whole cell with the integration over the unit cell.
 

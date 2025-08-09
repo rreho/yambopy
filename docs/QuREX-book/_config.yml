@@ -27,3 +27,11 @@ sphinx:
 
 bibtex_bibfiles:
   - references.bib            # Your BibTeX file
+
+# Notebook execution settings
+execute:
+  execute_notebooks: false     # Disable notebook execution during build
+  cache: ""                   # Disable caching
+  exclude_patterns: []        # Patterns to exclude from execution
+  timeout: 30                 # Timeout for notebook execution (not used when disabled)
+  run_in_temp: false         # Don't run in temporary directory
