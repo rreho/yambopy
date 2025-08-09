@@ -16,7 +16,7 @@ We distinguish between Bloch-like functions in the `Wannier basis`, **Wannier ga
 \left|u_{n \mathbf{k}}^{(\mathrm{H})}\right\rangle=\sum_m\left|u_{m \mathbf{k}}^{(\mathrm{W})}\right\rangle U_{m n}(\mathbf{k})
 ```
 
-where $U$ is the unitary matrix that diagonalizes {eq}`eq-wannier-bloch-function` 
+where $U$ is the unitary matrix that diagonalizes {eq}`eq:wannier-bloch-function` 
 
 # Representations in band theory
 In 1962 Blount {cite}`blount1962formalisms` reviewed the formalism of band theory, pointing out the existence of different representations for electronic states: the crystal momentum representation (CMR) developed by Adams, the Kohn-Luttinger CMR or Modified CMR (MCMR), and the Wannier one.
@@ -28,9 +28,10 @@ In this work, he focused on the Schroedinger, Pauli and Dirac Hamiltonians but h
 
 The velocity operator is defined as:
 
-$$
+```{math}
+:label: eq:velocity-operator
 \mathfrak{B}=-\frac{i}{\hbar}[\mathbf{x}, H]=\nabla_{\mathbf{p}}H
-$$
+```
 
 When U is a periodic potential, Bloch's theorem applies and we classify eigenfunctions $\psi_{n\mathbf{k}}(\mathbf{x})$ by ($\mathbf{k}, n$) quantum numbers
 
@@ -95,21 +96,23 @@ I_{n^{\prime} \mathbf{k}^{\prime} n \mathbf{k}} & =\int \psi_{n^{\prime} \mathbf
 
 where we used the usual trick of replacing the integration over the whole cell with the integration over the unit cell.
 
-$$
+```{math}
+:label: eq:xi-integral
 \mathbf{\xi}_{n^{\prime} n}(k)=\int_{uc} u_{n^{\prime} \mathbf{k}}^* \mathbf{x} u_{n \mathbf{k}} d \tau
-$$
+```
 
 {eq}`eq:posrep1` has two problems. The first term is not well defined and the second term depends on the choice of the unit cell.
 A different approach could be to write
 
-$$
+```{math}
+:label: eq:posrepr2
 \begin{align}
 I_{n^{\prime} \mathbf{k}^{\prime} n \mathbf{k}} & =\int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* x^\mu \psi_{n \mathbf{k}} d^3 \mathbf{x} \nonumber\\
 &=-i \frac{\partial}{\partial k^\mu} \int \psi_{n^{\prime} \mathbf{k}^{\prime}}^* \psi_{n \mathbf{k}} d^3 x \\
 & \quad+\int u_{n^{\prime} \mathbf{k}^{\prime}}^* e^{\left[i\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \cdot \mathbf{x}\right]} \frac{i \partial u_{n \mathbf{k}}}{\partial k^\mu} d^3 x \\
 & =-i \frac{\partial}{\partial k^\mu} \Delta_{n^{\prime} n}\left(\mathbf{k}^{\prime}, \mathbf{k}\right)+\delta\left(\mathbf{k}-\mathbf{k}^{\prime}\right) \mathfrak{X}_{n^{\prime} n}^\mu(\mathbf{k})
 \end{align}
-$$ (eq:posrepr2)
+```
 
 where $\Delta_{n^{\prime} n}\left(\mathbf{k}^{\prime}, \mathbf{k}\right)=\int \psi_{x^{\prime} \mathbf{k}^{\prime}}^* \psi_{n \mathbf{k}} d^8 x$ (cannot be assumed to be $\delta$ because we need to differentiate) and $\mathfrak{X}_{n^{\prime} n}(\mathbf{k})=\int u_{n^{\prime} \mathbf{k}}^* i \frac{\partial u_{n \mathbf{k}}}{\partial \mathbf{k}} d \tau$.
 
