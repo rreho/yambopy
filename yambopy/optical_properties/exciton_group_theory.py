@@ -25,55 +25,114 @@ warnings.filterwarnings('ignore')
 
 class ExcitonGroupTheory(BaseOpticalProperties):
     """
-    This class performs group theory analysis of exciton states.
+    Group theory analysis of exciton states using crystallographic symmetries.
     
-    It analyzes the irreducible representations of exciton states under the 
-    little group of the exciton momentum, providing insight into the symmetry
-    properties of excitonic states.
+    This class performs comprehensive symmetry analysis of exciton states by:
+    
+    1. **Point Group Identification**: Determines the crystallographic point group
+       using spglib and spgrep libraries for accurate symmetry classification.
+       
+    2. **Little Group Analysis**: Identifies symmetry operations that leave the 
+       exciton momentum invariant, crucial for k-point dependent analysis.
+       
+    3. **Irreducible Representation Decomposition**: Decomposes exciton states 
+       into irreducible representations of the little group.
+       
+    4. **Optical Activity Analysis**: Determines selection rules for optical 
+       transitions including electric dipole, Raman, and infrared activity.
+    
+    **Theoretical Background**
+    
+    The symmetry of exciton states is determined by the little group G_k of the 
+    exciton momentum k. For each exciton state |ψ_n⟩, the representation matrix
+    under symmetry operation R is computed as:
+    
+        D^(n)_R = ⟨ψ_n(Rk)| U(R) |ψ_n(k)⟩
+    
+    where U(R) is the symmetry operator. The character of this representation
+    determines the irreducible representation:
+    
+        χ^(n)(R) = Tr[D^(n)_R]
+    
+    **Selection Rules**
+    
+    Optical transitions are governed by symmetry selection rules:
+    
+    - **Electric Dipole**: Allowed if Γ_i ⊗ Γ_f contains the representation of 
+      the dipole operator (typically ungerade irreps in centrosymmetric groups)
+    - **Raman Active**: Allowed if the irrep is contained in the polarizability 
+      tensor (typically gerade irreps)
+    - **IR Active**: Allowed if the irrep transforms as a translation vector
     
     Parameters
     ----------
     path : str, optional
-        The path where the Yambo calculation is performed. Default is the current
-        working directory.
+        Path to the calculation directory. Default is current directory.
     save : str, optional
-        The name of the folder which contains the Yambo save folder. Default is 'SAVE'.
+        Name of the SAVE directory. Default is 'SAVE'.
     lelph_db : LetzElphElectronPhononDB, optional
-        The LetzElphElectronPhononDB object which contains the electron-phonon matrix
-        elements. If not provided, it will be read from the lelph database.
+        Pre-loaded electron-phonon database.
     latdb : YamboLatticeDB, optional
-        The YamboLatticeDB object which contains the lattice information. If not
-        provided, it will be read from the ns.db1 file.
+        Pre-loaded lattice database.
     wfdb : YamboWFDB, optional
-        The YamboWFDB object which contains the wavefunction information. If not
-        provided, it will be read from the ns.wf file.
+        Pre-loaded wavefunction database.
     bands_range : list or tuple, optional
-        The range of bands for which the analysis will be performed.
-        Default is all bands.
+        Range of bands to include in the analysis.
     BSE_dir : str, optional
-        The name of the folder which contains the BSE calculation. Default is 'bse'.
+        Name of the BSE directory. Default is 'bse'.
     LELPH_dir : str, optional
-        The name of the folder which contains the electron-phonon matrix elements.
-        Default is 'lelph'.
+        Name of the electron-phonon directory. Default is 'lelph'.
     read_symm_from_ns_db_file : bool, optional
-        If True, will read symmetry matrices from ns.db1 file else from ndb.elph.
-        Default is False.
+        Whether to read symmetries from ns.db1 file. Default is True.
     
     Attributes
     ----------
-    SAVE_dir : str
-        The path of the SAVE folder.
-    BSE_dir : str
-        The path of the BSE folder.
-    LELPH_dir : str
-        The path of the folder which contains the electron-phonon matrix elements.
-    latdb : YamboLatticeDB
-        The YamboLatticeDB object which contains the lattice information.
-    lelph_db : LetzElphElectronPhononDB
-        The LetzElphElectronPhononDB object which contains the electron-phonon matrix
-        elements.
-    wfdb : YamboWFDB
-        The YamboWFDB object which contains the wavefunction information.
+    point_group_label : str
+        Identified crystallographic point group.
+    little_group : array_like
+        Indices of little group symmetry operations.
+    symm_mats : array_like
+        Symmetry matrices in Cartesian coordinates.
+    frac_trans : array_like
+        Fractional translation vectors for non-symmorphic operations.
+    spglib_Dmats : array_like, optional
+        D-matrices computed using spglib symmetries for enhanced accuracy.
+    
+    Examples
+    --------
+    Basic usage for exciton symmetry analysis:
+    
+    >>> from yambopy.optical_properties import ExcitonGroupTheory
+    >>> 
+    >>> # Initialize the analysis
+    >>> egt = ExcitonGroupTheory(
+    ...     path='./calculation',
+    ...     BSE_dir='bse',
+    ...     LELPH_dir='lelph',
+    ...     bands_range=[1, 20]
+    ... )
+    >>> 
+    >>> # Analyze exciton symmetries at Γ point
+    >>> results = egt.analyze_exciton_symmetry(iQ=1, nstates=10)
+    >>> 
+    >>> # Print results
+    >>> print(f"Point group: {results['point_group_label']}")
+    >>> for i, (energy, irrep, activity) in enumerate(zip(
+    ...     results['unique_energies'],
+    ...     results['irrep_decomposition'],
+    ...     results['optical_activity']
+    ... )):
+    ...     print(f"State {i+1}: {energy:.3f} eV, {irrep}")
+    ...     print(f"  Optically active: {activity['electric_dipole_allowed']}")
+    ...     print(f"  Raman active: {activity['raman_active']}")
+    
+    References
+    ----------
+    .. [1] Tinkham, M. "Group Theory and Quantum Mechanics" (1964)
+    .. [2] Dresselhaus, M. S. et al. "Group Theory: Application to the Physics 
+           of Condensed Matter" (2008)
+    .. [3] Aroyo, M. I. et al. "Crystallography online: Bilbao Crystallographic 
+           Server" Bulg. Chem. Commun. 43, 183-197 (2011)
     """
     
     def __init__(self, path=None, save='SAVE', lelph_db=None, latdb=None, wfdb=None, 
@@ -151,6 +210,9 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         
         # Setup D-matrices for spgrep analysis (will be computed when needed)
         self.spglib_Dmats = None
+        
+        # Try to compute spglib D-matrices for better representation analysis
+        self._try_compute_spglib_dmats()
 
     def _setup_symmetry_data(self):
         """Setup symmetry data specific to group theory analysis."""
@@ -270,40 +332,11 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         # Convert to crystal coordinates
         return np.einsum('ij,nj->ni', self.blat_vecs.T, matched_translations)
     
-    def _compute_spglib_dmats(self, spglib_rotations):
-        """Compute D-matrices for spglib symmetry operations using wfdb.Dmat() method."""
-        try:
-            # Use the wfdb.Dmat() method with spglib symmetries
-            # This should be called after we have the spglib rotations
-            print("Computing D-matrices for spglib symmetries...")
-            
-            # Convert spglib rotations to the format expected by wfdb.Dmat()
-            spglib_symm_mats = spglib_rotations.astype(float)
-            
-            # Call wfdb.Dmat() with the spglib symmetries
-            # The method accepts symm_mat (singular), frac_vec, and time_rev parameters
-            if hasattr(self.wfdb, 'Dmat') and callable(getattr(self.wfdb, 'Dmat')):
-                # Try to compute D-matrices with spglib symmetries
-                # Get corresponding fractional translations for spglib operations
-                spglib_frac_trans = self._get_spglib_fractional_translations(spglib_rotations)
-                
-                self.spglib_Dmats = self.wfdb.Dmat(
-                    symm_mat=spglib_symm_mats,
-                    frac_vec=spglib_frac_trans,
-                    time_rev=(self.ele_time_rev == 1)
-                )[:,:,0,:,:]
-                print(f"Computed D-matrices for {len(spglib_rotations)} spglib operations")
-            else:
-                print("wfdb.Dmat() method not available, using Yambo D-matrices")
-                self.spglib_Dmats = self.Dmats
-                
-        except Exception as e:
-            print(f"Failed to compute spglib D-matrices: {e}")
-            print("Falling back to Yambo D-matrices")
-            self.spglib_Dmats = self.Dmats
+
+
     
-    def _get_spglib_fractional_translations(self, spglib_rotations):
-        """Get fractional translations corresponding to spglib rotations."""
+    def _try_compute_spglib_dmats(self):
+        """Try to compute D-matrices using spglib symmetries for better representation analysis."""
         try:
             import spglib
             
@@ -313,36 +346,29 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                 cell = (lattice, positions, numbers)
                 symmetry = spglib.get_symmetry(cell, symprec=1e-5)
                 
-                if symmetry:
+                if symmetry and hasattr(self, 'symm_mats') and self.symm_mats is not None:
                     spg_rotations = symmetry['rotations']
                     spg_translations = symmetry['translations']
                     
-                    # Match the provided spglib_rotations with the full set
-                    matched_translations = []
-                    for rot in spglib_rotations:
-                        # Find matching rotation in full spglib set
-                        best_match_idx = -1
-                        min_diff = float('inf')
+                    # Check if we have the same number of operations
+                    if len(spg_rotations) == len(self.symm_mats):
+                        print("Computing D-matrices with spglib symmetries for representation analysis...")
                         
-                        for j, spg_rot in enumerate(spg_rotations):
-                            diff = np.linalg.norm(rot - spg_rot)
-                            if diff < min_diff:
-                                min_diff = diff
-                                best_match_idx = j
+                        # Compute D-matrices using spglib symmetries
+                        self.spglib_Dmats = self.wfdb.Dmat(
+                            symm_mat=spg_rotations.astype(float),
+                            frac_vec=spg_translations,
+                            time_rev=(self.ele_time_rev == 1)
+                        )[:,:,0,:,:]
                         
-                        if min_diff < 1e-6 and best_match_idx >= 0:
-                            matched_translations.append(spg_translations[best_match_idx])
-                        else:
-                            matched_translations.append(np.zeros(3))
-                    
-                    return np.array(matched_translations)
-            
-            # Fallback: zero translations
-            return np.zeros((len(spglib_rotations), 3))
-            
+                        print(f"Successfully computed spglib D-matrices: {self.spglib_Dmats.shape}")
+                    else:
+                        print(f"Symmetry count mismatch: spglib({len(spg_rotations)}) vs Yambo({len(self.symm_mats)})")
+                        print("Using Yambo D-matrices")
+                        
         except Exception as e:
-            print(f"Failed to get spglib fractional translations: {e}")
-            return np.zeros((len(spglib_rotations), 3))
+            print(f"Could not compute spglib D-matrices: {e}")
+            print("Using Yambo D-matrices")
 
     def read_excdb_single(self, BSE_dir, iQ, nstates):
         """
@@ -452,12 +478,15 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                               np.dot(self.kpts_iBZ[iQ - 1], self.frac_trans[isym]))
             
             # Rotate exciton wavefunction
+            # Use spglib D-matrices if available, otherwise use Yambo D-matrices
+            dmat_to_use = self.spglib_Dmats[isym] if self.spglib_Dmats is not None else self.Dmats[isym]
+            
             wfc_tmp = rotate_exc_wf(
                 BS_wfcs,
                 self.sym_red[isym],
                 self.kpts,
                 self.kpts_iBZ[iQ - 1],
-                self.Dmats[isym],
+                dmat_to_use,
                 False,
                 ktree=self.kpt_tree
             )
@@ -576,7 +605,282 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             'trace_characters': np.array(trace_all_real) + 1j * np.array(trace_all_imag) if len(trace_all_real) > 0 else None
         }
         
+        # Add optical activity analysis
+        results['optical_activity'] = self._analyze_optical_activity(
+            results['irrep_decomposition'], 
+            results['point_group_label']
+        )
+        
         return results
+    
+    def _analyze_optical_activity(self, irrep_decompositions, point_group_label):
+        """
+        Analyze optical activity of exciton states based on their irreducible representations.
+        
+        This method determines whether transitions are:
+        - Electric dipole allowed (optical transitions)
+        - Raman active
+        - Infrared (IR) active
+        
+        Parameters
+        ----------
+        irrep_decompositions : list
+            List of irreducible representation labels for each energy level
+        point_group_label : str
+            Point group label (e.g., '6/m', 'D3h', 'Oh')
+            
+        Returns
+        -------
+        list
+            List of dictionaries containing optical activity analysis for each level
+        """
+        optical_activities = []
+        
+        for irrep_str in irrep_decompositions:
+            activity = {
+                'irrep': irrep_str,
+                'electric_dipole_allowed': False,
+                'raman_active': False,
+                'ir_active': False,
+                'selection_rules': []
+            }
+            
+            # Parse irrep string (handle cases like "Γ5 ⊕ Γ7", "A1g", etc.)
+            irreps = self._parse_irrep_string(irrep_str)
+            
+            for irrep in irreps:
+                # Apply selection rules based on point group and irrep
+                rules = self._get_selection_rules(irrep, point_group_label)
+                
+                # Combine rules (if any component is active, the whole state is active)
+                activity['electric_dipole_allowed'] |= rules['electric_dipole_allowed']
+                activity['raman_active'] |= rules['raman_active'] 
+                activity['ir_active'] |= rules['ir_active']
+                activity['selection_rules'].append(rules)
+            
+            optical_activities.append(activity)
+        
+        return optical_activities
+    
+    def _parse_irrep_string(self, irrep_str):
+        """Parse irrep string to extract individual irrep labels."""
+        if not isinstance(irrep_str, str):
+            return [str(irrep_str)]
+            
+        # Handle direct sum notation (e.g., "Γ5 ⊕ Γ7")
+        if '⊕' in irrep_str:
+            return [irrep.strip() for irrep in irrep_str.split('⊕')]
+        elif '+' in irrep_str:
+            return [irrep.strip() for irrep in irrep_str.split('+')]
+        else:
+            return [irrep_str.strip()]
+    
+    def _get_selection_rules(self, irrep, point_group_label):
+        """
+        Get selection rules for a specific irrep in a given point group.
+        
+        Parameters
+        ----------
+        irrep : str
+            Irreducible representation label
+        point_group_label : str
+            Point group label
+            
+        Returns
+        -------
+        dict
+            Selection rules for this irrep
+        """
+        rules = {
+            'electric_dipole_allowed': False,
+            'raman_active': False,
+            'ir_active': False,
+            'notes': []
+        }
+        
+        # Normalize point group label
+        pg = point_group_label.lower().replace('/', '').replace('-', '')
+        
+        # Apply general selection rules based on irrep symmetry
+        if 'g' in irrep.lower():
+            # Gerade (even) irreps
+            rules['raman_active'] = True
+            rules['ir_active'] = False
+            rules['electric_dipole_allowed'] = False
+            rules['notes'].append("Gerade: Raman active, IR forbidden")
+            
+        elif 'u' in irrep.lower():
+            # Ungerade (odd) irreps  
+            rules['raman_active'] = False
+            rules['ir_active'] = True
+            rules['electric_dipole_allowed'] = True
+            rules['notes'].append("Ungerade: IR active, electric dipole allowed")
+            
+        else:
+            # For point groups without inversion symmetry
+            # Apply specific rules based on point group and irrep type
+            rules.update(self._get_non_centrosymmetric_rules(irrep, pg))
+        
+        # Special cases for specific point groups
+        if pg in ['6m', 'c6h']:
+            rules.update(self._get_c6h_rules(irrep))
+        elif pg in ['d3h']:
+            rules.update(self._get_d3h_rules(irrep))
+        elif pg in ['oh', 'o']:
+            rules.update(self._get_oh_rules(irrep))
+        elif pg in ['td']:
+            rules.update(self._get_td_rules(irrep))
+            
+        return rules
+    
+    def _get_non_centrosymmetric_rules(self, irrep, point_group):
+        """Selection rules for non-centrosymmetric point groups."""
+        rules = {
+            'electric_dipole_allowed': True,  # Generally allowed
+            'raman_active': True,             # Generally allowed
+            'ir_active': True,                # Generally allowed
+            'notes': ["Non-centrosymmetric: generally all transitions allowed"]
+        }
+        
+        # Specific rules for common irreps
+        if irrep.lower().startswith('a'):
+            # A-type irreps (totally symmetric or antisymmetric)
+            if '1' in irrep:
+                rules['notes'].append("A1-type: totally symmetric")
+            elif '2' in irrep:
+                rules['notes'].append("A2-type: antisymmetric to some operations")
+                
+        elif irrep.lower().startswith('e'):
+            # E-type irreps (doubly degenerate)
+            rules['notes'].append("E-type: doubly degenerate, typically optically active")
+            
+        elif irrep.lower().startswith('t'):
+            # T-type irreps (triply degenerate)
+            rules['notes'].append("T-type: triply degenerate, typically optically active")
+            
+        return rules
+    
+    def _get_c6h_rules(self, irrep):
+        """Selection rules for C6h point group (6/m)."""
+        rules = {'notes': []}
+        
+        # C6h irreps: Ag, Bg, E1g, E2g, Au, Bu, E1u, E2u
+        if 'γ' in irrep.lower() or 'gamma' in irrep.lower():
+            # Gamma point irreps (spgrep notation)
+            irrep_num = ''.join(filter(str.isdigit, irrep))
+            if irrep_num in ['1', '2']:  # Γ1, Γ2 (A-type)
+                rules['electric_dipole_allowed'] = False
+                rules['raman_active'] = True
+                rules['ir_active'] = False
+                rules['notes'].append("A-type gerade: Raman active")
+            elif irrep_num in ['3', '4']:  # Γ3, Γ4 (A-type ungerade)
+                rules['electric_dipole_allowed'] = True
+                rules['raman_active'] = False
+                rules['ir_active'] = True
+                rules['notes'].append("A-type ungerade: IR active")
+            elif irrep_num in ['5', '6']:  # Γ5, Γ6 (E1-type)
+                rules['electric_dipole_allowed'] = True
+                rules['raman_active'] = True
+                rules['ir_active'] = True
+                rules['notes'].append("E1-type: optically active (in-plane)")
+            elif irrep_num in ['7', '8']:  # Γ7, Γ8 (E2-type)
+                rules['electric_dipole_allowed'] = False
+                rules['raman_active'] = True
+                rules['ir_active'] = False
+                rules['notes'].append("E2-type: Raman active")
+        
+        return rules
+    
+    def _get_d3h_rules(self, irrep):
+        """Selection rules for D3h point group."""
+        rules = {'notes': []}
+        
+        # D3h irreps: A1', A2', E', A1'', A2'', E''
+        if "'" in irrep:  # Prime irreps
+            if irrep.startswith('A1'):
+                rules['electric_dipole_allowed'] = False
+                rules['raman_active'] = True
+                rules['ir_active'] = False
+                rules['notes'].append("A1': totally symmetric, Raman active")
+            elif irrep.startswith('A2'):
+                rules['electric_dipole_allowed'] = False
+                rules['raman_active'] = False
+                rules['ir_active'] = False
+                rules['notes'].append("A2': antisymmetric, inactive")
+            elif irrep.startswith('E'):
+                rules['electric_dipole_allowed'] = True
+                rules['raman_active'] = True
+                rules['ir_active'] = True
+                rules['notes'].append("E': doubly degenerate, optically active")
+        elif "''" in irrep:  # Double prime irreps
+            if irrep.startswith('A1'):
+                rules['electric_dipole_allowed'] = True
+                rules['raman_active'] = False
+                rules['ir_active'] = True
+                rules['notes'].append("A1'': IR active (z-polarized)")
+            elif irrep.startswith('A2'):
+                rules['electric_dipole_allowed'] = False
+                rules['raman_active'] = True
+                rules['ir_active'] = False
+                rules['notes'].append("A2'': Raman active")
+            elif irrep.startswith('E'):
+                rules['electric_dipole_allowed'] = False
+                rules['raman_active'] = True
+                rules['ir_active'] = False
+                rules['notes'].append("E'': Raman active")
+        
+        return rules
+    
+    def _get_oh_rules(self, irrep):
+        """Selection rules for Oh point group."""
+        rules = {'notes': []}
+        
+        # Oh irreps: A1g, A2g, Eg, T1g, T2g, A1u, A2u, Eu, T1u, T2u
+        if 'g' in irrep:
+            rules['electric_dipole_allowed'] = False
+            rules['raman_active'] = True
+            rules['ir_active'] = False
+            rules['notes'].append("Gerade: Raman active, electric dipole forbidden")
+        elif 'u' in irrep:
+            rules['electric_dipole_allowed'] = True
+            rules['raman_active'] = False
+            rules['ir_active'] = True
+            rules['notes'].append("Ungerade: IR active, electric dipole allowed")
+            
+        return rules
+    
+    def _get_td_rules(self, irrep):
+        """Selection rules for Td point group."""
+        rules = {'notes': []}
+        
+        # Td irreps: A1, A2, E, T1, T2
+        if irrep.startswith('A1'):
+            rules['electric_dipole_allowed'] = False
+            rules['raman_active'] = True
+            rules['ir_active'] = False
+            rules['notes'].append("A1: totally symmetric, Raman active")
+        elif irrep.startswith('A2'):
+            rules['electric_dipole_allowed'] = False
+            rules['raman_active'] = False
+            rules['ir_active'] = False
+            rules['notes'].append("A2: inactive")
+        elif irrep.startswith('E'):
+            rules['electric_dipole_allowed'] = False
+            rules['raman_active'] = True
+            rules['ir_active'] = False
+            rules['notes'].append("E: doubly degenerate, Raman active")
+        elif irrep.startswith('T1'):
+            rules['electric_dipole_allowed'] = True
+            rules['raman_active'] = False
+            rules['ir_active'] = True
+            rules['notes'].append("T1: triply degenerate, IR active")
+        elif irrep.startswith('T2'):
+            rules['electric_dipole_allowed'] = False
+            rules['raman_active'] = True
+            rules['ir_active'] = False
+            rules['notes'].append("T2: triply degenerate, Raman active")
+            
+        return rules
     
     def _get_crystallographic_point_group(self, little_group_yambo):
         """
@@ -649,13 +953,9 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                         # Extract point group operations (rotations without translations)
                         rotations = symmetry['rotations']
                         
-                        # For Γ point analysis, we need the little group, not the full space group
-                        # Filter operations that leave Q=0 invariant (all operations do for Γ)
-                        # But we need to identify the proper point group subset
-                        little_group_rotations = self._extract_little_group_operations(rotations, spacegroup_info)
-                        
-                        # Use spgrep with the proper little group symmetries
-                        return self._analyze_with_spglib_symmetries(little_group_rotations, little_group_yambo)
+                        # Use spgrep with the spglib symmetries directly
+                        # The little group analysis is handled by the original Yambo approach
+                        return self._analyze_with_spglib_symmetries(rotations, little_group_yambo)
             
             # Fallback if spglib analysis fails
             print("spglib analysis failed, using operation matching")
@@ -668,110 +968,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             print(f"spglib analysis failed: {e}")
             return self._match_operations_to_point_group(little_group_yambo)
     
-    def _extract_little_group_operations(self, rotations, spacegroup_info):
-        """
-        Extract the proper little group operations for Γ point analysis.
-        
-        For hexagonal systems like hBN, the little group at Γ should be D3h (12 operations)
-        rather than the full space group D6h (24 operations).
-        """
-        import numpy as np
-        
-        # Parse space group number from spacegroup_info
-        sg_number = int(spacegroup_info.split('(')[1].split(')')[0])
-        
-        # General approach: extract little group operations for Γ point
-        # For hexagonal systems, we typically want to reduce from D6h to D3h
-        # For other systems, we may use all operations or apply different rules
-        
-        little_group_ops = []
-        
-        # Classify all operations first
-        operation_classes = self._classify_operations(rotations)
-        
-        # Apply little group selection rules based on space group family
-        if sg_number in [194, 186, 191, 193]:  # Hexagonal space groups
-            little_group_ops = self._select_hexagonal_little_group(rotations, operation_classes)
-        else:
-            # For other space groups, use a more general approach
-            little_group_ops = self._select_general_little_group(rotations, operation_classes)
-        
-        print(f"Extracted {len(little_group_ops)} operations for little group")
-        return np.array(little_group_ops)
-    
-    def _classify_operations(self, rotations):
-        """Classify symmetry operations by type."""
-        classes = []
-        for rot in rotations:
-            det = np.linalg.det(rot)
-            trace = np.trace(rot)
-            
-            if np.allclose(rot, np.eye(3)):
-                classes.append('E')
-            elif np.allclose(rot, -np.eye(3)):
-                classes.append('i')
-            elif det > 0:  # Proper rotations
-                if np.isclose(trace, 0):
-                    classes.append('C3')
-                elif np.isclose(trace, 1):
-                    classes.append('C6')
-                elif np.isclose(trace, -1):
-                    classes.append('C2')
-                else:
-                    classes.append('Cn')
-            else:  # Improper rotations
-                if np.isclose(trace, 1):
-                    # Reflection - determine type
-                    eigenvals, eigenvecs = np.linalg.eig(rot)
-                    normal_idx = np.argmin(np.abs(eigenvals + 1))
-                    normal = np.real(eigenvecs[:, normal_idx])
-                    if np.abs(normal[2]) > 0.9:
-                        classes.append('σh')
-                    else:
-                        classes.append('σv')
-                elif np.isclose(trace, -2):
-                    classes.append('S3')
-                elif np.isclose(trace, -1):
-                    classes.append('S6')
-                else:
-                    classes.append('Sn')
-        
-        return classes
-    
-    def _select_hexagonal_little_group(self, rotations, classes):
-        """Select D3h little group operations from D6h space group."""
-        selected_ops = []
-        c2_count = 0
-        sv_count = 0
-        
-        for i, (rot, op_class) in enumerate(zip(rotations, classes)):
-            if op_class == 'E':
-                selected_ops.append(rot)
-            elif op_class == 'C3':
-                selected_ops.append(rot)
-            elif op_class == 'C2' and c2_count < 3:
-                # Select only C2 operations in xy-plane
-                eigenvals, eigenvecs = np.linalg.eig(rot)
-                axis_idx = np.argmin(np.abs(eigenvals - 1))
-                axis = np.real(eigenvecs[:, axis_idx])
-                if np.abs(axis[2]) < 0.1:  # Axis in xy-plane
-                    selected_ops.append(rot)
-                    c2_count += 1
-            elif op_class == 'σh':
-                selected_ops.append(rot)
-            elif op_class == 'σv' and sv_count < 3:
-                selected_ops.append(rot)
-                sv_count += 1
-            elif op_class == 'S3':
-                selected_ops.append(rot)
-        
-        return selected_ops
-    
-    def _select_general_little_group(self, rotations, classes):
-        """General little group selection for non-hexagonal systems."""
-        # For now, use all operations
-        # This can be refined based on specific space group requirements
-        return list(rotations)
+
     
     def _get_crystal_structure(self):
         """
@@ -832,10 +1029,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             # spglib gives integer matrices in the standard crystallographic setting
             print(f"Using {len(spglib_rotations)} symmetry operations from spglib")
             
-            # Compute D-matrices for spglib symmetries if needed
-            # This should be done safely after we have the spglib rotations
-            if self.spglib_Dmats is None:
-                self._compute_spglib_dmats(spglib_rotations)
+            # D-matrices are computed during initialization if possible
             
             # Use spgrep with the proper spglib symmetries
             pg_label, classes, class_dict, char_tab, irreps = get_pg_info(

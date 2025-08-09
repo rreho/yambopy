@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `ExcitonGroupTheory` class has been **implemented** in Yambopy to provide comprehensive group theory analysis of exciton states in crystalline materials. The implementation has been **completely rewritten** to follow the original algorithm from MN exactly, ensuring **maximum accuracy** and **algorithmic fidelity**. This implementation enables researchers to understand the symmetry properties, optical selection rules, and degeneracies of excitonic states with unprecedented precision.
+The `ExcitonGroupTheory` class provides comprehensive group theory analysis of exciton states in crystalline materials. This implementation enables researchers to understand the symmetry properties, optical selection rules, and degeneracies of excitonic states using rigorous crystallographic methods.
 
 ## Key Features
 
@@ -48,7 +48,7 @@ The implementation is based on solid group theory principles:
 - **Performance optimization**: Tips for large systems
 
 ### 3. API Reference
-- **`exciton_group_theory_api.md`**: Complete API documentation
+- **`exciton_group_theory_api_auto.md`**: Auto-generated API documentation from docstrings
 - **Method signatures**: Detailed parameter descriptions
 - **Return values**: Comprehensive output documentation
 - **Error handling**: Exception types and solutions

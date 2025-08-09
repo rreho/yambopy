@@ -2,7 +2,7 @@
 
 ## Overview
 
-This tutorial demonstrates how to use the **significantly improved** `ExcitonGroupTheory` class to analyze the symmetry properties of exciton states in crystalline materials. The implementation has been **completely rewritten** in 2024 to follow the original algorithm exactly, ensuring **maximum accuracy** and **enhanced performance**. We'll walk through a complete example showing how to set up the analysis, interpret the results, and understand the physical implications.
+This tutorial demonstrates how to use the `ExcitonGroupTheory` class to analyze the symmetry properties of exciton states in crystalline materials using group theory. We'll walk through a complete example showing how to set up the analysis, interpret the results, and understand the physical implications.
 
 ## Prerequisites
 
@@ -12,11 +12,10 @@ Before starting this tutorial, ensure you have:
 2. **LetzElPhC calculation**: Electron-phonon matrix elements and D-matrices for wavefunction rotation
 3. **Required databases**: All necessary Yambo database files in the correct directories
 4. **Yambopy installed**: The yambopy package with the ExcitonGroupTheory module
-5. **spgrep library (recommended)**: For enhanced point group analysis
+5. **spgrep library (recommended)**: For crystallographic point group analysis
    ```bash
    pip install spgrep
    ```
-   If not available, the system automatically falls back to the original implementation.
 
 ## Step-by-Step Tutorial
 
