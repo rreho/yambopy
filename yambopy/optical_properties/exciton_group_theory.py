@@ -908,7 +908,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         print(f"GENERAL SYMMETRY OPERATIONS ANALYSIS")
         print("=" * 80)
         
-        print(f"\n🔍 CRYSTAL STRUCTURE INFORMATION:")
+        print(f"\nCRYSTAL STRUCTURE INFORMATION:")
         print(f"   Space Group: {summary.get('space_group', 'Unknown')} (#{summary.get('space_group_number', '?')})")
         print(f"   Point Group: {summary.get('point_group', 'Unknown')}")
         print(f"   Crystal System: {summary.get('crystal_system', 'Unknown').title()}")
@@ -916,7 +916,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         print(f"   Spglib Operations: {summary.get('spglib_operations', '?')}")
         
         # Count operations by type
-        print(f"\n📊 OPERATION BREAKDOWN:")
+        print(f"\nOPERATION BREAKDOWN:")
         print("   " + "-" * 70)
         
         operation_symbols = {
@@ -985,7 +985,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         space_group = summary.get('space_group', '')
         
         if crystal_system:
-            print(f"\n🎯 {crystal_system.upper()} CRYSTAL SYSTEM PROPERTIES:")
+            print(f"\n{crystal_system.upper()} CRYSTAL SYSTEM PROPERTIES:")
             print("   " + "-" * 70)
             
             if crystal_system == 'hexagonal':
