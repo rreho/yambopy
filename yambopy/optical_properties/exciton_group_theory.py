@@ -441,27 +441,6 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             
         Returns
         -------
-        tuple
-            Point group analysis results
-        """
-        try:
-            from .spgrep_point_group_ops import get_pg_info
-            
-            # Convert spglib rotations to the format expected by spgrep
-            # spglib gives integer matrices in the standard crystallographic setting
-            print(f"Using {len(spglib_rotations)} symmetry operations from spglib")
-            
-            # D-matrices are computed during initialization if possible
-            
-            # Use spgrep with the proper spglib symmetries
-            pg_label, classes, class_dict, char_tab, irreps = get_pg_info(
-                spglib_rotations, 
-                time_rev=(self.ele_time_rev == 1)
-            )
-            
-            print(f"spgrep analysis with spglib symmetries successful: {pg_label}")
-            return pg_label, classes, class_dict, char_tab, irreps
-            
         list
             List of LaTeX-formatted labels (e.g., [r'$A_{1g}$', r'$E_{2u}$'])
         """
