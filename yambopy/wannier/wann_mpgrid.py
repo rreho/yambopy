@@ -139,6 +139,32 @@ class symmetrized_mp_grid(KPointGenerator):
 
         return closest_indices_ibz
     
+    def get_wannier90toyambo(self, lat_k, yambo=False):
+        '''
+        Because in term 1 and term 2 we need to compute the neighbour kpoint, 
+        we need the neighbour from wannier90 .nnkp and then convert it to a 
+        point in the yambo grid. 
+        '''
+        k = self.red_kpoints_full   # Wannier90 kgrid
+
+        yk = lat_k.red_kpoints.copy()
+
+        shifts = np.array(np.meshgrid(
+            *[np.arange(-1, 1 + 1)] * 3)).T.reshape(-1, 3)
+        
+        images = (yk[:, None, :] + shifts[None, :, :]).reshape(-1, 3)
+        # Track which original index each image comes from
+        origin_indices = np.repeat(np.arange(len(k)), len(shifts))
+        tree = cKDTree(images)
+
+        dist, idx = tree.query(k)   # where in the yambo grid is the wannier90 kpoint?
+        # matched_images = images[idx]
+        matched_indices = origin_indices[idx]   # index of the wannier90 kpoint in the yambo grid
+        k = yk[matched_indices]
+
+        self.yambotowannier90_table = matched_indices   # this is the index of the yambo point given a wannier90 point
+        self.wannier90toyambo_table = np.argsort(matched_indices)
+
 class tb_Monkhorst_Pack(KPointGenerator):
     def __init__(self, grid_shape,latdb, shift=np.array([0.0,0.0,0.0])):
         super().__init__()

@@ -683,3 +683,11 @@ class TBMODEL(tbmodels.Model):
             return ks_ebands_up, ks_ebands_dw , qp_ebands_up, qp_ebands_dw
         else: 
             return ks_ebands, qp_eigens_kpath
+        
+    def apply_gw(self):
+
+        ws_qp = YamboQPDB.from_db_file(filename="ndb.QP",folder='/Users/6179304/Developer/calculations/ws2-rr/gw-bse')
+        eigv = EIG(seedname=f'{shared_dir}nscf-wannier-30x30x1/ws2')
+        self.nv = int(np.sum(self.f_kn[0]))
+        ynv = (ws_qp.max_band - ws_qp.min_band + 1)/2   # assume even number of conduction and valence in GW
+        shift,cslope,vslope,cintercept,vintercept = ws_qp.get_scissor(valence=ynv)
