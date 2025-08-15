@@ -235,45 +235,21 @@ class ExcitonBands(H2P):
         """
         if spin_pol is not None: print('Plotting exciton mad in 2D axis for spin polarization: %s' % spin_pol)
 
-    if spin_pol is not None:
-        x,y,weights_bz_sum_up,weights_bz_sum_dw = self.get_exciton_2D_spin_pol(excitons,f=f)
-    else:
-        x,y,weights_bz_sum = self.get_exciton_2D(f=f,n=n)
+        if spin_pol is not None:
+            x,y,weights_bz_sum_up,weights_bz_sum_dw = self.get_exciton_2D_spin_pol(excitons,f=f)
+        else:
+            x,y,weights_bz_sum = self.get_exciton_2D(f=f,n=n)
 
-    weights_bz_sum=weights_bz_sum[:,q]/np.max(weights_bz_sum[:,q])
-    
-    #filter points outside of area
-    lim = np.max(self.latdb.rlat)*limfactor
-    dlim = lim*1.1
-    if spin_pol is not None:
-        filtered_weights_up = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_up) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
-        filtered_weights_dw = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_dw) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
-        x,y,weights_bz_sum_up = np.array(filtered_weights_up).T
-        x,y,weights_bz_sum_dw = np.array(filtered_weights_dw).T
-    else:
-        x = np.asarray(x)
-        y = np.asarray(y)
-        weights_bz_sum = np.asarray(weights_bz_sum)
-        mask = (x > -dlim) & (x < dlim) & (y > -dlim) & (y < dlim)
-        x_filtered = x[mask]
-        y_filtered = y[mask]
-        weights_filtered = weights_bz_sum[mask]  # Filter rows only
-        # weights_bz_sum = weights_filtered
-        # x,y,weights_bz_sum = np.array(filtered_weights).T
-    # Add contours of BZ
-    from yambopy.plot.plotting import BZ_Wigner_Seitz
-    ax.add_patch(BZ_Wigner_Seitz(self.latdb))
         weights_bz_sum=weights_bz_sum[:,q]/np.max(weights_bz_sum[:,q])
-        if ax is None:
-            fig,ax = plt.subplots(figsize=(12,8),dpi=300)
+        
         #filter points outside of area
         lim = np.max(self.latdb.rlat)*limfactor
         dlim = lim*1.1
         if spin_pol is not None:
-           filtered_weights_up = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_up) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
-           filtered_weights_dw = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_dw) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
-           x,y,weights_bz_sum_up = np.array(filtered_weights_up).T
-           x,y,weights_bz_sum_dw = np.array(filtered_weights_dw).T
+            filtered_weights_up = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_up) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
+            filtered_weights_dw = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_dw) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
+            x,y,weights_bz_sum_up = np.array(filtered_weights_up).T
+            x,y,weights_bz_sum_dw = np.array(filtered_weights_dw).T
         else:
             x = np.asarray(x)
             y = np.asarray(y)
@@ -287,7 +263,31 @@ class ExcitonBands(H2P):
         # Add contours of BZ
         from yambopy.plot.plotting import BZ_Wigner_Seitz
         ax.add_patch(BZ_Wigner_Seitz(self.latdb))
-
+        weights_bz_sum=weights_bz_sum[:,q]/np.max(weights_bz_sum[:,q])
+        if ax is None:
+            fig,ax = plt.subplots(figsize=(12,8),dpi=300)
+        #filter points outside of area
+        lim = np.max(self.latdb.rlat)*limfactor
+        dlim = lim*1.1
+        if spin_pol is not None:
+            filtered_weights_up = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_up) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
+            filtered_weights_dw = [[xi,yi,di] for xi,yi,di in zip(x,y,weights_bz_sum_dw) if -dlim<xi and xi<dlim and -dlim<yi and yi<dlim]
+            x,y,weights_bz_sum_up = np.array(filtered_weights_up).T
+            x,y,weights_bz_sum_dw = np.array(filtered_weights_dw).T
+        else:
+            x = np.asarray(x)
+            y = np.asarray(y)
+            weights_bz_sum = np.asarray(weights_bz_sum)
+            mask = (x > -dlim) & (x < dlim) & (y > -dlim) & (y < dlim)
+            x_filtered = x[mask]
+            y_filtered = y[mask]
+            weights_filtered = weights_bz_sum[mask]  # Filter rows only
+            # weights_bz_sum = weights_filtered
+            # x,y,weights_bz_sum = np.array(filtered_weights).T
+        # Add contours of BZ
+        from yambopy.plot.plotting import BZ_Wigner_Seitz
+        ax.add_patch(BZ_Wigner_Seitz(self.latdb))
+        
         #plotting
         if mode == 'hexagon': 
             scale = kwargs.pop('scale',1)
@@ -340,11 +340,11 @@ class ExcitonBands(H2P):
             ax.imshow(weights_bz_sum_dw.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
         else:
             ax.imshow(weights_bz_sum.T,interpolation=interp_method,extent=[-lim,lim,-lim,lim])
-    title = kwargs.pop('title',str('excitons'))
+        title = kwargs.pop('title',str('excitons'))
 
-    ax.set_title(title)
-    ax.set_aspect('equal')
-    ax.set_xticks([])
-    ax.set_yticks([])
+        ax.set_title(title)
+        ax.set_aspect('equal')
+        ax.set_xticks([])
+        ax.set_yticks([])
 
-    return ax
+        return ax
