@@ -1114,7 +1114,11 @@ class H2P():
             car_qpoint = np.array([0,0,0])
         ydb = YamboExcitonDB(lattice=self.latdb,Qpt=0, eigenvalues=self.h2peigv[0],l_residual=self.F_kcv,r_residual=1, table=self.convert_to_yambo_table(self.electronsdb.nelectrons),car_qpoint=np.array(car_qpoint))
         ydb.eigenvectors =self.h2peigvec
-        ydb.real_wf_to_cube(iexe=iexe, wfdb=wfdb, **args)
+        if isinstance(iexe, (list, np.ndarray)):
+            for idx in iexe:
+                ydb.real_wf_to_cube(iexe=idx, wfdb=wfdb, **args)
+        else:
+            ydb.real_wf_to_cube(iexe=iexe, wfdb=wfdb, **args)
 
 
 def chunkify(lst, n):

@@ -282,7 +282,7 @@ class YamboExcitonDB(object):
         self.Akcv = eig_wfcs_returned
         return self.Akcv
     
-    def real_wf_to_cube(self, iexe, wfdb, fixed_postion=[0,0,0], supercell=[1,1,1], degen_tol=1e-2,
+    def real_wf_to_cube(self, iexe, wfdb, out_path='', fixed_postion=[0,0,0], supercell=[1,1,1], degen_tol=1e-2,
                         wfcCutoffRy=-1, fix_particle='h', phase=False, block_size=256):
         """
         Function to compute and save real-space exciton wavefunctions and 
@@ -344,7 +344,7 @@ class YamboExcitonDB(object):
         real_wfc *= (1.0/max_normalize_val)
         # write to cube file 
         print('Writing to .cube file')
-        write_cube('exe_wf_%s_%d.cube' %(name_file,iexe+1),
+        write_cube('%sexe_wf_%s_%d.cube' %(out_path,name_file,iexe+1),
                    real_wfc, sc_latvecs, atom_pos, atom_nums,
                    header='Real space exciton wavefunction')
 
