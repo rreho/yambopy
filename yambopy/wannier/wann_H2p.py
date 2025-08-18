@@ -668,7 +668,9 @@ class H2P():
             #self.eps_0 = eps_0            
         else:
             # Pull per-exciton oscillator strengths
-            F_exc = getattr(tb_dipoles, "F_kcv", None)
+            self.F_kcv = getattr(tb_dipoles, "F_kcv", None)
+            F_exc = self.F_kcv[0] 
+
 
             k = self.n_exc_computed
 
@@ -699,7 +701,6 @@ class H2P():
             pl0  = piVk * np.einsum('p,pxy,pw->wxy', f_pl, F_exc, Wre, optimize=True)
             pl0 += 1j   * piVk * np.einsum('p,pxy,pw->wxy', f_pl, F_exc, Wim, optimize=True)
 
-            self.F_kcv = F_exc
             self.eps_wxy   = eps
             self.pl0_wxy   = pl0
 

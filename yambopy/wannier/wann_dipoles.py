@@ -139,7 +139,6 @@ class TB_dipoles():
             import time
             print("Starting BSE dipole matrix formation\n")
             t0 = time.time()
-
             # transitions t = (#k * #c * #v)
             wc1 = self.eigv[self.BSE_table[:,0], self.BSE_table[:,2]]
             wv1 = self.eigv[self.BSE_table[:,0], self.BSE_table[:,1]]
@@ -153,8 +152,8 @@ class TB_dipoles():
             # ---- only the first k excitons ----
             k = self.n_exc
             # A_{t,p} for the first k excitons (shape: nq x k x t) -> transpose to nq x t x k
-            
             A_qkt = self.h2peigvec_vck[:, :k, BSE_TABLE[:,1], BSE_TABLE[:,2], BSE_TABLE[:,0]]
+            nq = A_qkt.shape[0]
 
             # Transition-side contractions (unchanged); shapes: (t,3)
             dothlm     = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:],
@@ -171,8 +170,8 @@ class TB_dipoles():
             dip_conj = ga[None, :,None] * np.einsum('qkt,ta->qkta', np.conjugate(A_qkt), vdot_conj, optimize=True)  # (nq, t, k, 3)
 
             # Reshape t -> (nkpoints, bse_nc, bse_nv)
-            dipoles_bse_kcv      = dip.reshape(k, self.nkpoints, self.bse_nc, self.bse_nv, 3)
-            dipoles_bse_kcv_conj = dip_conj.reshape(k, self.nkpoints, self.bse_nc, self.bse_nv, 3)
+            dipoles_bse_kcv      = dip.reshape(nq, k, self.nkpoints, self.bse_nc, self.bse_nv, 3)
+            dipoles_bse_kcv_conj = dip_conj.reshape(nq, k, self.nkpoints, self.bse_nc, self.bse_nv, 3)
 
             # Store: now there’s an explicit exciton axis length k
             self.dipoles_bse_kcv = dipoles_bse_kcv
@@ -243,27 +242,14 @@ class TB_dipoles():
         Dc = self.dipoles_bse_kcv_conj     # same shape
         BSE_TABLE = self.BSE_table.copy() - np.array([0, self.offset_nv, self.nv])
 
-        if D.ndim == 6:
-            # Sum over transitions t = (k-point, c, v)
-            J  = D[:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(1))             # (t, 3)
-            Jc = Dc[:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(1))            # (t, 3)
 
-            # Outer product over Cartesian components → (nq, k, 3, 3)
-            F = np.einsum('qka,qkb->qkab', J, Jc, optimize=True)
+        # Legacy shape without explicit exciton axis: (t, nk, nc, nv, 3)
+        # Treat first dim as “exciton” and proceed similarly.
+        J  = D[:,:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(2))             # (t, 3)
+        Jc = Dc[:,:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(2))            # (t, 3)
+        F  = np.einsum('qta,qtb->qtab', J, Jc, optimize=True)
+        self.F_kcv = F
 
-            # Store; pick what you prefer to keep
-            self.F_kcv = F                     # per q, per exciton
-
-        elif D.ndim == 5:
-            # Legacy shape without explicit exciton axis: (t, nk, nc, nv, 3)
-            # Treat first dim as “exciton” and proceed similarly.
-            J  = D[:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(1))             # (t, 3)
-            Jc = Dc[:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(1))            # (t, 3)
-            F  = np.einsum('ta,tb->tab', J, Jc, optimize=True)
-            self.F_kcv = F
-
-        else:
-            raise ValueError(f"Unexpected dipoles shape {D.shape}")
 
         print(f"Done in {time.time() - t0:.3f}s; F shape = {F.shape}")
 

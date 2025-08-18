@@ -37,6 +37,7 @@ class TB_lifetimes(TB_dipoles):
             self.tau = self._get_tau1D(tb_dipoles)
 
     def _get_tau3D(self, tb_dipoles):
+        print("Implementation warning")
         tau = np.zeros((tb_dipoles.ntransitions, 3, 3))
         F_kcv = tb_dipoles.F_kcv
         h2peigvec = tb_dipoles.h2peigvec / HA2EV
@@ -54,7 +55,7 @@ class TB_lifetimes(TB_dipoles):
         
         gamma0 = 0
         tau0_tot = np.zeros(shape=(tb_dipoles.ntransitions,3,3))
-        ES = tb_dipoles.h2peigv/HA2EV
+        ES = tb_dipoles.h2peigv[0]/HA2EV
             # [FP]: is this gauge treatment correct?
         
                 # [RR] if you inspect the Yambo code you might expect 
@@ -73,6 +74,7 @@ class TB_lifetimes(TB_dipoles):
         return tau0_tot
 
     def _get_tau1D(self, tb_dipoles):
+        print("Implementation warning")
         tau = np.zeros((tb_dipoles.ntransitions, 3, 3))
         F_kcv = tb_dipoles.F_kcv
         vc = np.linalg.norm(self.latdb.lat[0]*BOHR2ANG**2)
