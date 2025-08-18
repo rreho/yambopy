@@ -55,14 +55,14 @@ class TB_lifetimes(TB_dipoles):
         
         gamma0 = 0
         tau0_tot = np.zeros(shape=(tb_dipoles.ntransitions,3,3))
-        ES = tb_dipoles.h2peigv[0]/HA2EV
+        ES = tb_dipoles.h2peigv[0,:tb_dipoles.n_exc]/HA2EV
             # [FP]: is this gauge treatment correct?
         
                 # [RR] if you inspect the Yambo code you might expect 
                 # another 1/((2*np.pi)**3) but I think that 
                 # d3k_factor/((2np.pi)**3) is actually 1/Omega
         q0_norm = 1e-5
-        muS2 = tb_dipoles.F_kcv/(q0_norm**2) 
+        muS2 = tb_dipoles.F_kcv[0]/(q0_norm**2) 
         vc = np.linalg.norm(np.cross(self.latdb.lat[0], self.latdb.lat[1]))*speed_of_light*tb_dipoles.nkpoints
 
 

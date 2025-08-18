@@ -7,7 +7,7 @@ from yambopy.lattice import calculate_distances
 from yambopy.wannier.wann_occupations import TB_occupations
 
 class ExcitonBands(H2P):
-    def __init__(self, h2p: 'H2P', path_qpoints: 'Path', method="Boltz", Tel=0.0, Tbos=300.0, sigma=0.1):
+    def __init__(self, h2p: 'H2P', path_qpoints: 'Path', method="Boltz", Tel=0.0, Tbos=300.0, sigma=0.1, memmap_path=None, distributed=False, keep_kernels=False):
         # Get the __init__ argument names of the parent class (excluding 'self')
         self.kmpgrid = h2p.kmpgrid
         self.cpot = h2p.cpot
@@ -42,96 +42,185 @@ class ExcitonBands(H2P):
             self.nq_double = self.nq_list
             self.red_kpoints = self.path_qpoints.get_klist()[:,0:3]
             self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)*ang2bohr # result in Bohr
-            self.H2P = self.buildH2P_qlist()
+            self.H2P = self.buildH2P_qlist(memmap_path=memmap_path, distributed=distributed, keep_kernels=keep_kernels)
         if not isinstance(h2p, H2P):
             raise TypeError('Argument must be an instance of H2P')
         
+    def buildH2P_qlist(self, memmap_path=None, distributed=False, keep_kernels=False):
+        """
+        Memory-safe, optionally multi-node build of H2P over q-list.
 
-    def buildH2P_qlist(self):        
-        H2P = np.zeros((self.nq_list, self.dimbse, self.dimbse), dtype=np.complex128)
-        print('initialize buildh2p from cpot')
+        Parameters
+        ----------
+        memmap_path : str or None
+            If given, H2P is created as a memmap at this path. Strongly recommended for large problems.
+        distributed : bool
+            If True and mpi4py is available, split q's across MPI ranks and write into the same memmap.
+            Each rank writes disjoint q-slices; rank 0 returns the array handle, others return None.
+        keep_kernels : bool
+            If True, stores self.K_direct and self.K_Ex for diagnostics (uses extra RAM).
+
+        Returns
+        -------
+        H2P : np.ndarray or np.memmap on rank 0; None on other ranks if distributed=True.
+            Shape (nq_list, dimbse, dimbse), dtype=complex128.
+        """
+        import numpy as np, gc
+        from time import time
+
         t0 = time()
-        cpot_array = None
 
-        if (self.ctype=='v2dt2'):
-            #print('\n Kernel built from v2dt2 Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
-            # Ensure inputs are NumPy arrays
-            #K_direct = self.cpot.v2dt2(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:])\
-            #   *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
-            cpot_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.v2dt2(np.array([[0,0,0]]),self.red_kpoints)
+        # --- MPI setup (optional) ---
+        comm = None
+        rank = 0
+        size = 1
+        if distributed:
+            try:
+                from mpi4py import MPI
+                comm = MPI.COMM_WORLD
+                rank = comm.Get_rank()
+                size = comm.Get_size()
+            except Exception:
+                # fallback to single-process if mpi4py not available
+                comm = None
+                rank = 0
+                size = 1
 
-        elif(self.ctype == 'v2dk'):
-            #print('\n Kernel built from v2dk Coulomb potential. Remember to provide the cutoff length lc in Bohr\n')
-                        # K_direct = self.cpot.v2dk(self.kmpgrid.car_kpoints[ik,:],self.kmpgrid.car_kpoints[ikp,:] )\
-                        # *np.vdot(self.eigvec[ik,:, ic],self.eigvec[ikp,:, icp])*np.vdot(self.eigvec[ikpminusq,:, ivp],self.eigvec[ikminusq,:, iv])
-            cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.v2dk(np.array([[0,0,0]]),self.red_kpoints)
+        nq   = int(self.nq_list)
+        dim  = int(self.dimbse)
+        nb   = int(self.nb)
+        nk   = int(self.nk)
 
-        elif(self.ctype == 'vcoul'):
-            #print('''\n Kernel built from screened Coulomb potential.\n
-            #   Screening should be set via the instance of the Coulomb Potential class.\n
-            #   ''')
-            cpot_array = self.cpot.vcoul(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.vcoul(np.array([[0,0,0]]),self.red_kpoints)
+        # ---- Coulomb matrices (small enough; build once) ----
+        if   self.ctype == 'v2dt2':
+            cpot_array   = self.cpot.v2dt2(self.kmpgrid.car_kpoints, self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dt2(np.array([[0,0,0]]),      self.red_kpoints).ravel()
+        elif self.ctype == 'v2dk':
+            cpot_array   = self.cpot.v2dk(self.kmpgrid.car_kpoints, self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dk(np.array([[0,0,0]]),      self.red_kpoints).ravel()
+        elif self.ctype == 'vcoul':
+            cpot_array   = self.cpot.vcoul(self.kmpgrid.car_kpoints, self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.vcoul(np.array([[0,0,0]]),      self.red_kpoints).ravel()
+        elif self.ctype == 'v2dt':
+            cpot_array   = self.cpot.v2dt(self.kmpgrid.car_kpoints, self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2dt(np.array([[0,0,0]]),      self.red_kpoints).ravel()
+        elif self.ctype == 'v2drk':
+            cpot_array   = self.cpot.v2drk(self.kmpgrid.car_kpoints, self.kmpgrid.car_kpoints)
+            cpot_q_array = self.cpot.v2drk(np.array([[0,0,0]]),      self.red_kpoints).ravel()
+        else:
+            raise ValueError(f"Unknown ctype={self.ctype}")
 
-        elif(self.ctype == 'v2dt'):
-            #print('''\n Kernel built from v2dt Coulomb potential.\n
-            #   ''')
-            cpot_array = self.cpot.v2dt(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.v2dt(np.array([[0,0,0]]),self.red_kpoints)
+        # Map k-indices used by transitions
+        ik  = self.BSE_table[:, 0].astype(np.intp)          # (dim,)
+        ivb = self.BSE_table[:, 1].astype(np.intp)          # (dim,)
+        icb = self.BSE_table[:, 2].astype(np.intp)          # (dim,)
 
-        elif(self.ctype == 'v2drk'):
-            #print('''\n Kernel built from v2drk Coulomb potential.\n
-            #   lc, ez, w and r0 should be set via the instance of the Coulomb potential class.\n
-            #   ''')
-            cpot_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.v2drk(np.array([[0,0,0]]),self.red_kpoints)
+        # k − q list
+        kminusqlist = self.kmpgrid.k[:, None, :] - self.red_kpoints[None, :, :]   # (nk, nq, 3)
 
-        kminusqlist_table = self.kmpgrid.k[:,None,:] - self.red_kpoints[None,:,:]
-        eigv_kmq, eigvec_kmq = self.model.get_eigenval_and_vec(kminusqlist_table.reshape(self.nk*self.nq_list,3))
-        # compute the fermi occupations for k-q
-        f_kmqn = self._get_occupations(eigv_kmq, self.model.fermie) #Fermi-dirac occupations in shape of eigv_kmq 
-        f_kmqn = TB_occupations(eigv_kmq,Tel = self.Tel, Tbos=self.Tbos, Eb=self.model.fermie, sigma=self.sigma, fermie=self.model.fermie)._get_fkn(method=self.method)
-        eigv_kmq = np.array(eigv_kmq).reshape(self.nk, self.nq_list, self.nb)
-        self.f_kmqn = f_kmqn.reshape(self.nk, self.nq_list, self.nb)    # these reshapes are not very nice
-        eigvec_kmq = np.array(eigvec_kmq).reshape(self.nk, self.nq_list, self.nb, self.nb)
-        eigv_k = self.eigv
-        eigvec_k = self.eigvec
-        
-        eigc = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
-        eigcp = eigvec_k[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
-        eigv = eigvec_kmq[self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
-        eigvp = eigvec_kmq[self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
-        dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
-        dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigvp), eigv)
+        # --- Precompute k-only stuff once (tiny) ---
+        # Conduction eigenvectors at k for each transition t = (ik, icb)
+        C_k = self.eigvec[ik, :, icb]            # (dim, nb)
+        # Gram over bands for conduction part (constant over q)
+        # dotc[i,j] = <C_i | C_j> = sum_b conj(C_i[b]) * C_j[b]
+        dotc = C_k.conj() @ C_k.T                # (dim, dim)
 
-        dotc2 = np.einsum('ijk,ijlk->li',np.conjugate(eigc), eigv)
-        dotv2 = np.einsum('ijlk,ijk->lj',np.conjugate(eigvp), eigcp)
-                
-        del eigc, eigcp, eigv, eigvp
-        gc.collect()
-        
-        K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
-        del dotc, dotv
-        gc.collect()
-        K_Ex = - cpot_q_array.T * dotc2 * dotv2
-        K_sum = K_direct + K_Ex[:,:,np.newaxis]
+        # Coulomb map for transitions (dim x dim)
+        cpot_tt = cpot_array[ik][:, ik]          # (dim, dim)
 
-        f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-self.f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
-        self.K_direct = K_direct
-        self.K_Ex = K_Ex
-        gc.collect()
+        # Valence occupations at k for each transition (constant over q)
+        f_val = self.f_kn[ik, ivb]               # (dim,)
 
-        H2P = f_diff/self.nk * K_sum
+        # --- Output array: memmap or in-memory ---
+        if memmap_path is not None:
+            # Create/overwrite memmap on every rank; disjoint writes are safe
+            H2P_out = np.memmap(memmap_path, dtype=np.complex128, mode='w+', shape=(nq, dim, dim))
+        else:
+            # Only root holds full array if not memmapping
+            H2P_out = np.zeros((nq, dim, dim), dtype=np.complex128) if rank == 0 else None
 
-        result = eigv_kmq[self.BSE_table[:, 0],:, self.BSE_table[:, 1]].T  # Shape: (nqpoints, ntransitions)
-        eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
-        diag = np.einsum('ij,ki->kij', np.eye(self.dimbse),eigv_diff)  # when t ==tp
-        H2P += diag
-        print(f'Completed in {time() - t0} seconds')
+        # --- Distribute q indices across ranks ---
+        q_indices = np.arange(nq, dtype=np.intp)[rank::size]
 
-        return H2P
+        # --- Main loop over q (streaming; O(1) memory per q) ---
+        for iq in q_indices:
+            # 1) Eigenpairs at k - q_i (only this q)
+            k_minus_q = kminusqlist[:, iq, :]                              # (nk, 3)
+            eigv_kmq_iq, eigvec_kmq_iq = self.model.get_eigenval_and_vec(k_minus_q)  # eigv: (nk, nb), eigvec: (nk, nb, nb)
+
+            # 2) Fermi occupations at k - q_i (only this q)
+            f_kmq_iq = TB_occupations(
+                eigv_kmq_iq, Tel=self.Tel, Tbos=self.Tbos, Eb=self.model.fermie,
+                sigma=self.sigma, fermie=self.model.fermie
+            )._get_fkn(method=self.method)                                 # (nk, nb)
+
+            # 3) Build valence vectors V_i(q): for each transition t=(ik, ivb)
+            V_q = eigvec_kmq_iq[ik, :, ivb]                                # (dim, nb)
+
+            # 4) dotv(q): Gram over valence vectors -> (dim, dim)
+            #     dotv[i,j] = <V_i(q)|V_j(q)>
+            dotv = V_q.conj() @ V_q.T                                      # (dim, dim)
+
+            # 5) Exchange side vectors (length dim), per transition
+            #     dotc2[i] = <C_i | V_i(q)>,   dotv2[j] = <V_j(q) | C_j>
+            dotc2 = np.einsum('ib,ib->i', C_k.conj(), V_q, optimize=True)  # (dim,)
+            dotv2 = np.einsum('jb,jb->j', V_q.conj(), C_k, optimize=True)  # (dim,)
+
+            # 6) Direct + exchange kernels at this q
+            #     K_direct(q) = cpot_tt * dotc * dotv(q)        (elementwise)
+            K_direct_q = cpot_tt * dotc * dotv                                 # (dim, dim)
+
+            #     K_ex(q) = - v(q) * [dotc2 ⊗ dotv2]        (outer product)
+            #     If you need legacy broadcasting semantics, replace outer with replication.
+            K_ex_q = - cpot_q_array[iq] * (dotc2[:, None] * dotv2[None, :])    # (dim, dim)
+
+            if keep_kernels and rank == 0:
+                # Stash small views for debugging (optional)
+                # WARNING: keeping full K_* over all q re-introduces memory growth.
+                if iq == 0:
+                    self.K_direct = np.empty((nq, dim, dim), dtype=np.complex128)
+                    self.K_Ex     = np.empty((nq, dim, dim), dtype=np.complex128)
+                self.K_direct[iq] = K_direct_q
+                self.K_Ex[iq]     = K_ex_q
+
+            # 7) Occupation difference per (i,j) at this q
+            #     f_diff_ij(q) = f_val[i] - f_con(q)[j]
+            f_con_q = f_kmq_iq[ik, icb]                                     # (dim,)
+            f_diff_q = f_val[:, None] - f_con_q[None, :]                    # (dim, dim)
+
+            # 8) Assemble H2P(q)
+            H_q = (f_diff_q / self.nk) * (K_direct_q + K_ex_q)              # (dim, dim)
+
+            # 9) Add diagonal term: ΔE_i(q) on the diagonal
+            #     ΔE_i(q) = E_c(ik,icb) - E_v(ik−q,ivb)
+            Ec_i = self.eigv[ik, icb]                                       # (dim,)
+            Ev_iq = eigv_kmq_iq[ik, ivb]                                    # (dim,)
+            dE_iq = Ec_i - Ev_iq                                            # (dim,)
+            H_q[np.diag_indices(dim)] += dE_iq
+
+            # 10) Store H2P(q) into output (memmap or in-memory)
+            if memmap_path is not None:
+                H2P_out[iq, :, :] = H_q
+            elif rank == 0:
+                H2P_out[iq, :, :] = H_q
+
+            # 11) Free per-q temporaries
+            del eigv_kmq_iq, eigvec_kmq_iq, f_kmq_iq, V_q, dotv, dotc2, dotv2, K_direct_q, K_ex_q, f_con_q, f_diff_q, H_q
+            gc.collect()
+
+        # --- Synchronize and return ---
+        if comm is not None:
+            comm.Barrier()
+        if memmap_path is not None:
+            H2P_out.flush()
+
+        if rank == 0:
+            print(f'Completed in {time() - t0:.3f} s (streaming over q, distributed={distributed}, memmap={"yes" if memmap_path else "no"})')
+            return H2P_out
+        else:
+            # non-root returns nothing in distributed mode
+            return None
+
 
     def _get_occupations(self, eigv, fermie):
         occupations = fermi_dirac(eigv,fermie)
@@ -151,10 +240,10 @@ class ExcitonBands(H2P):
         weight_norm = weight/np.max(weight)
         return weight_norm
     
-    def plot_exciton_dispersion(self, n = None, ax=None, **kwargs):
+    def plot_exciton_dispersion(self, n_threads=None, n = None, ax=None, **kwargs):
         """Take the weights from the eigenvectors, and plot first n exciton bands"""
         if n is None: n = self.dimbse        
-        if  not hasattr(self, 'h2peigvec_vck'): self.solve_H2P()
+        if  not hasattr(self, 'h2peigvec_vck'): self.solve_H2P(n_threads=n_threads, k=n)
         if not ax:
             fig, ax = plt.subplots()
         weight_norm = self.get_exciton_weights(nq=self.nq_list)

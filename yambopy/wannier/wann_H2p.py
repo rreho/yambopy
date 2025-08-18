@@ -559,8 +559,12 @@ class H2P():
         nv_idx = self.bse_nv - self.nv + self.BSE_table[:, 1]
         nc_idx = self.BSE_table[:, 2] - self.nv
         k_idx  = self.BSE_table[:, 0]
-
-        print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape}\n')
+        
+        if k is not None:
+            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape[0], k,k}\n')
+        else:
+            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape}\n')
+            
         t0 = time()
 
         # Only a single q-point in your case, but keep the loop general
