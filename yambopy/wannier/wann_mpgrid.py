@@ -8,8 +8,6 @@ import numpy as np
 from scipy.spatial import cKDTree
 import spglib
 
-
-
 class symmetrized_mp_grid(KPointGenerator):
     def __init__(self, grid_shape, latdb, shift=np.array([0.0,0.0,0.0])):
         super().__init__()

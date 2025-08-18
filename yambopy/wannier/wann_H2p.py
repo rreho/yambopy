@@ -317,9 +317,6 @@ class H2P():
         No diagonaliztion needed."""
         if self.skip_diago:
             H2P = None
-            # self.qgrid_toibzk = self.electronsdb.kpoints_indexes[self.kindices_table[:]]
-            # self.ibzk_toqgrid={v: i for i, v in enumerate(self.qgrid_toibzk)}
-
             if self.nq_double == 1:
                 H2P = np.zeros((self.dimbse, self.dimbse), dtype=np.complex128)
                 file_suffix = 'ndb.BS_diago_Q1'
@@ -1193,7 +1190,11 @@ class H2P():
             car_qpoint = np.array([0,0,0])
         ydb = YamboExcitonDB(lattice=self.latdb,Qpt=0, eigenvalues=self.h2peigv[0],l_residual=self.F_kcv,r_residual=1, table=self.convert_to_yambo_table(self.electronsdb.nelectrons),car_qpoint=np.array(car_qpoint))
         ydb.eigenvectors =self.h2peigvec
-        ydb.real_wf_to_cube(iexe=iexe, wfdb=wfdb, **args)
+        if isinstance(iexe, (list, np.ndarray)):
+            for idx in iexe:
+                ydb.real_wf_to_cube(iexe=idx, wfdb=wfdb, **args)
+        else:
+            ydb.real_wf_to_cube(iexe=iexe, wfdb=wfdb, **args)
 
 
 def chunkify(lst, n):

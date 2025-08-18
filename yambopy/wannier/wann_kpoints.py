@@ -48,44 +48,34 @@ class KPointGenerator():
         - folded_k_points: The folded k-points within the BZ (same shape as k_points).
         - G_vectors: The reciprocal lattice vectors that fold the k-points into the BZ (same shape as k_points).
         """
-        k_points = np.array(k_points)  # Ensure input is an array
+        k_points = np.array(k_points)
 
-        # Compute G multipliers
-        G_multiplier = np.floor((k_points-bz_range[0])/ (bz_range[1] - bz_range[0]))
-        
-        #G_multiplier = np.floor((k_points - bz_range[0]) / (bz_range[1] - bz_range[0]))
+        # Compute G multipliers (integer shifts)
+        G_multiplier = np.floor((k_points - bz_range[0]) / (bz_range[1] - bz_range[0]))
+
         # Compute G_vectors
         if reciprocal_vectors is not None:
-            reciprocal_vectors = np.array(reciprocal_vectors)  # Ensure reciprocal_vectors is an array
+            reciprocal_vectors = np.array(reciprocal_vectors)
             G_vectors = np.tensordot(G_multiplier, reciprocal_vectors, axes=([1], [0]))
         else:
-            # Assume a cubic lattice with unit cell length of 1
             G_vectors = G_multiplier * (bz_range[1] - bz_range[0])
 
-        # Fold k-points into the BZ
+        # Fold k-points
         folded_k_points = k_points - G_vectors
 
-        # Handle boundary conditions based on `include_upper_bound`
+        # Handle boundaries
         if include_upper_bound:
-            # Map -0.5 to +0.5 while keeping +0.5 unchanged
+            # Map -0.5 to +0.5
             mask_lower_bound = np.isclose(folded_k_points, bz_range[0], atol=1e-10)
-            folded_k_points[mask_lower_bound] = bz_range[1]  # -0.5 → +0.5
-            G_vectors[mask_lower_bound] -= (bz_range[1] - bz_range[0])  # Adjust G_vectors
-
-            # Negate G_vectors for consistency
-            G_vectors = -G_vectors            
+            folded_k_points[mask_lower_bound] = bz_range[1]
+            G_vectors[mask_lower_bound] -= (bz_range[1] - bz_range[0])
         else:
-            # Treat upper bound as exclusive: if folded_k_points == bz_range[1], shift it back to bz_range[0]
-            mask_upper_bound = (folded_k_points == bz_range[0]) & (G_vectors >= 1.0)
-            folded_k_points[mask_upper_bound] += (bz_range[1] - bz_range[0])
-            G_vectors[mask_upper_bound] -= (bz_range[1] - bz_range[0])
-            # Negate G_vectors
-            G_vectors = -G_vectors
-            # Handle points at the upper bound of the BZ
-            mask_at_upper_bound = (folded_k_points == bz_range[1])
-            folded_k_points[mask_at_upper_bound] -= (bz_range[1] - bz_range[0])
-            G_vectors[mask_at_upper_bound] = 0
+            # Treat +0.5 as exclusive: shift back to -0.5
+            mask_upper_bound = np.isclose(folded_k_points, bz_range[1], atol=1e-10)
+            folded_k_points[mask_upper_bound] -= (bz_range[1] - bz_range[0])
+            G_vectors[mask_upper_bound] += (bz_range[1] - bz_range[0])
 
+        # Do not negate G_vectors: they are defined as k - k_folded
         return folded_k_points, G_vectors
 
     def find_closest_kpoint(self, points):
