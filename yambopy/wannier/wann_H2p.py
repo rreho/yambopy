@@ -531,34 +531,93 @@ class H2P():
         return K_direct, K_Ex
     
    
-    
-    def solve_H2P(self):
 
-        h2peigv = np.zeros((self.nq_double,self.dimbse), dtype=np.complex128)
-        h2peigvec = np.zeros((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex128)
-        h2peigv_vck = np.zeros((self.nq_double,self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
-        h2peigvec_vck = np.zeros((self.nq_double,self.dimbse,self.bse_nv,self.bse_nc,self.nk),dtype=np.complex128) 
-        deg_h2peigvec = np.array([])        
-        
-        print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape} \n')
+    def solve_H2P(self, n_threads=None, k=None, which='SA', driver='evd'):
+        """
+        n_threads: int or None -> number of BLAS threads (None = leave as-is)
+        k: None or int -> if not None and k < dimbse, use iterative eigensolver for k eigenpairs
+        which: 'SA' (smallest) or 'LA' (largest) if k is not None
+        driver: 'evd'|'evr'|'evx' for scipy.linalg.eigh when computing all eigenpairs
+        """
+            
+        import numpy as np
+        import scipy.linalg
+        from threadpoolctl import threadpool_limits
+        from time import time
+        import contextlib
+
+        nq = self.nq_double
+        dim = self.dimbse
+
+        # Allocate outputs (keep original shapes for compatibility)
+        h2peigv       = np.zeros((nq, dim), dtype=np.complex128)
+        h2peigvec     = np.zeros((nq, dim, dim), dtype=np.complex128)
+        h2peigv_vck   = np.zeros((nq, self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128)
+        h2peigvec_vck = np.zeros((nq, dim, self.bse_nv, self.bse_nc, self.nk), dtype=np.complex128) 
+
+        # Precompute scatter indices once
+        nv_idx = self.bse_nv - self.nv + self.BSE_table[:, 1]
+        nc_idx = self.BSE_table[:, 2] - self.nv
+        k_idx  = self.BSE_table[:, 0]
+
+        print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape}\n')
         t0 = time()
-        for iq in range(0,self.nq_double):
 
-            (h2peigv[iq],h2peigvec[iq]) = scipy.linalg.eigh(self.H2P[iq])
+        # Only a single q-point in your case, but keep the loop general
+        for iq in range(nq):
+            A = np.array(self.H2P[iq], order='F', copy=True)  # Fortran order avoids hidden copies
 
-            h2peigvec_vck[iq][:, self.bse_nv - self.nv+self.BSE_table[:,1], self.BSE_table[:,2]-self.nv, self.BSE_table[:,0]] = h2peigvec[iq].T
-            h2peigv_vck[iq][self.bse_nv - self.nv + self.BSE_table[:,1], self.BSE_table[:,2] - self.nv, self.BSE_table[:,0]] = h2peigv[iq]
-        
+            # Control BLAS threads only around the hot call
+            ctx = threadpool_limits(limits=n_threads, user_api='blas') if n_threads else contextlib.nullcontext()
+            self.n_exc_computed = k if (k is not None and k < self.dimbse) else self.dimbse
 
-        self.h2peigv = h2peigv
-        self.h2peigv_vck = h2peigv_vck
-        self.h2peigvec = h2peigvec
+            with ctx:
+                if k is None or k >= dim:
+                    # Dense path: all eigenpairs
+                    w, v = scipy.linalg.eigh(A, overwrite_a=True, check_finite=False, driver=driver)
+                    # Store
+                    h2peigv[iq] = w
+                    h2peigvec[iq] = v
+
+                    # Scatter into *_vck tensors
+                    # v shape: (dim, dim). We need [mode, nv, nc, k] = v.T[...] mapping
+                    dest = h2peigvec_vck[iq]
+                    dest[:, nv_idx, nc_idx, k_idx] = v.T  # transpose is a cheap view
+                    h2peigv_vck[iq][nv_idx, nc_idx, k_idx] = w
+
+                else:
+                    # Iterative path: compute k eigenpairs (much faster 
+                    # --- iterative path (k < dim) ---
+                    from scipy.sparse.linalg import LinearOperator, eigsh
+
+                    def mv(x):
+                        return A @ x
+                    Aop = LinearOperator(dtype=np.complex128, shape=(dim, dim), matvec=mv)
+
+                    w, V = eigsh(Aop, k=k, which=which)  # V: (dim, k)
+                    order = np.argsort(w) if which.upper() == 'SA' else np.argsort(-w)
+                    w = w[order]; V = V[:, order]
+
+                    # store compactly in leading slices
+                    h2peigv[iq, :k] = w
+                    h2peigvec[iq, :, :k] = V
+
+                    # scatter:
+                    # 1) eigenvectors: slice the *mode* axis
+                    h2peigvec_vck[iq][:k, nv_idx, nc_idx, k_idx] = V.T
+
+                    # 2) eigenvalues: slice the three index arrays to length k
+                    h2peigv_vck[iq][nv_idx[:k], nc_idx[:k], k_idx[:k]] = w
+
+        # Publish results on the object
+        self.h2peigv       = h2peigv
+        self.h2peigv_vck   = h2peigv_vck
+        self.h2peigvec     = h2peigvec
         self.h2peigvec_vck = h2peigvec_vck
 
         t1 = time()
+        print(f'\nDiagonalization of H2P in {t1 - t0:.3f} s (threads={n_threads or "default"}, driver={driver}, k={k or "all"})')
 
-        print(f'\n Diagonalization of H2P in {t1-t0:.3f} s')
- 
 
     def get_eps(self, hlm, emin, emax, estep, eta, method="Boltz", Tel=0.0, Tbos=300.0, sigma=0.1):
         '''
@@ -575,13 +634,13 @@ class H2P():
             np.fill_diagonal(eps[i,:,:], 1.0)
         # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
 
-        h2peigvec_vck=self.h2peigvec_vck[self.q0index]
-        h2peigv_vck = self.h2peigv_vck[self.q0index]
-        h2peigvec = self.h2peigvec[self.q0index]
-        h2peigv = self.h2peigv[self.q0index]
+        h2peigvec_vck = self.h2peigvec_vck
+        h2peigv_vck = self.h2peigv_vck
+        h2peigvec = self.h2peigvec
+        h2peigv = self.h2peigv
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
+        tb_dipoles = TB_dipoles(self.n_exc_computed, self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
                                 self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck,h2peigv=h2peigv, method='real',ktype=self.ktype)
         self.tb_dipoles = tb_dipoles
         # compute osc strength
@@ -608,49 +667,45 @@ class H2P():
             #self.w = w
             #self.eps_0 = eps_0            
         else:
-            F_kcv = tb_dipoles.F_kcv
-            self.F_kcv = F_kcv
-            
-            # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
-            self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
-            ediff = h2peigv[:, np.newaxis]-w[np.newaxis, :]
-            ibz_factor = 1
+            # Pull per-exciton oscillator strengths
+            F_exc = getattr(tb_dipoles, "F_kcv", None)
 
-                # ibz_factor = len(self.model.mpgrid.red_kpoints_full) / self.model.nk
-                
-            
+            k = self.n_exc_computed
 
-            # compute eps and pl
-            #f_pl = TB_occupations(self.eigv,Tel = 0, Tbos=self.TBos, Eb=self.h2peigv[0])._get_fkn( method='Boltz')
-            #pl = eps
-            # for ies, es in enumerate(w):
-            #     for t in range(0,self.dimbse):
-            #         ik = self.BSE_table_sort[0][t][0]
-            #         iv = self.BSE_table_sort[0][t][1]
-            #         ic = self.BSE_table_sort[0][t][2]
-                    # eps[ies,:,:] += 8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                        # + 1j*8*np.pi/(self.electronsdb.lat_vol**bohr2ang**3*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-            #         #pl[ies,:,:] += f_pl * 8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-            #         #    + 1j*8*np.pi/(self.latdb.lat_vol*self.nk)*F_kcv[t,:,:]*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-            weight_bse = np.zeros(self.ntransitions)+1
-            if hasattr(self.model.mpgrid, 'red_kpoints_full'): # ibz case
+            # Exciton energies for the same k
+            E_exc = self.h2peigv[0, :k]                 # (k,)
+            # Frequency grid (your existing variable)
+            # w: (nw,) 
+            # Broadening
+            # eta: scalar
 
-                weight_bse = (self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]])#*self.model.mpgrid.nkpoints
+            # energy denominators: (k, nw)
+            ediff = E_exc[:, None] - w[None, :]
 
-            vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 #* ibz_factor**2
-            piVk = 8*np.pi/(vbz)
-            eps = piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
-            eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
-            
-            f_pl = TB_occupations(self.h2peigv[0],Tel = Tel, Tbos=Tbos, Eb=self.h2peigv[0][0], sigma=sigma)._get_fkn(method=method)
-            pl0 = piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
-            pl0 += 1j*piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
-            # pl0 = eps + f_pl * piVk* F_kcv*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
-                        #  + 1j*piVk* F_kcv*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
-            print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
-            #self.pl = pl
-            # self.w = w
-            # self.eps_0 = eps_0
+            # volume prefactor
+            vbz  = np.prod(self.cpot.ngrid) * self.electronsdb.lat_vol * bohr2ang**3
+            piVk = 8*np.pi / vbz
+
+            # Real + Imag parts, summed over excitons p
+            Wre = ediff / (np.abs(ediff)**2 + eta**2)    # (k, nw)
+            Wim = eta   / (np.abs(ediff)**2 + eta**2)    # (k, nw)
+
+            # ε(ω)_{αβ} = (8π/V) * Σ_p F^{p}_{αβ} * [Δ/(Δ^2+η^2) + i η/(Δ^2+η^2)]
+            eps  = piVk * np.einsum('pxy,pw->wxy', F_exc, Wre, optimize=True)
+            eps += 1j   * piVk * np.einsum('pxy,pw->wxy', F_exc, Wim, optimize=True)
+
+            # PL term (occupations per exciton, length k)
+            f_pl = TB_occupations(E_exc, Tel=Tel, Tbos=Tbos, Eb=E_exc[0], sigma=sigma)._get_fkn(method=method)  # (k,)
+            pl0  = piVk * np.einsum('p,pxy,pw->wxy', f_pl, F_exc, Wre, optimize=True)
+            pl0 += 1j   * piVk * np.einsum('p,pxy,pw->wxy', f_pl, F_exc, Wim, optimize=True)
+
+            self.F_kcv = F_exc
+            self.eps_wxy   = eps
+            self.pl0_wxy   = pl0
+
+            print('Excitonic Direct Ground state: ', np.min(E_exc), ' [eV]')
+
+
         return w, eps, pl0
     
     def get_eps_yambo(self, hlm, emin, emax, estep, eta):

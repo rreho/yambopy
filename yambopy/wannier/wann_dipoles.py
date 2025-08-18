@@ -6,7 +6,7 @@ from yambopy.wannier.wann_utils import *
 
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
-    def __init__(self , nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
+    def __init__(self ,n_exc, nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
                  eta, hlm, T_table, BSE_table, h2peigvec,eigv_diff_ttp=None, eigvecc_t=None,eigvecv_t=None,\
                  mpgrid=None, cpot=None, \
                  h2peigv_vck = None, h2peigvec_vck = None,h2peigv=None, method = 'real',\
@@ -36,6 +36,7 @@ class TB_dipoles():
         self.eigv_diff_ttp = eigv_diff_ttp
         self.eigvecc_t = eigvecc_t
         self.eigvecv_t = eigvecv_t
+        self.n_exc=n_exc
         if self.hlm[0][0][0][0] ==0:
             print(f"WARNING: hlm zero: {self.hlm[0][0][0][0]}")
 
@@ -138,66 +139,47 @@ class TB_dipoles():
             import time
             print("Starting BSE dipole matrix formation\n")
             t0 = time.time()
-            # dipoles_bse_kcv = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)
-            # dipoles_bse_kcv_conj = np.zeros((self.nbsetransitions, self.nkpoints, self.bse_nc,self.bse_nv,3),dtype=np.complex128)            
-            # for t in range(0,self.nbsetransitions):
-            #     for tp in range(0,self.nbsetransitions):
 
-            wc1 = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]]
-            wv1 = self.eigv[self.BSE_table[:,0],self.BSE_table[:,1]]
+            # transitions t = (#k * #c * #v)
+            wc1 = self.eigv[self.BSE_table[:,0], self.BSE_table[:,2]]
+            wv1 = self.eigv[self.BSE_table[:,0], self.BSE_table[:,1]]
 
-            gr = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GR
-            ga = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GA 
-            BSE_TABLE = self.BSE_table.copy() - np.array([0, self.offset_nv, self.nv])  # move to the BSE kernel subset
-            dip1 = self.h2peigvec_vck[:,BSE_TABLE[:,1], BSE_TABLE[:,2], BSE_TABLE[:,0]]
-            dothlm = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:] ,self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,1]])  # Take the eigvec_v of the transition
-            dothlm_conj = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:] ,self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,2]]) # Take the eigvec_c of the transition
+            gr = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GR      # (t,)
+            ga = GreensFunctions(w=wc1, E=wv1, eta=self.eta).GA      # (t,)
 
-            vdot = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,2]]), dothlm) # do a vdot with the einsum eigvec_c and dothlm
-            vdot_conj = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:,self.BSE_table[:,1]]), dothlm_conj) # do a vdot with the einsum eigvec_v and dothlm_conj
+            # Move to kernel subset
+            BSE_TABLE = self.BSE_table.copy() - np.array([0, self.offset_nv, self.nv])
+
+            # ---- only the first k excitons ----
+            k = self.n_exc
+            # A_{t,p} for the first k excitons (shape: nq x k x t) -> transpose to nq x t x k
             
-            dip = gr[:,np.newaxis] * np.einsum('tp,pa->tpa', dip1, vdot)  
-            dipoles_bse_kcv = dip.reshape(self.nbsetransitions,self.nkpoints,self.bse_nc,self.bse_nv, 3)
-            
-            dip_conj = ga[:,np.newaxis]* np.einsum('tp,pa->tpa', np.conjugate(dip1), vdot_conj) # complex conjugate
-            dipoles_bse_kcv_conj = dip_conj.reshape(self.nbsetransitions,self.nkpoints,self.bse_nc,self.bse_nv, 3)
-            # Determine the dimension of hlm
-            #dim_hlm = 3 #if np.count_nonzero(self.hlm[:,:,:,2]) > 0 else 2
+            A_qkt = self.h2peigvec_vck[:, :k, BSE_TABLE[:,1], BSE_TABLE[:,2], BSE_TABLE[:,0]]
 
-            # # Extract k, v, c from T_table
-            # k_indices, v_indices, c_indices = self.T_table.T
-            # # k_indices = np.array(k_indices)[:, np.newaxis]
+            # Transition-side contractions (unchanged); shapes: (t,3)
+            dothlm     = np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:],
+                                                self.eigvec[BSE_TABLE[:,0],:, self.BSE_table[:,1]],optimize=True)
+            dothlm_conj= np.einsum('tvca,tc->tva',  self.hlm[BSE_TABLE[:,0],:,:,:],
+                                                self.eigvec[BSE_TABLE[:,0],:, self.BSE_table[:,2]],optimize=True)
 
+            vdot      = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:, self.BSE_table[:,2]]), dothlm,optimize=True)        # (t,3)
+            vdot_conj = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:, self.BSE_table[:,1]]), dothlm_conj,optimize=True)   # (t,3)
 
-            # # Compute Green's function for all transitions
-            # E = self.eigv[k_indices, c_indices] - self.eigv[k_indices, v_indices]
-            # GR = GreensFunctions(w=E, E=0, eta=self.eta).GR
+            # Dipoles per transition t, exciton p, cart a, for each q (keep q explicit)
+            # Broadcast gr/ga over the exciton axis k.
+            dip      = gr[None, :,None] * np.einsum('qkt,ta->qkta', A_qkt, vdot, optimize=True)         # (nq, t, k, 3)
+            dip_conj = ga[None, :,None] * np.einsum('qkt,ta->qkta', np.conjugate(A_qkt), vdot_conj, optimize=True)  # (nq, t, k, 3)
 
-            # # Initialize dipoles array
-            # # dipoles = np.zeros((self.nbsetransitions, dim_hlm), dtype=np.complex128)
-            # print(self.nbsetransitions)
-            # print(self.bse_nb)
-            # print(self.nkpoints)
+            # Reshape t -> (nkpoints, bse_nc, bse_nv)
+            dipoles_bse_kcv      = dip.reshape(k, self.nkpoints, self.bse_nc, self.bse_nv, 3)
+            dipoles_bse_kcv_conj = dip_conj.reshape(k, self.nkpoints, self.bse_nc, self.bse_nv, 3)
 
-            # dipoles = np.zeros((self.nbsetransitions, dim_hlm), dtype=np.complex128)
-            # # Prepare eigenvectors
-            # eigvec_c = self.eigvec[k_indices, :, c_indices]
-            # eigvec_v = self.eigvec[k_indices, :, v_indices]
-
-            # # Compute dipoles
-            # for dim in range(dim_hlm):
-            #     # Compute the dot product
-            #     dot_product = np.einsum('ijk,ij->ik', self.hlm[k_indices, :, :, dim],eigvec_v)
-                
-            #     # Compute the vdot and multiply with GR and h2peigvec
-            #     dipoles_cvk[:, :, :, :, dim] = GR * self.h2peigvec[:,:, self.bse_nv-self.nv+v_indices, c_indices-self.nv, k_indices] * np.sum(np.conjugate(eigvec_c) * dot_product, axis=1)
-
-            # Reshape dipoles to match your original shape
-            # final_dipoles = np.zeros((self.nbsetransitions, self.bse_nc, self.bse_nv, self.nkpoints, dim_hlm), dtype=np.complex128)
-            # final_dipoles[np.arange(self.nbsetransitions), c_indices-self.nv, self.bse_nv-self.nv+v_indices, self.nkpoints,:dim_hlm] = dipoles_cvk
-
+            # Store: now there’s an explicit exciton axis length k
             self.dipoles_bse_kcv = dipoles_bse_kcv
             self.dipoles_bse_kcv_conj = dipoles_bse_kcv_conj
+
+            print(f"Done in {time.time()-t0:.3f}s (first {k} excitons)")
+
 
         print("BSE Dipoles matrix computed successfully.")
         print(f"Time for BSE Dipoles matrix formation: {time.time() - t0:.2f}")
@@ -249,62 +231,41 @@ class TB_dipoles():
         print("BSE Dipoles matrix computed successfully.")
         print(f"Time for BSE Dipoles matrix formation: {time.time() - t0:.2f}")
                 
-    def _get_osc_strength(self,method):
-        '''computes osc strength from dipoles
-        F_{\alpha, \beta}^{n, BSE} = ( \Sum_c,v,k = \dfrac{A^n_{c,v,k,0} < c,k | P_{\alpha} |v,k >}{E_{c,k} - E{v,k} + i \eta_1} ) * c.c
-        '''
-        print('Computing oscillator strength')
+    def _get_osc_strength(self, method):
+        """F_{αβ}^{n} = (Σ_{t} dipoles_{t,n,α}) * (Σ_{t} dipoles_{t,n,β})^*"""
         import time
+        assert method == 'real', "only 'real' supported here"
+
+        print('Computing oscillator strength')
         t0 = time.time()
-        dipoles_bse_kcv = self.dipoles_bse_kcv
-        dipoles_bse_kcv_conj = self.dipoles_bse_kcv_conj
-        F_kcv = np.zeros((self.nbsetransitions, 3, 3), dtype=np.complex128)   
 
-        weights = np.zeros(self.nkpoints) + 1
-        bse_weights = np.zeros(self.nbsetransitions) + 1
-        if hasattr(self.mpgrid, 'red_kpoints_full'): # ibz case
-            weights = self.mpgrid.kpoint_weights#*self.nkpoints
-            bse_weights = weights[self.BSE_table[:,0]]
-        # else:
-        #     # self.cpot.lattice.expand_kpoints()
-        #     orig_weights = self.cpot.lattice.weights_ibz.copy()
-        #     orig_weights[:8]=1
-        #     orig_weights[[0,1,2,3,7,8,14,4,5,6,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35]]
-        #     weight_bse = orig_weights[self.BSE_table[:,0]]#*self.cpot.lattice.nkpoints
+        D  = self.dipoles_bse_kcv          # expected: (nq, k, nk, nc, nv, 3)
+        Dc = self.dipoles_bse_kcv_conj     # same shape
+        BSE_TABLE = self.BSE_table.copy() - np.array([0, self.offset_nv, self.nv])
 
+        if D.ndim == 6:
+            # Sum over transitions t = (k-point, c, v)
+            J  = D[:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(1))             # (t, 3)
+            Jc = Dc[:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(1))            # (t, 3)
 
-        if (method == 'real'):
-            for t in range(0,self.nbsetransitions):
-                tmp_F_left = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
-                tmp_F_right = np.zeros((self.nbsetransitions,3), dtype=np.complex128)
-                for idip in range(0,self.nbsetransitions):
-                    ik = self.BSE_table[idip][0]
-                    iv = self.BSE_table[idip][1]
-                    ic = self.BSE_table[idip][2]
-                    factorLx = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 0]
-                    factorRx = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 0] 
-                    factorLy = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 1]
-                    factorRy = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 1]
-                    factorLz = dipoles_bse_kcv[t, ik, ic-self.nv, iv-self.offset_nv, 2]
-                    factorRz = dipoles_bse_kcv_conj[t, ik, ic-self.nv, iv-self.offset_nv, 2]
-                    tmp_F_left[t,0]  += factorLx #* (weights[ik])**(1/6)
-                    tmp_F_left[t,1]  += factorLy #* (weights[ik])**(1/6)
-                    tmp_F_left[t,2]  += factorLz #* (weights[ik])**(1/6)
-                    tmp_F_right[t,0] += factorRx #* (weights[ik])**(1/6)
-                    tmp_F_right[t,1] += factorRy #* (weights[ik])**(1/6)
-                    tmp_F_right[t,2] += factorRz #* (weights[ik])**(1/6)
+            # Outer product over Cartesian components → (nq, k, 3, 3)
+            F = np.einsum('qka,qkb->qkab', J, Jc, optimize=True)
 
-                F_kcv[t,0,0] = tmp_F_left[t,0] * tmp_F_right[t,0]# * bse_weights[t]
-                F_kcv[t,0,1] = tmp_F_left[t,0] * tmp_F_right[t,1]# * bse_weights[t]
-                F_kcv[t,0,2] = tmp_F_left[t,0] * tmp_F_right[t,2]# * bse_weights[t]
-                F_kcv[t,1,0] = tmp_F_left[t,1] * tmp_F_right[t,0]# * bse_weights[t]
-                F_kcv[t,1,1] = tmp_F_left[t,1] * tmp_F_right[t,1]# * bse_weights[t]
-                F_kcv[t,1,2] = tmp_F_left[t,1] * tmp_F_right[t,2]# * bse_weights[t]
-                F_kcv[t,2,0] = tmp_F_left[t,2] * tmp_F_right[t,0]# * bse_weights[t]
-                F_kcv[t,2,1] = tmp_F_left[t,2] * tmp_F_right[t,1]# * bse_weights[t]
-                F_kcv[t,2,2] = tmp_F_left[t,2] * tmp_F_right[t,2]# * bse_weights[t]
+            # Store; pick what you prefer to keep
+            self.F_kcv = F                     # per q, per exciton
 
-                
+        elif D.ndim == 5:
+            # Legacy shape without explicit exciton axis: (t, nk, nc, nv, 3)
+            # Treat first dim as “exciton” and proceed similarly.
+            J  = D[:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(1))             # (t, 3)
+            Jc = Dc[:,BSE_TABLE[:,0],BSE_TABLE[:,2],BSE_TABLE[:,1]].sum(axis=(1))            # (t, 3)
+            F  = np.einsum('ta,tb->tab', J, Jc, optimize=True)
+            self.F_kcv = F
+
+        else:
+            raise ValueError(f"Unexpected dipoles shape {D.shape}")
+
+        print(f"Done in {time.time() - t0:.3f}s; F shape = {F.shape}")
 
         if (method== 'v-gauge'):
             print('Warning! velocity gauge not implemented yet')
@@ -312,7 +273,6 @@ class TB_dipoles():
             print('Warning! position gauge not implemented yet')
         if (method== 'covariant'):
             print('Warning! covariant approach not implemented yet')
-        self.F_kcv = F_kcv        
         print(f"Oscillation strength computed succesfully in {time.time()-t0:.2f}s")
 
     def _get_osc_strength_IP(self,method):
