@@ -99,7 +99,7 @@ class H2P():
     '''
     def __init__(self, model, electronsdb_path, kmpgrid, qmpgrid, bse_nv=1, bse_nc=1, kernel_path=None, excitons_path=None,cpot=None, \
                  ctype='v2dt2',ktype='direct',bsetype='resonant', method='model',f_kn=None, f_qn = None,\
-                 TD=False, run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01):
+                 TD=False, run_parallel=False,dimslepc=100,gammaonly=False,nproc=8,eta=0.01,memmap_path=None,distributed=False):
 
         self.model = model
         self.nk = model.nk
@@ -115,6 +115,8 @@ class H2P():
         self.eigvec = model.eigvec
         self.gammaonly=gammaonly
         self.eta = eta
+        self.memmap_path = memmap_path
+        self.distibuted = distributed
         if(self.gammaonly):
             self.nq_double = 1
         else:
@@ -380,9 +382,29 @@ class H2P():
             print('Error: skip_diago is false')         
 
     def _buildH2P_fromcpot(self):
-        """ Build H2P using a model coulomb potential. (memmap-aware) """
-        self.memmap_path = './h2ptemp.txt'
-        use_memmap = bool(getattr(self, "memmap_path", None))
+        """ Build H2P using a model coulomb potential. (streamed, optional memmap + MPI over q) """
+
+        import numpy as np, gc
+        from time import time
+
+        # ---- opt-in knobs (no signature change) ----
+        use_memmap   = bool(getattr(self, "memmap_path", None))
+        distributed  = bool(getattr(self, "distributed", False))
+
+        # ---- MPI setup (optional) ----
+        comm, rank, size = None, 0, 1
+        if distributed:
+            try:
+                from mpi4py import MPI
+                comm  = MPI.COMM_WORLD
+                rank  = comm.Get_rank()
+                size  = comm.Get_size()
+            except Exception:
+                # mpi4py not available; fall back to single process
+                comm, rank, size = None, 0, 1
+                distributed = False
+
+        # allocate output (memmap if requested)
         if use_memmap:
             H2P = np.memmap(self.memmap_path, dtype=np.complex128, mode='w+',
                             shape=(self.nq_double, self.dimbse, self.dimbse))
@@ -392,13 +414,13 @@ class H2P():
         print('initialize buildh2p from cpot')
         t0 = time()
 
-        # Precompute k−q table and transition indices
+        # Precompute tables / indices (same)
         ikminusq = self.kminusq_table[:, :, 1]
         ik  = self.BSE_table[:, 0].astype(np.intp)
         iv  = self.BSE_table[:, 1].astype(np.intp)
         ic  = self.BSE_table[:, 2].astype(np.intp)
 
-        # Keep the exact same helper calls
+        # Kernels: keep identical calls
         K_direct, K_Ex = (None, None)
         if self.nq == 1:
             K_direct  = self._getKd()                 # (dim, dim)
@@ -407,44 +429,50 @@ class H2P():
 
         gc.collect()
 
-        # q-independent part of f_diff and diagonal’s conduction energies
+        # Parts that don’t depend on q
         f_val = self.f_kn[ik[:, None], iv[None, :]]   # (dim, dim)
         Ec_i  = self.eigv[ik, ic]                     # (dim,)
 
-        # store ΔE per q (small)
+        # Store ΔE per q like before (but we fill it per-q)
         eigv_diff_ttp = np.zeros((self.nq_double, self.dimbse), dtype=self.eigv.dtype)
 
-        # ---- stream over q to avoid big temporaries ----
+        # Distribute q’s across ranks (non-overlapping)
+        q_indices = np.arange(self.nq_double, dtype=np.intp)[rank::size]
+
+        # ---- Stream over q to avoid big temporaries ----
         if self.nq == 1:
-            iq = 0
-            E_kmq_iq = self.eigv[ikminusq[:, iq], :]                      # (nk, nb)
-            f_kmq_iq = self._get_occupations(E_kmq_iq, self.model.fermie) # (nk, nb)
+            # even if distributed, only rank 0 will have q_indices=[0]
+            for iq in q_indices:
+                E_kmq_iq = self.eigv[ikminusq[:, iq], :]                      # (nk, nb)
+                f_kmq_iq = self._get_occupations(E_kmq_iq, self.model.fermie) # (nk, nb)
 
-            f_con   = f_kmq_iq[ik[:, None], ic[None, :]]                  # (dim, dim)
-            f_diff  = f_val - f_con
-
-            H2P[iq] = f_diff * K_direct
-            if K_Ex is not None:
-                H2P[iq] += f_diff * K_Ex[iq][:, None]                     # same broadcast
-
-            Ev_iq = E_kmq_iq[ik, iv]                                      # (dim,)
-            dE_iq = Ec_i - Ev_iq
-            eigv_diff_ttp[iq] = dE_iq
-            H2P[iq, np.arange(self.dimbse), np.arange(self.dimbse)] += dE_iq
-
-            del E_kmq_iq, f_kmq_iq, f_con, f_diff, Ev_iq, dE_iq
-            gc.collect()
-        else:
-            for iq in range(self.nq_double):
-                E_kmq_iq = self.eigv[ikminusq[:, iq], :]                  # (nk, nb)
-                f_kmq_iq = self._get_occupations(E_kmq_iq, self.model.fermie)
-
-                f_con   = f_kmq_iq[ik[:, None], ic[None, :]]              # (dim, dim)
+                f_con   = f_kmq_iq[ik[:, None], ic[None, :]]                  # (dim, dim)
                 f_diff  = f_val - f_con
 
-                H2P[iq] = f_diff * K_direct[iq]
+                H2P[iq] = f_diff * K_direct
                 if K_Ex is not None:
-                    H2P[iq] += f_diff * K_Ex[iq][:, None]                 # same broadcast
+                    # broadcast vector across last axis exactly like original K_Ex[:,:,np.newaxis]
+                    H2P[iq] += f_diff * K_Ex[iq][:, None]
+
+                Ev_iq = E_kmq_iq[ik, iv]                                      # (dim,)
+                dE_iq = Ec_i - Ev_iq
+                eigv_diff_ttp[iq] = dE_iq
+                # add only to the diagonal (avoids allocating full 'diag' tensor)
+                H2P[iq, np.arange(self.dimbse), np.arange(self.dimbse)] += dE_iq
+
+                del E_kmq_iq, f_kmq_iq, f_con, f_diff, Ev_iq, dE_iq
+                gc.collect()
+        else:
+            for iq in q_indices:
+                E_kmq_iq = self.eigv[ikminusq[:, iq], :]                      # (nk, nb)
+                f_kmq_iq = self._get_occupations(E_kmq_iq, self.model.fermie)
+
+                f_con   = f_kmq_iq[ik[:, None], ic[None, :]]                  # (dim, dim)
+                f_diff  = f_val - f_con
+
+                H2P[iq]  = f_diff * K_direct[iq]
+                if K_Ex is not None:
+                    H2P[iq] += f_diff * K_Ex[iq][:, None]                     # same broadcast
 
                 Ev_iq = E_kmq_iq[ik, iv]
                 dE_iq = Ec_i - Ev_iq
@@ -454,17 +482,21 @@ class H2P():
                 del E_kmq_iq, f_kmq_iq, f_con, f_diff, Ev_iq, dE_iq
                 gc.collect()
 
-        # keep these assignments exactly as before
+        # Barrier + flush when distributed / memmap
+        if comm is not None:
+            comm.Barrier()
+        if use_memmap:
+            H2P.flush()
+
+        # keep these attributes as in your original
         self.K_Ex = K_Ex
         self.K_direct = K_direct
         self.eigv_diff_ttp = eigv_diff_ttp
 
-        if use_memmap:
-            H2P.flush()
-
         print(self.dimbse)
         print(f'Completed in {time() - t0} seconds')
         return H2P
+
 
         
     def _getKd(self):
