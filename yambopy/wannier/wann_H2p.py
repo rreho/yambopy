@@ -630,10 +630,7 @@ class H2P():
         nc_idx = self.BSE_table[:, 2] - self.nv
         k_idx  = self.BSE_table[:, 0]
         
-        if k is not None:
-            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape[0], k,k}\n')
-        else:
-            print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape}\n')
+        print(f'\nDiagonalizing the H2P matrix with dimensions: {self.H2P.shape}\n')
             
         t0 = time()
 
@@ -647,6 +644,7 @@ class H2P():
 
             with ctx:
                 if k is None or k >= dim:
+        
                     # Dense path: all eigenpairs
                     w, v = scipy.linalg.eigh(A, overwrite_a=True, check_finite=False, driver=driver)
                     # Store

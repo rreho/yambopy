@@ -245,7 +245,7 @@ class ExcitonBands(H2P):
         from threadpoolctl import threadpool_limits
         ctx = threadpool_limits(limits=n_threads, user_api='blas') if n_threads else contextlib.nullcontext()
         with ctx:
-            if n is None: n = self.dimbse        
+            if n_exc is None: n_exc = self.dimbse        
             if  not hasattr(self, 'h2peigvec_vck'): self.solve_H2P(n_threads=n_threads, k=n_exc, driver=driver)
 
     def plot_exciton_dispersion(self,n=None, ax=None, **kwargs):
