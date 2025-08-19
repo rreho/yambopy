@@ -7,7 +7,7 @@ from yambopy.wannier.wann_utils import *
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self ,n_exc, nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, BSE_table, h2peigvec,eigv_diff_ttp=None, eigvecc_t=None,eigvecv_t=None,\
+                 eta, hlm, T_table, BSE_table, h2peigvec,\
                  mpgrid=None, cpot=None, \
                  h2peigv_vck = None, h2peigvec_vck = None,h2peigv=None, method = 'real',\
                  rmn = None,ktype='IP'):
@@ -33,9 +33,6 @@ class TB_dipoles():
         self.eta = eta
         self.hlm = hlm
         self.ktype=ktype
-        self.eigv_diff_ttp = eigv_diff_ttp
-        self.eigvecc_t = eigvecc_t
-        self.eigvecv_t = eigvecv_t
         self.n_exc=n_exc
         if self.hlm[0][0][0][0] ==0:
             print(f"WARNING: hlm zero: {self.hlm[0][0][0][0]}")

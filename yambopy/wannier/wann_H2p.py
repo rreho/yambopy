@@ -422,10 +422,6 @@ class H2P():
 
         # Kernels: keep identical calls
         K_direct, K_Ex = (None, None)
-        if self.nq == 1:
-            K_direct  = self._getKd()                 # (dim, dim)
-        else:
-            K_direct, K_Ex = self._getKdq()           # (nq, dim, dim), (nq, dim)
 
         gc.collect()
 
@@ -434,8 +430,7 @@ class H2P():
         Ec_i  = self.eigv[ik, ic]                     # (dim,)
 
         # Store ΔE per q like before (but we fill it per-q)
-        eigv_diff_ttp = np.zeros((self.nq_double, self.dimbse), dtype=self.eigv.dtype)
-
+       
         # Distribute q’s across ranks (non-overlapping)
         q_indices = np.arange(self.nq_double, dtype=np.intp)[rank::size]
 
@@ -443,6 +438,12 @@ class H2P():
         if self.nq == 1:
             # even if distributed, only rank 0 will have q_indices=[0]
             for iq in q_indices:
+                if self.nq == 1:
+                    K_direct  = self._getKd()                 # (dim, dim)
+                else:
+                    K_direct, K_Ex = self._getKdq(iq=iq)           # (nq, dim, dim), (nq, dim)
+
+                gc.collect()
                 E_kmq_iq = self.eigv[ikminusq[:, iq], :]                      # (nk, nb)
                 f_kmq_iq = self._get_occupations(E_kmq_iq, self.model.fermie) # (nk, nb)
 
@@ -456,7 +457,6 @@ class H2P():
 
                 Ev_iq = E_kmq_iq[ik, iv]                                      # (dim,)
                 dE_iq = Ec_i - Ev_iq
-                eigv_diff_ttp[iq] = dE_iq
                 # add only to the diagonal (avoids allocating full 'diag' tensor)
                 H2P[iq, np.arange(self.dimbse), np.arange(self.dimbse)] += dE_iq
 
@@ -464,19 +464,23 @@ class H2P():
                 gc.collect()
         else:
             for iq in q_indices:
+
+                
+                K_direct, K_Ex = self._getKdq(iq=iq)           # (nq, dim, dim), (nq, dim)
+                
+                gc.collect()
                 E_kmq_iq = self.eigv[ikminusq[:, iq], :]                      # (nk, nb)
                 f_kmq_iq = self._get_occupations(E_kmq_iq, self.model.fermie)
 
                 f_con   = f_kmq_iq[ik[:, None], ic[None, :]]                  # (dim, dim)
                 f_diff  = f_val - f_con
 
-                H2P[iq]  = f_diff * K_direct[iq]
+                H2P[iq]  = f_diff * K_direct
                 if K_Ex is not None:
-                    H2P[iq] += f_diff * K_Ex[iq][:, None]                     # same broadcast
+                    H2P[iq] += f_diff * K_Ex                     # same broadcast
 
                 Ev_iq = E_kmq_iq[ik, iv]
                 dE_iq = Ec_i - Ev_iq
-                eigv_diff_ttp[iq] = dE_iq
                 H2P[iq, np.arange(self.dimbse), np.arange(self.dimbse)] += dE_iq
 
                 del E_kmq_iq, f_kmq_iq, f_con, f_diff, Ev_iq, dE_iq
@@ -491,7 +495,6 @@ class H2P():
         # keep these attributes as in your original
         self.K_Ex = K_Ex
         self.K_direct = K_direct
-        self.eigv_diff_ttp = eigv_diff_ttp
 
         print(self.dimbse)
         print(f'Completed in {time() - t0} seconds')
@@ -542,7 +545,7 @@ class H2P():
         return K_direct
 
 
-    def _getKdq(self):
+    def _getKdq(self, iq=0):
         """ Kernel using finite Q. Computing direct and exchange term."""
         if (self.ktype =='IP'):
             K_direct = 0.0
@@ -551,44 +554,44 @@ class H2P():
             return K_direct
         cpot_array = None
         cpot_q_array = None
-        ikminusq = self.kminusq_table[:, :, 1]
+        ikminusq = self.kminusq_table[:, iq, 1]
 
         if (self.ctype=='v2dt2'):
             cpot_array = self.cpot.v2dt2(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.v2dt2(np.array([[0,0,0]]),self.qmpgrid.k)
+            cpot_q_array = self.cpot.v2dt2(np.array([[0,0,0]]),np.array([self.qmpgrid.k[iq]]))
         
         elif(self.ctype == 'v2dk'):
             cpot_array = self.cpot.v2dk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.v2dk(np.array([[0,0,0]]),self.qmpgrid.k)
+            cpot_q_array = self.cpot.v2dk(np.array([[0,0,0]]),np.array([self.qmpgrid.k[iq]]))
         
         elif(self.ctype == 'vcoul'):
             cpot_array = self.cpot.vcoul(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.vcoul(np.array([[0,0,0]]),self.qmpgrid.k)
+            cpot_q_array = self.cpot.vcoul(np.array([[0,0,0]]),np.array([self.qmpgrid.k[iq]]))
 
         elif(self.ctype == 'v2dt'):
             cpot_array = self.cpot.v2dt(self.kmpgrid.car_kpoints, self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.v2dt(np.array([[0,0,0]]),self.qmpgrid.k)
+            cpot_q_array = self.cpot.v2dt(np.array([[0,0,0]]),np.array([self.qmpgrid.k[iq]]))
 
         elif(self.ctype == 'v2drk'):
             cpot_array = self.cpot.v2drk(self.kmpgrid.car_kpoints,self.kmpgrid.car_kpoints)
-            cpot_q_array = self.cpot.v2drk(np.array([[0,0,0]]),self.qmpgrid.k)
+            cpot_q_array = self.cpot.v2drk(np.array([[0,0,0]]),np.array([self.qmpgrid.k[iq]]))
 
         eigc = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][:,np.newaxis,:]   # conduction bands
         eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
-        eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][:,np.newaxis,:,:]  # Valence bands of ikminusq
-        eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,:,self.BSE_table[:,1]][np.newaxis,:,:,:]  # Valence bands prime of ikminusq
+        eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,self.BSE_table[:,1]][:,np.newaxis,:]  # Valence bands of ikminusq
+        eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,self.BSE_table[:,1]][np.newaxis,:,:]  # Valence bands prime of ikminusq
 
-        self.eigvecc_t = eigc[:,0,:]
-        self.eigvecv_t = eigv[:,0,0,:]
+        self.eigvecc_t_Q = eigc[:,0,:]
+        self.eigvecv_t_Q = eigv[:,0,:]
 
         dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
-        dotv = np.einsum('ijkl,ijkl->kij',np.conjugate(eigvp), eigv)
+        dotv = np.einsum('ijk,ijk->ij',np.conjugate(eigvp), eigv)
         K_direct = cpot_array[self.BSE_table[:,0],][:,self.BSE_table[:,0]] * dotc * dotv
         del dotc, dotv
         gc.collect()
         
-        dotc2 = np.einsum('ijk,ijlk->li',np.conjugate(eigc), eigv)
-        dotv2 = np.einsum('ijlk,ijk->lj',np.conjugate(eigvp), eigcp)
+        dotc2 = np.einsum('ijk,ijk->i',np.conjugate(eigc), eigv)
+        dotv2 = np.einsum('ijk,ijk->j',np.conjugate(eigvp), eigcp)
           
         del eigc, eigcp, eigv, eigvp  
         gc.collect()
@@ -713,7 +716,7 @@ class H2P():
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.n_exc_computed, self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
-                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck,h2peigv=h2peigv, method='real',ktype=self.ktype)
+                                mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck,h2peigv=h2peigv, method='real',ktype=self.ktype)
         self.tb_dipoles = tb_dipoles
         # compute osc strength
         if(self.ktype=='IP'):
