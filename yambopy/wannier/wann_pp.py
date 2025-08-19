@@ -241,8 +241,12 @@ class ExcitonBands(H2P):
         return weight_norm
     
     def solve_exc(self, n_threads=None, n_exc=None, driver='evd'):
-        if n is None: n = self.dimbse        
-        if  not hasattr(self, 'h2peigvec_vck'): self.solve_H2P(n_threads=n_threads, k=n_exc, driver=driver)
+        import contextlib
+        from threadpoolctl import threadpool_limits
+        ctx = threadpool_limits(limits=n_threads, user_api='blas') if n_threads else contextlib.nullcontext()
+        with ctx:
+            if n is None: n = self.dimbse        
+            if  not hasattr(self, 'h2peigvec_vck'): self.solve_H2P(n_threads=n_threads, k=n_exc, driver=driver)
 
     def plot_exciton_dispersion(self,n=None, ax=None, **kwargs):
         """Take the weights from the eigenvectors, and plot first n exciton bands"""
