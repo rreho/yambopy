@@ -380,48 +380,89 @@ class H2P():
             print('Error: skip_diago is false')         
 
     def _buildH2P_fromcpot(self):
-        """ Build H2P using a model coulomb potential."""
+        """ Build H2P using a model coulomb potential. (memmap-aware) """
+        self.memmap_path = './h2ptemp.txt'
+        use_memmap = bool(getattr(self, "memmap_path", None))
+        if use_memmap:
+            H2P = np.memmap(self.memmap_path, dtype=np.complex128, mode='w+',
+                            shape=(self.nq_double, self.dimbse, self.dimbse))
+        else:
+            H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
 
-        H2P = np.zeros((self.nq_double, self.dimbse, self.dimbse), dtype=np.complex128)
         print('initialize buildh2p from cpot')
         t0 = time()
 
-        # Precompute kplusq and kminusq tables
+        # Precompute k−q table and transition indices
         ikminusq = self.kminusq_table[:, :, 1]
+        ik  = self.BSE_table[:, 0].astype(np.intp)
+        iv  = self.BSE_table[:, 1].astype(np.intp)
+        ic  = self.BSE_table[:, 2].astype(np.intp)
+
+        # Keep the exact same helper calls
         K_direct, K_Ex = (None, None)
         if self.nq == 1:
-            K_direct  = self._getKd()
+            K_direct  = self._getKd()                 # (dim, dim)
         else:
-            K_direct, K_Ex = self._getKdq()
+            K_direct, K_Ex = self._getKdq()           # (nq, dim, dim), (nq, dim)
 
         gc.collect()
-        eigv_kmq = self.eigv[ikminusq]
-        f_kmqn = self._get_occupations(eigv_kmq, self.model.fermie)
-        f_kmqn = f_kmqn.reshape(self.nk, self.nq, self.nb)
 
-        f_diff = (self.f_kn[self.BSE_table[:,0],:][:,self.BSE_table[:,1]][None,:,:]-f_kmqn[self.BSE_table[:,0],:,:][:,:,self.BSE_table[:,2]].swapaxes(1,0))
-        gc.collect()
-        
-        H2P = f_diff * K_direct
-        if K_Ex is not None:
-            H2P += f_diff * K_Ex[:,:,np.newaxis]
-        # del f_diff, K_Ex, K_direct
+        # q-independent part of f_diff and diagonal’s conduction energies
+        f_val = self.f_kn[ik[:, None], iv[None, :]]   # (dim, dim)
+        Ec_i  = self.eigv[ik, ic]                     # (dim,)
+
+        # store ΔE per q (small)
+        eigv_diff_ttp = np.zeros((self.nq_double, self.dimbse), dtype=self.eigv.dtype)
+
+        # ---- stream over q to avoid big temporaries ----
+        if self.nq == 1:
+            iq = 0
+            E_kmq_iq = self.eigv[ikminusq[:, iq], :]                      # (nk, nb)
+            f_kmq_iq = self._get_occupations(E_kmq_iq, self.model.fermie) # (nk, nb)
+
+            f_con   = f_kmq_iq[ik[:, None], ic[None, :]]                  # (dim, dim)
+            f_diff  = f_val - f_con
+
+            H2P[iq] = f_diff * K_direct
+            if K_Ex is not None:
+                H2P[iq] += f_diff * K_Ex[iq][:, None]                     # same broadcast
+
+            Ev_iq = E_kmq_iq[ik, iv]                                      # (dim,)
+            dE_iq = Ec_i - Ev_iq
+            eigv_diff_ttp[iq] = dE_iq
+            H2P[iq, np.arange(self.dimbse), np.arange(self.dimbse)] += dE_iq
+
+            del E_kmq_iq, f_kmq_iq, f_con, f_diff, Ev_iq, dE_iq
+            gc.collect()
+        else:
+            for iq in range(self.nq_double):
+                E_kmq_iq = self.eigv[ikminusq[:, iq], :]                  # (nk, nb)
+                f_kmq_iq = self._get_occupations(E_kmq_iq, self.model.fermie)
+
+                f_con   = f_kmq_iq[ik[:, None], ic[None, :]]              # (dim, dim)
+                f_diff  = f_val - f_con
+
+                H2P[iq] = f_diff * K_direct[iq]
+                if K_Ex is not None:
+                    H2P[iq] += f_diff * K_Ex[iq][:, None]                 # same broadcast
+
+                Ev_iq = E_kmq_iq[ik, iv]
+                dE_iq = Ec_i - Ev_iq
+                eigv_diff_ttp[iq] = dE_iq
+                H2P[iq, np.arange(self.dimbse), np.arange(self.dimbse)] += dE_iq
+
+                del E_kmq_iq, f_kmq_iq, f_con, f_diff, Ev_iq, dE_iq
+                gc.collect()
+
+        # keep these assignments exactly as before
         self.K_Ex = K_Ex
         self.K_direct = K_direct
-        gc.collect()
-        
-        result = self.eigv[ikminusq[self.BSE_table[:, 0]], self.BSE_table[:, 1][:, None]].T  # Shape: (nqpoints, ntransitions)
-        eigv_diff = self.eigv[self.BSE_table[:,0],self.BSE_table[:,2]] - result
-        del result
-        gc.collect()
-        self.eigv_diff_ttp = eigv_diff
-        del eigv_diff
-        gc.collect()
+        self.eigv_diff_ttp = eigv_diff_ttp
+
+        if use_memmap:
+            H2P.flush()
+
         print(self.dimbse)
-        diag = np.einsum('ij,ki->kij', np.eye(self.dimbse), self.eigv_diff_ttp)  # when t ==tp
-        H2P += diag
-        del diag 
-        gc.collect()
         print(f'Completed in {time() - t0} seconds')
         return H2P
 
