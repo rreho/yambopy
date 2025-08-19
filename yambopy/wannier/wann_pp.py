@@ -240,10 +240,12 @@ class ExcitonBands(H2P):
         weight_norm = weight/np.max(weight)
         return weight_norm
     
-    def plot_exciton_dispersion(self, n_threads=None, n = None, ax=None, **kwargs):
-        """Take the weights from the eigenvectors, and plot first n exciton bands"""
+    def solve_exc(self, n_threads=None, n_exc=None):
         if n is None: n = self.dimbse        
-        if  not hasattr(self, 'h2peigvec_vck'): self.solve_H2P(n_threads=n_threads, k=n)
+        if  not hasattr(self, 'h2peigvec_vck'): self.solve_H2P(n_threads=n_threads, k=n_exc)
+
+    def plot_exciton_dispersion(self,n=None, ax=None, **kwargs):
+        """Take the weights from the eigenvectors, and plot first n exciton bands"""
         if not ax:
             fig, ax = plt.subplots()
         weight_norm = self.get_exciton_weights(nq=self.nq_list)
