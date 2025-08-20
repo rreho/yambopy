@@ -189,7 +189,7 @@ class ExcitonBands(H2P):
             f_diff_q = f_val[:, None] - f_con_q[None, :]                    # (dim, dim)
 
             # 8) Assemble H2P(q)
-            H_q = (f_diff_q / self.nk) * (K_direct_q + K_ex_q)              # (dim, dim)
+            H_q = f_diff_q  * (K_direct_q + K_ex_q)              # (dim, dim)
 
             # 9) Add diagonal term: ΔE_i(q) on the diagonal
             #     ΔE_i(q) = E_c(ik,icb) - E_v(ik−q,ivb)
