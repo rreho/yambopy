@@ -26,7 +26,7 @@ def process_file(args):
     H2P_local = np.zeros((len(BSE_table), len(BSE_table)), dtype=np.complex128)
 
     del kernel_db, yexc_atk  # Free memory as early as possible
-
+    gc.collect()
     BSE_table = np.array(BSE_table)
     ik = BSE_table[:, 0]
     iv = BSE_table[:, 1]
@@ -48,6 +48,7 @@ def process_file(args):
 
     occupation_diff = -f_kn[ikpminusq, ivp] + f_kn[ikp, icp]
     del ik, iv, ic, ikp, ivp, icp, ikplusq, ikminusq, ikpminusq  # Free memory
+    gc.collect()
     K = -(K_ttp[np.arange(BSE_table.shape[0])[:, None], np.arange(BSE_table.shape[0])[None, :]]) * HA2EV
 
     # Ensure deltaE is diagonal in (t, tp)
@@ -170,9 +171,11 @@ class H2P():
             Model coulomb potential, and possibly coulomb/screening from Yambo 
             """
             self.ctype = ctype
-            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid) 
+            # (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables(self.qmpgrid) 
             (self.qplusk_table, self.qminusk_table) = self.qmpgrid.get_kq_tables(self.kmpgrid, sign="-")  # minus sign to have k-q  
             print(f'\n Building H2P from model Coulomb potentials {self.ctype}\n')
+            (self.kplusq_table, self.kminusq_table) = self.kmpgrid.get_kq_tables_yambo(self.qmpgrid) # used in building BSE
+
             self.cpot = cpot
             self.H2P = self._buildH2P_fromcpot()
         elif(self.method=='kernel' and cpot is None):
@@ -434,14 +437,17 @@ class H2P():
         # Distribute q’s across ranks (non-overlapping)
         q_indices = np.arange(self.nq_double, dtype=np.intp)[rank::size]
 
+        self.K_Ex = np.empty((self.nq_double,self.dimbse,self.dimbse),dtype=np.complex64)
+        self.K_direct = K_direct
         # ---- Stream over q to avoid big temporaries ----
         if self.nq == 1:
             # even if distributed, only rank 0 will have q_indices=[0]
             for iq in q_indices:
-                if self.nq == 1:
+                if iq == 0:
                     K_direct  = self._getKd()                 # (dim, dim)
                 else:
                     K_direct, K_Ex = self._getKdq(iq=iq)           # (nq, dim, dim), (nq, dim)
+                    self.K_Ex[iq]= K_Ex
 
                 gc.collect()
                 E_kmq_iq = self.eigv[ikminusq[:, iq], :]                      # (nk, nb)
@@ -465,8 +471,10 @@ class H2P():
         else:
             for iq in q_indices:
 
-                
-                K_direct, K_Ex = self._getKdq(iq=iq)           # (nq, dim, dim), (nq, dim)
+                if iq == 0:
+                    K_direct  = self._getKd()                 # (dim, dim)
+                else:
+                    K_direct, K_Ex = self._getKdq(iq=iq)           # (nq, dim, dim), (nq, dim)
                 
                 gc.collect()
                 E_kmq_iq = self.eigv[ikminusq[:, iq], :]                      # (nk, nb)
@@ -478,6 +486,7 @@ class H2P():
                 H2P[iq]  = f_diff * K_direct
                 if K_Ex is not None:
                     H2P[iq] += f_diff * K_Ex                     # same broadcast
+                    self.K_Ex[iq]= K_Ex
 
                 Ev_iq = E_kmq_iq[ik, iv]
                 dE_iq = Ec_i - Ev_iq
@@ -492,9 +501,6 @@ class H2P():
         if use_memmap:
             H2P.flush()
 
-        # keep these attributes as in your original
-        self.K_Ex = K_Ex
-        self.K_direct = K_direct
 
         print(self.dimbse)
         print(f'Completed in {time() - t0} seconds')
@@ -530,9 +536,6 @@ class H2P():
         eigcp = self.eigvec[self.BSE_table[:,0], :, self.BSE_table[:,2]][np.newaxis,:,:]   # conduction bands prime
         eigv = self.eigvec[self.BSE_table[:,0], :,self.BSE_table[:,1]][:,np.newaxis,:]  # Valence bands of ikminusq
         eigvp = self.eigvec[self.BSE_table[:,0], :,self.BSE_table[:,1]][np.newaxis,:,:]  # Valence bands prime of ikminusq
-
-        self.eigvecc_t = eigc[:,0,:]
-        self.eigvecv_t = eigv[:,0,:]
 
         dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
         dotv = np.einsum('ijk,ijk->ij',np.conjugate(eigvp), eigv)
@@ -581,8 +584,6 @@ class H2P():
         eigv = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,self.BSE_table[:,1]][:,np.newaxis,:]  # Valence bands of ikminusq
         eigvp = self.eigvec[ikminusq, :, :][self.BSE_table[:,0],:,self.BSE_table[:,1]][np.newaxis,:,:]  # Valence bands prime of ikminusq
 
-        self.eigvecc_t_Q = eigc[:,0,:]
-        self.eigvecv_t_Q = eigv[:,0,:]
 
         dotc = np.einsum('ijk,ijk->ij',np.conjugate(eigc), eigcp)
         dotv = np.einsum('ijk,ijk->ij',np.conjugate(eigvp), eigv)
@@ -715,8 +716,8 @@ class H2P():
         h2peigv = self.h2peigv
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
-        tb_dipoles = TB_dipoles(self.n_exc_computed, self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
-                                mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck,h2peigv=h2peigv, method='real',ktype=self.ktype)
+        tb_dipoles = TB_dipoles(self.n_exc_computed, self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, \
+                                mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigvec_vck=h2peigvec_vck,h2peigv=h2peigv, method='real',ktype=self.ktype)
         self.tb_dipoles = tb_dipoles
         # compute osc strength
         if(self.ktype=='IP'):
@@ -802,7 +803,7 @@ class H2P():
             h2peigvec = self.h2peigvec[self.q0index]
             h2peigv = self.h2peigv[self.q0index]
 
-        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec=h2peigvec_vck, method='yambo')
+        tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, eta, hlm, self.T_table, self.BSE_table,h2peigvec_vck=h2peigvec_vck, method='yambo')
         # compute osc strength
         self.dipoles_bse = tb_dipoles.dipoles
         # self.dipoles = tb_dipoles.dipoles
