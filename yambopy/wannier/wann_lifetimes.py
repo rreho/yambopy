@@ -24,8 +24,9 @@ class TB_lifetimes(TB_dipoles):
         else:
             raise AttributeError("TB_dipoles does not have the expected 'cpot.lattice' attribute")
 
-        if hasattr(tb_dipoles, 'h2peigvec'):
-            self.h2peigvec = tb_dipoles.h2peigvec
+        if hasattr(tb_dipoles, 'h2peigvec_vck'):
+            (nq, nexc, nv, nc, nk) = tb_dipoles.h2peigvec_vck.shape  # (nq, nexc, nv, nc, nk)
+            self.h2peigvec = tb_dipoles.h2peigvec_vck.reshape(nq,nexc,nv*nc*nk)
         else:
             raise AttributeError('Before computing lifetimes you need the excitonic energies.')
 
@@ -40,7 +41,7 @@ class TB_lifetimes(TB_dipoles):
         print("Implementation warning")
         tau = np.zeros((tb_dipoles.ntransitions, 3, 3))
         F_kcv = tb_dipoles.F_kcv
-        h2peigvec = tb_dipoles.h2peigvec / HA2EV
+        h2peigvec = self.h2peigvec / HA2EV
         dipvec = np.einsum('tp,txy->txy',h2peigvec**3,F_kcv)
         tau = 3 * tb_dipoles.nkpoints / (4 * dipvec)
         return tau
@@ -78,7 +79,7 @@ class TB_lifetimes(TB_dipoles):
         tau = np.zeros((tb_dipoles.ntransitions, 3, 3))
         F_kcv = tb_dipoles.F_kcv
         vc = np.linalg.norm(self.latdb.lat[0]*BOHR2ANG**2)
-        h2peigvec = tb_dipoles.h2peigvec / HA2EV
+        h2peigvec = self.h2peigvec / HA2EV
         dipvec = np.einsum('tp,txy->txy',h2peigvec**2,F_kcv)
         tau = vc * tb_dipoles.nkpoints / (2 * np.pi * dipvec)
         return tau
