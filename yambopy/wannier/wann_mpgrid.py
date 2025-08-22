@@ -38,7 +38,7 @@ class symmetrized_mp_grid(KPointGenerator):
         # red_kpoints_ibz[:, [0, 1]] = red_kpoints_ibz[:, [1, 0]]     #swap the x and y coordinates
         self.k = red_kpoints_ibz
         self.red_kpoints = red_kpoints_ibz
-        self.car_kpoints = red_car(self.k, self.rlat)
+        self.car_kpoints = red_car(self.red_kpoints,rlat=self.rlat)
         self.nkpoints = len(self.k)
         self.k_tree = cKDTree(self.k)   # in ibz
         self.point_map = point_map
@@ -163,6 +163,22 @@ class symmetrized_mp_grid(KPointGenerator):
         self.yambotowannier90_table = matched_indices   # this is the index of the yambo point given a wannier90 point
         self.wannier90toyambo_table = np.argsort(matched_indices)
 
+
+    def set_yambo(self):
+        # Vectorized remapping
+        self.red_kpoints_full = self.latdb.red_kpoints
+        self.kpoint_indices = self.latdb.kpoints_indexes
+        self.kpoint_weights = self.latdb.weights_ibz
+        # red_kpoints_ibz[:, [0, 1]] = red_kpoints_ibz[:, [1, 0]]     #swap the x and y coordinates
+        self.k = self.latdb.ibz_kpoints_standard
+        self.red_kpoints = self.latdb.ibz_kpoints_standard
+        self.car_kpoints = red_car(self.k, self.rlat)   # There is a difference 2pi ang2bohr compared to yambo car kpoints
+        self.nkpoints = len(self.k)
+        self.k_tree = cKDTree(self.k)   # in ibz
+        self.k_tree_full = cKDTree(self.red_kpoints_full)
+
+
+
 class tb_Monkhorst_Pack(KPointGenerator):
     def __init__(self, grid_shape,latdb, shift=np.array([0.0,0.0,0.0])):
         super().__init__()
@@ -220,9 +236,9 @@ class tb_Monkhorst_Pack(KPointGenerator):
             kq_diff = -k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),bz_range=(0.0,1.0),include_upper_bound=False)  # Flatten for batch processing
-        kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3)
+        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3),include_upper_bound=False)  # Flatten for batch processing
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
+        kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3) #+Gvec
 
         # Find closest k-points for all points
         closest_indices = self.find_closest_kpoint(kmq_folded.reshape(-1, 3)).reshape(nkpoints, nqpoints)
@@ -412,6 +428,95 @@ class tb_Monkhorst_Pack(KPointGenerator):
             ],
             axis=-1
         ).astype(int)  # Shape (nkpoints, nqpoints, nnkpts, 5)
+
+
+    def set_yambo(self):
+        # Vectorized remapping
+        self.red_kpoints = self.latdb.red_kpoints
+        self.k = self.red_kpoints
+        self.car_kpoints = red_car(self.red_kpoints,rlat=self.rlat) # There is a difference 2pi ang2bohr compared to yambo car kpoints
+        self.nkpoints = len(self.k)
+        self.k_tree = cKDTree(self.k)   
+
+
+    def get_kq_tables_yambo(self,electronsdb):
+        
+        kplusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz),dtype=int)
+        kminusq_table = np.zeros((self.nkpoints,electronsdb.nkpoints_ibz), dtype=int)
+        
+        _,kplusq_table = self.get_kpq_grid_yambo(electronsdb.red_kpoints)
+        _,kminusq_table = self.get_kmq_grid_yambo(electronsdb.red_kpoints)
+
+        return kplusq_table, kminusq_table
+
+    def get_kmq_grid_yambo(self,red_kpoints):
+
+        nkpoints = self.nkpoints
+        nqpoints = len(red_kpoints)
+     
+        # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
+        k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
+        q_grid = np.expand_dims(red_kpoints, axis=0)  # Shape (1, nqpoints, 3)
+        kq_diff = k_grid - q_grid  # Shape (nkpoints, nqpoints, 3)
+
+        # Fold into the Brillouin Zone and get G-vectors
+        kmq_folded, Gvec = self.fold_into_bz_Gs(kq_diff.reshape(-1, 3))
+        Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
+        kmq_folded = kmq_folded.reshape(nkpoints, nqpoints, 3) + Gvec
+
+        # Find closest k-points for all points
+        closest_indices = self.find_closest_kpoint(kmq_folded.reshape(-1, 3)).reshape(nkpoints, nqpoints)
+        # Populate the grids
+        kmq_grid = kmq_folded  # Shape (nkpoints, nqpoints, nnkpts, 3)
+        kmq_grid_table = np.stack(
+            [
+                np.arange(nkpoints)[:, None].repeat(nqpoints, axis=1),  # ik
+                closest_indices,  # idkmq
+                Gvec[..., 0].astype(int),  # Gx
+                Gvec[..., 1].astype(int),  # Gy
+                Gvec[..., 2].astype(int)   # Gz
+            ],
+            axis=-1
+        ).astype(int)  # Shape (nkpoints, nqpoints, 5)
+        self.kmq_grid = kmq_grid
+        self.kmq_grid_table = kmq_grid_table        
+        
+        return kmq_grid, kmq_grid_table
+    def get_kpq_grid_yambo(self, red_kpoints):
+
+        nkpoints = self.nkpoints
+        nqpoints = len(red_kpoints)
+        
+        # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
+        k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
+        q_grid = np.expand_dims(red_kpoints, axis=0)  # Shape (1, nqpoints, 3)
+        kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
+
+        # Fold into the Brillouin Zone and get G-vectors
+        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3), include_upper_bound=False)
+        kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
+        Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
+
+        # Find closest k-points for all points
+        closest_indices = self.find_closest_kpoint(kpq_folded.reshape(-1, 3)).reshape(nkpoints, nqpoints)
+        # Populate the grids
+        kpq_grid = kpq_folded  # Shape (nkpoints, nqpoints, nnkpts, 3)
+        kpq_grid_table = np.stack(
+            [
+                np.arange(nkpoints)[:, None].repeat(nqpoints, axis=1),  # ik
+                closest_indices,  # idxkp
+                Gvec[..., 0].astype(int),  # Gx
+                Gvec[..., 1].astype(int),  # Gy
+                Gvec[..., 2].astype(int)   # Gz
+            ],
+            axis=-1
+        ).astype(int)  # Shape (nkpoints, nqpoints, 5)
+
+        self.kpq_grid = kpq_grid
+        self.kpq_grid_table = kpq_grid_table
+
+        return kpq_grid, kpq_grid_table
+
 
     def __str__(self):
         return "Instance of symmetrized_mp_grid"   
