@@ -41,7 +41,7 @@ class ExcitonBands(H2P):
             self.nq_list = len(path_qpoints.get_klist())
             self.nq_double = self.nq_list
             self.red_kpoints = self.path_qpoints.get_klist()[:,0:3]
-            self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)*ang2bohr # result in Bohr
+            self.car_kpoints = red_car(self.red_kpoints, self.kmpgrid.rlat)#*ang2bohr # result in Bohr
             self.H2P = self.buildH2P_qlist(memmap_path=memmap_path, distributed=distributed, keep_kernels=keep_kernels)
         if not isinstance(h2p, H2P):
             raise TypeError('Argument must be an instance of H2P')
