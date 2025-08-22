@@ -7,9 +7,9 @@ from yambopy.wannier.wann_utils import *
 class TB_dipoles():
     '''dipoles = 1/(\DeltaE+ieta)*<c,k|P_\alpha|v,k>'''
     def __init__(self ,n_exc, nc, nv, bse_nc, bse_nv, nkpoints, eigv, eigvec, \
-                 eta, hlm, T_table, BSE_table, h2peigvec,\
+                 eta, hlm, T_table, BSE_table, \
                  mpgrid=None, cpot=None, \
-                 h2peigv_vck = None, h2peigvec_vck = None,h2peigv=None, method = 'real',\
+                 h2peigvec_vck = None,h2peigv=None, method = 'real',\
                  rmn = None,ktype='IP'):
         # hk, hlm are TBMODEL hamiltonians
         self.mpgrid = mpgrid
@@ -50,8 +50,6 @@ class TB_dipoles():
         # self.d_knm = self._get_dipoles_nm(method)
         if (h2peigvec_vck is not None):
             self.h2peigvec_vck = h2peigvec_vck
-            self.h2peigv_vck = h2peigv_vck
-            self.h2peigvec = h2peigvec
             self.h2peigv = h2peigv
             # self.dipoles_bse = self._get_dipoles_bse(method)
             self.BSE_table = BSE_table
@@ -160,7 +158,6 @@ class TB_dipoles():
 
             vdot      = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:, self.BSE_table[:,2]]), dothlm,optimize=True)        # (t,3)
             vdot_conj = np.einsum('tv,tva->ta', np.conjugate(self.eigvec[BSE_TABLE[:,0],:, self.BSE_table[:,1]]), dothlm_conj,optimize=True)   # (t,3)
-
             # Dipoles per transition t, exciton p, cart a, for each q (keep q explicit)
             # Broadcast gr/ga over the exciton axis k.
             dip      = gr[None, :,None] * np.einsum('qkt,ta->qkta', A_qkt, vdot, optimize=True)         # (nq, t, k, 3)
