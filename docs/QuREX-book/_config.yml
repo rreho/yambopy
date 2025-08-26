@@ -1,5 +1,4 @@
 title: "QuREX Documentation"
-author: "Riccardo Reho"
 
 sphinx:
   config:
@@ -35,3 +34,11 @@ execute:
   exclude_patterns: []        # Patterns to exclude from execution
   timeout: 30                 # Timeout for notebook execution (not used when disabled)
   run_in_temp: false         # Don't run in temporary directory
+
+sphinx:
+  config:
+    author: "Riccardo Reho"
+    copyright: "2025"
+
+html:
+  extra_footer: ""

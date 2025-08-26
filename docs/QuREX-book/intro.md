@@ -97,4 +97,3 @@ QuREX builds upon decades of theoretical and computational advances in many-body
 ---
 
 *Choose your path above to begin exploring quantum real-space exciton analysis.*
-

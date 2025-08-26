@@ -3,9 +3,13 @@
 # If you wish to continue using _config.yml, make edits to that file and
 # re-generate this one.
 ###############################################################################
-author = 'Henrique Miranda, Alejandro Molina Sánchez, Fulvio Paleari, Riccardo Reho'
+import datetime
+
+author = "Riccardo Reho"
+copyright = f"{datetime.datetime.now().year}, {author}"
+#author = 'Henrique Miranda, Alejandro Molina Sánchez, Fulvio Paleari, Riccardo Reho'
 comments_config = {'hypothesis': False, 'utterances': False}
-copyright = '2024, Henrique Miranda, Alejandro Molina Sánchez, Fulvio Paleari, Riccardo Reho'
+#copyright = '2024, Henrique Miranda, Alejandro Molina Sánchez, Fulvio Paleari, Riccardo Reho'
 exclude_patterns = ['build', 'Thumbs.db', '.DS_Store']
 extensions = [
     'sphinx.ext.autodoc',
