@@ -1249,7 +1249,7 @@ class H2P():
         new_table = np.column_stack([nk_col,nv_col, nc_col,arr_ones,arr_ones])
         return  new_table
 
-    def write_exc_wf_cube(self, wf_path,iexe, car_qpoint=None, **args):
+    def write_exc_wf_cube(self, wf_path,iexe, iq=None,car_qpoint=None, **args):
         from yambopy.dbs.wfdb import YamboWFDB
         wfdb = None
         if wf_path is None:
@@ -1260,14 +1260,19 @@ class H2P():
             wfdb = YamboWFDB(path=wf_path,latdb=self.latdb, bands_range=[])
 
         wfdb.expand_fullBZ()
-        if car_qpoint is None:
+        if iq is not None:
+            car_qpoint = red_car([np.array(self.qmpgrid.red_kpoints[iq])], rlat=self.latdb.rlat)[0] # Yambo convention
+        elif car_qpoint is None:
             Qpt= self.q0index
+            iq=0
             car_qpoint = np.array([0,0,0])
-        ydb = YamboExcitonDB(lattice=self.latdb,Qpt=0, eigenvalues=self.h2peigv[0],l_residual=self.F_kcv,r_residual=1, table=self.convert_to_yambo_table(self.electronsdb.nelectrons),car_qpoint=np.array(car_qpoint))
-        ydb.eigenvectors =self.h2peigvec
+
+        
+        ydb = YamboExcitonDB(lattice=self.latdb,Qpt=iq+1, eigenvalues=self.h2peigv[iq],l_residual=self.tb_dipoles.dipoles_kcv,r_residual=1, table=self.convert_to_yambo_table(self.electronsdb.nelectrons),car_qpoint=np.array(car_qpoint))
+        ydb.eigenvectors =self.h2peigvec[iq]
         if isinstance(iexe, (list, np.ndarray)):
             for idx in iexe:
-                ydb.real_wf_to_cube(iexe=idx, wfdb=wfdb, **args)
+                ydb.real_wf_to_cube(iexe=idx, wfdb=wfdb, **args,)
         else:
             ydb.real_wf_to_cube(iexe=iexe, wfdb=wfdb, **args)
 

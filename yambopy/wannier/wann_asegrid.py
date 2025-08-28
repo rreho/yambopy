@@ -13,7 +13,7 @@ class ase_Monkhorst_Pack(KPointGenerator):
         super().__init__()
         self.grid_shape = grid_shape
         self.latdb = latdb
-        self.rlat = self.latdb.rlat*2*np.pi 
+        self.rlat = self.latdb.rlat*2*np.pi *ang2bohr # result in Bohr
     
     def generate(self):
         # Use ASE's monkhorst_pack to generate the k-points
@@ -21,5 +21,5 @@ class ase_Monkhorst_Pack(KPointGenerator):
         self.nkpoints = len(self.k)
         self.weights = 1/(self.nkpoints)
         self.red_kpoints = self.k
-        self.car_kpoints = red_car(self.k, self.rlat)*ang2bohr # result in Bohr
+        self.car_kpoints = red_car(self.k, self.rlat)
         print(f"Generated {self.nkpoints} k-points using ASE.")

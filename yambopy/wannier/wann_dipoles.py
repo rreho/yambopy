@@ -97,7 +97,7 @@ class TB_dipoles():
                 iv = self.T_table[t][1]
                 ic = self.T_table[t][2]
                 w = self.eigv[ik,ic]
-                E = self.eigv[ik,ic]
+                E = self.eigv[ik,iv]
                 GR = GreensFunctions(w=w, E=E, eta=self.eta).GR
                 dipoles_kcv[ik, ic, iv,0] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
                 dipoles_kcv[ik, ic, iv,1] = GR*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
@@ -106,19 +106,18 @@ class TB_dipoles():
             self.dipoles_kcv = dipoles_kcv
 
         if (method == 'yambo'):
-            dipoles = np.zeros((self.ntransitions, self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
-            for n in range(0, self.ntransitions):
-                for t in self.T_table:
-                    ik = t[0]
-                    iv = t[1]
-                    ic = t[2]
-                    # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
-                    # E = self.eigv[ik, ic]-self.eigv[ik, iv]
-                    GR = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GR #w - E
-                    GA = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GA #w - E
-                    dipoles[n, ik, ic, iv, 0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
-                    dipoles[n, ik, ic, iv, 1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
-                    dipoles[n, ik, ic, iv, 2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
+            dipoles = np.zeros((self.nkpoints, self.nb,self.nb,3),dtype=np.complex128)
+            for t in self.T_table:
+                ik = t[0]
+                iv = t[1]
+                ic = t[2]
+                # here I want 1/(E_cv-E_vk) so w=\DeltaE and E = 0 in the call to GFs
+                # E = self.eigv[ik, ic]-self.eigv[ik, iv]
+                GR = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GR #w - E
+                GA = GreensFunctions(w=self.eigv[ik, ic], E=self.eigv[ik, iv], eta=self.eta).GA #w - E
+                dipoles[ik, ic, iv, 0] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,0],self.eigvec[ik,:,iv]))
+                dipoles[ik, ic, iv, 1] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,1],self.eigvec[ik,:,iv]))
+                dipoles[ik, ic, iv, 2] = (GR+GA)*np.vdot(self.eigvec[ik,:,ic],np.dot(self.hlm[ik,:,:,2],self.eigvec[ik,:,iv]))
             self.dipoles = dipoles#/(HA2EV**3)  
 
         if (method== 'v-gauge'):
