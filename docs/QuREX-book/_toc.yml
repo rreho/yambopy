@@ -1,24 +1,28 @@
 format: jb-book
-root: intro  # The landing page (intro.md)
+root: intro
 options:
-  numbered: true  # Enable numbering globally
+  numbered: true
 
 parts:
-- caption: Theory
-  numbered: false  # Ensure numbering applies to this part
+- caption: Theoretical Foundation
+  numbered: true
   chapters:
-    - file: content/theory/theoretical_background  # Acts as the section's intro
+    - file: content/theory/theoretical_background
       sections:
+        - file: content/theory/GW
+        - file: content/theory/bse_equation
         - file: content/theory/model_hamiltonian
         - file: content/theory/coulomb_potential
-        - file: content/theory/h2p
-        - file: content/theory/wannier_exciton
-        - file: content/theory/wannier_chern
         - file: content/theory/wannier_basis
+        - file: content/theory/wannier_exciton
+        - file: content/theory/h2p
         - file: content/theory/quantum_well
         - file: content/theory/exciton_phonon_coupling
-- caption: Software
-  numbered: false
+        - file: content/theory/exciton_group_theory
+        - file: content/theory/wannier_chern
+
+- caption: Software Implementation
+  numbered: true
   chapters:
     - file: content/software/software
       sections:
@@ -28,19 +32,35 @@ parts:
         - file: content/software/wannier90/wannier90_compilation
         - file: content/software/wannier_tools/wannier_tools
 - caption: Tutorials
+        - file: content/software/optical_properties_api
+        - file: content/software/exciton_group_theory_api_auto
+        - file: content/software/exciton_group_theory_summary
+        - file: content/software/yambopy_improvements_2024
+
+- caption: API Documentation
   numbered: false
   chapters:
-    - file: content/tutorials/tutorials
+    - file: content/api/index
       sections:
         - file: content/tutorials/exciton_phonon
         - file: content/tutorials/LiF-tutorial-RR
+        - file: content/api/baseopticalproperties_api.rst
+        - file: content/api/excitongrouptheory_api.rst
+        - file: content/api/excitondipole_api.rst
+        - file: content/api/excitonphonon_api.rst
+        - file: content/api/luminescence_api.rst
+        - file: content/api/letzelphelectronphonondb_api.rst
+        - file: content/api/spgrep_point_group_ops_api.rst
+        - file: content/api/utils_api.rst
+        - file: content/api/lelph2y_api.rst
 
-- caption: Notebooks
+- caption: Interactive Examples
   numbered: false
-  execute: 
-    execute_notebooks: 'off'
   chapters:
     - file: notebooks/notebooks
     - file: notebooks/exciton_phonon
     - file: notebooks/LiF-minimal_mssp
     - file: notebooks/wannberri  
+      sections:
+        - file: notebooks/exciton_phonon
+        - file: notebooks/exciton_group_theory_example

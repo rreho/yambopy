@@ -7,3 +7,5 @@ save_flow
 docs/QuREX-book/_build
 docs/QuREX-book/_build/*/*/*
 git.sh
+docs/QuREX-book/_build/
+.vscode/
