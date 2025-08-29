@@ -1282,3 +1282,101 @@ class H2P():
 def chunkify(lst, n):
     """Divide list `lst` into `n` chunks."""
     return [lst[i::n] for i in range(n)]    
+
+
+def write_bs_diago(
+    outfile,
+    eigenvalues,          # shape (n_all,)
+    eigenvectors,         # shape (n_all, N) or (n_all, nk, nc, nv) complex
+    bs_table,             # shape (N, 3) [k, v, c] (1-based)
+    n_exc,                # number of excitons to write
+    table_vars=("BS_TABLE",),  # or ("BS_TABLE","BSE_Tables")
+    compress=True,
+    overwrite=True,
+):
+    """
+    Writes:
+      - BS_Energies(neig=n_exc, one=1)             <-- clipped
+      - BS_EIGENSTATES(neig=n_exc, nstates=N, 2)   <-- clipped (real/imag)
+      - <table_vars>(three=5, nstates=N)           <-- NOT clipped
+      - Bands(nbands)                              <-- helper (int)
+    """
+    # overwrite stale file (prevents old 'neig' lingering)
+    if overwrite and os.path.exists(outfile):
+        os.remove(outfile)
+
+    # ---- inputs
+    T = np.asarray(bs_table, dtype=int)
+    assert T.ndim == 2 and T.shape[1] == 5, "bs_table must be (N,5)"
+    N = T.shape[0]
+    T[:]
+
+    vals = np.asarray(eigenvalues, dtype=np.float64)
+    assert n_exc <= vals.shape[0], f"n_exc={n_exc} > eigenvalues={vals.shape[0]}"
+    vals = vals[:n_exc]                         # <-- clip energies
+
+    vecs = np.asarray(eigenvectors)
+    assert vecs.ndim in (2,4), "eigenvectors must be (neig,N) or (neig,nk,nc,nv)"
+    assert n_exc <= vecs.shape[0], f"n_exc={n_exc} > eigenvectors={vecs.shape[0]}"
+    vecs = vecs[:n_exc]                         # <-- clip eigenvectors on axis 0
+    neig = int(n_exc)
+
+    # ---- map eigenvectors to row order of BS_TABLE if needed
+    if vecs.ndim == 2:
+        assert vecs.shape[1] == N, "eigenvectors columns must match BS_TABLE rows"
+        eig_store = vecs
+    else:
+        kvc = T.copy()
+        bands_unique = np.unique(np.concatenate([kvc[:,1], kvc[:,2]]))
+        vmin = bands_unique.min()
+        kvc[:,0] = kvc[:,0] - 1
+        nv = np.unique(kvc[:,1]).size
+        kvc[:,1] = kvc[:,1] - vmin
+        kvc[:,2] = kvc[:,2] - vmin - nv
+        nk = np.unique(kvc[:,0]).size
+        nc = np.unique(kvc[:,2]).size
+        sort_idx = kvc[:,0]*(nc*nv) + kvc[:,2]*nv + kvc[:,1]
+        eig_store = vecs.reshape(neig, nk*nc*nv)[:, sort_idx]
+        assert eig_store.shape == (neig, N)
+
+    bands = np.unique(np.concatenate([T[:,1], T[:,2]])).astype(int)
+
+    zargs = dict(zlib=True, complevel=4, shuffle=True) if compress else {}
+    with Dataset(outfile, "w", format="NETCDF4") as ds:
+        # dimensions
+        ds.createDimension("neig", neig)          # <-- n_exc
+        ds.createDimension("nstates", N)          # <-- full N, not clipped
+        ds.createDimension("complex", 2)          # real/imag
+        ds.createDimension("five", 5)
+        ds.createDimension("nbands", bands.size)
+        ds.createDimension("two", 2)
+        ds.createDimension("one", 1)
+
+
+        # variables
+        ds.createVariable("Bands", "i4", ("nbands",))[:] = bands
+
+        vE = ds.createVariable("BS_Energies", "f8", ("neig", "two"), **zargs)
+        print(vals.shape)
+        print(vE.shape)
+        vE[:, 0] = vals                           # clipped to n_exc
+        vE[:, 1] = 0.0                            # dummy second column
+        # write table under one or more variable names (to match readers)
+        for tv in table_vars:
+            vT = ds.createVariable(tv, "i4", ("five", "nstates"))
+            vT[:, :] = T.T                        # NOT clipped
+
+        vPsi = ds.createVariable("BS_EIGENSTATES", "f8", ("neig", "nstates", "complex"), **zargs)
+        vPsi[:, :, 0] = np.real(eig_store)        # clipped on first axis only
+        vPsi[:, :, 1] = np.imag(eig_store)
+
+        # metadata
+        vE.long_name = "Excitonic energies (column 0)"
+        vPsi.long_name = "Excitonic eigenvectors (real, imag)"
+        ds.setncattr("n_excitons_written", neig)
+
+        # on-disk sanity checks
+        assert len(ds.dimensions["neig"]) == neig
+        assert vPsi.shape == (neig, N, 2)
+        for tv in table_vars:
+            assert ds.variables[tv].shape == (5, N)
