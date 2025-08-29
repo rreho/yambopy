@@ -44,7 +44,7 @@ class BaseOpticalProperties(ABC):
     """
     
     def __init__(self, path=None, save='SAVE', latdb=None, wfdb=None, 
-                 bands_range=None, BSE_dir='bse', save_files=True):
+                 bands_range=None, qpoints=None, BSE_dir='bse', save_files=True):
         """
         Initialize base optical properties class.
         
@@ -59,6 +59,8 @@ class BaseOpticalProperties(ABC):
             Pre-loaded Yambo Lattice database. Defaults to None.
         wfdb : YamboWFDB, optional
             Pre-loaded Yambo wavefunction database. Defaults to None.
+        qpoints : list, optional
+            List of q-points to consider. Defaults to all q-points.
         bands_range : list, optional
             Range of bands to load. Python indexing. Defaults to all bands.
         BSE_dir : str, optional
@@ -71,7 +73,7 @@ class BaseOpticalProperties(ABC):
         self.BSE_dir = os.path.join(self.path, BSE_dir)
         self.save_files = save_files
         self.bands_range = bands_range if bands_range is not None else []
-        
+        self.qpoints = qpoints  
         # Initialize databases
         self.latdb = latdb
         self.wfdb = wfdb
@@ -103,7 +105,7 @@ class BaseOpticalProperties(ABC):
             Pre-loaded database. If None, reads from ns.db1 file.
         """
         try:
-            ns_db1_fname = os.path.join(self.SAVE_dir, 'ns.db1')
+            ns_db1_fname = self.SAVE_dir
             if latdb:
                 if not hasattr(latdb, 'ibz_kpoints'):
                     latdb.expand_kpoints()
@@ -237,7 +239,14 @@ class BaseOpticalProperties(ABC):
         BS_wfcs = []   # exciton wavefunctions
         excQpt = []    # Q-point of BSE -> The q of A^{\lambda Q}_{cvk}
         
-        for iq in tqdm(range(self.nibz), desc="Loading Ex-wfcs "):
+        if self.qpoints is None:
+            self.qpoints = self.nibz
+        else:
+            # User specified q-points
+            self.qpoints = len(self.qpoints)
+
+        for iq in tqdm(range(self.qpoints), desc="Loading Ex-wfcs "):
+            print(iq)
             try:
                 bse_db_iq = YamboExcitonDB.from_db_file(
                     self.ydb, folder=BSE_dir, filename=f'ndb.BS_diago_Q{iq+1}'

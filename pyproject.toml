@@ -20,10 +20,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
 ]
-dependencies = [ "numpy", "scipy", "netCDF4", "h5py", "matplotlib", "pyyaml", "lxml","monty","scikit-learn", "sphinx","sphinx-rtd-theme","sphinx-proof","h5py","fortio","ase","sisl","tbmodels",
-"tqdm","jupyter-book","numba"]
-[project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "flake8"]
 dependencies = [ "numpy", "scipy", "netCDF4", "h5py", "matplotlib", "pyyaml", "lxml","monty","scikit-learn","tqdm", "numba"]
 
 [project.optional-dependencies]

@@ -65,6 +65,8 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         Pre-loaded wavefunction database.
     bands_range : list or tuple, optional
         Range of bands to include in the analysis.
+    qpoints : list, optional
+        List of q-points to consider. Defaults to all q-points.
     BSE_dir : str, optional
         Name of the BSE directory. Default is 'bse'.
     LELPH_dir : str, optional
@@ -115,20 +117,24 @@ class ExcitonGroupTheory(BaseOpticalProperties):
     """
     
     def __init__(self, path=None, save='SAVE', lelph_db=None, latdb=None, wfdb=None, 
-                 bands_range=None, BSE_dir='bse', LELPH_dir='lelph', 
+                 bands_range=None, qpoints=None, BSE_dir='bse', LELPH_dir=None, 
                  read_symm_from_ns_db_file=True):
         """Initialize with minimal setup."""
         super().__init__(path=path, save=save, latdb=latdb, wfdb=wfdb, 
-                        bands_range=bands_range, BSE_dir=BSE_dir)
-        
-        self._setup_directories(LELPH_dir=LELPH_dir)
-        self.read(lelph_db=lelph_db, latdb=latdb, wfdb=wfdb, bands_range=bands_range)
+                        bands_range=bands_range, qpoints=qpoints, BSE_dir=BSE_dir)
+        if LELPH_dir is not None and lelph_db is not None:
+            self._setup_directories(LELPH_dir=LELPH_dir)
 
-    def read(self, lelph_db=None, latdb=None, wfdb=None, bands_range=None):
+        self.read(latdb=latdb, LELPH_dir=LELPH_dir, lelph_db=lelph_db, wfdb=wfdb, bands_range=bands_range, qpoints=qpoints)
+
+    def read(self, latdb=None, LELPH_dir=None, lelph_db=None, wfdb=None, bands_range=None, qpoints=None):
         """Read databases and setup symmetry."""
         self.read_common_databases(latdb=latdb, wfdb=wfdb, bands_range=bands_range)
-        self.lelph_db = read_lelph_database(self.LELPH_dir, lelph_db)
-        self.qpts = self.lelph_db.qpoints
+        # self.qpts = latdb.qpoints
+        if qpoints is None:
+            self.lelph_db = read_lelph_database(LELPH_dir, lelph_db)
+        else:
+            self.qpts = qpoints
         
         # Setup k-point mapping and symmetry operations
         self._setup_kpoint_mapping()
@@ -140,7 +146,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         if hasattr(self.wfdb, 'ktree'):
             self.kpt_tree = self.wfdb.ktree
         else:
-            self._build_kpoint_tree(self.lelph_db.kpoints)
+            self._build_kpoint_tree(latdb.kpoints)
 
     def _setup_symmetry(self):
         """Setup symmetry using both spglib and Yambo matrices."""
@@ -193,7 +199,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         print("Computing D-matrices with Yambo symmetries...")
         
         # Get band information from wavefunction database
-        nk = len(self.lelph_db.kpoints)
+        nk = self.wfdb.nkBZ
         # Get total number of bands from the wavefunction database
         total_bands = self.wfdb.nbands
         nsym = len(self.symm_mats)
@@ -478,7 +484,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                 rotated_wfc = rotate_exc_wf(
                     wfc_single,
                     symm_mat_red,
-                    self.lelph_db.kpoints,
+                    self.wfdb.kBZ,
                     self.qpts[iQ - 1],
                     dmat,
                     False,

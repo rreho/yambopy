@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 
 class ExcitonDipole(BaseOpticalProperties):
     def __init__(self, path=None, save='SAVE', latdb=None, wfdb=None, 
-                 ydipdb=None, bands_range=None, BSE_dir='bse', 
+                 ydipdb=None, bands_range=None, qpoints=None, BSE_dir='bse', 
                  DIP_dir='gw', save_files=True):
         """
         Initialize ExcitonDipole class.
@@ -33,6 +33,8 @@ class ExcitonDipole(BaseOpticalProperties):
             Pre-loaded dipoles database.
         bands_range : list, optional
             Range of bands to load.
+        qpoints : list, optional
+            List of q-points to consider. Defaults to all q-points.
         BSE_dir : str, optional
             BSE directory name. Defaults to 'bse'.
         DIP_dir : str, optional
@@ -42,7 +44,7 @@ class ExcitonDipole(BaseOpticalProperties):
         """
         # Initialize base class
         super().__init__(path=path, save=save, latdb=latdb, wfdb=wfdb, 
-                        bands_range=bands_range, BSE_dir=BSE_dir, save_files=save_files)
+                        bands_range=bands_range, qpoints=qpoints, BSE_dir=BSE_dir, save_files=save_files)
         
         # Setup additional directories
         self._setup_directories(DIP_dir=DIP_dir)

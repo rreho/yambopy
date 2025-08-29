@@ -98,6 +98,8 @@ class YamboExcitonDB(object):
         path_filename = os.path.join(folder,filename)
         if not os.path.isfile(path_filename):
             raise FileNotFoundError("File %s not found in YamboExcitonDB"%path_filename)
+        
+        l_residual, r_residual = None, None
 
         # Qpoint
         Qpt = filename.split("Q",1)[1]
@@ -140,16 +142,17 @@ class YamboExcitonDB(object):
             #eigenvectors
             table = None
             eigenvectors = None
+            spin_vars = None
             if Load_WF and 'BS_EIGENSTATES' in database.variables:
                 eiv = database['BS_EIGENSTATES'][:neigs,...].data
                 #eiv = eiv[:,:,0] + eiv[:,:,1]*I
                 #eigenvectors = eiv
                 eigenvectors = eiv.view(dtype=CmplxType(eiv)).reshape(eiv.shape[:-1])
                 table = np.rint(database.variables['BS_TABLE'][:].T).astype(int)
-
-            spin_vars = [int(database.variables['SPIN_VARS'][:][0]), int(database.variables['SPIN_VARS'][:][1])]
-            if spin_vars[0] == 2 and spin_vars[1] == 1:
-               spin_pol = 'pol'
+            if "SPIN_VARS" in database.variables:
+                spin_vars = [int(database.variables['SPIN_VARS'][:][0]), int(database.variables['SPIN_VARS'][:][1])]
+                if spin_vars[0] == 2 and spin_vars[1] == 1:
+                    spin_pol = 'pol'
             else:
                spin_pol = 'no'
         # Check if Coulomb cutoff is present

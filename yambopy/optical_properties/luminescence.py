@@ -25,7 +25,7 @@ warnings.filterwarnings('ignore')
 
 class Luminescence(BaseOpticalProperties):
     def __init__(self, path=None, save='SAVE', lelph_db=None, latdb=None, wfdb=None, 
-                 ydipdb=None, bands_range=None, BSE_dir='bse', LELPH_dir='lelph', 
+                 ydipdb=None, bands_range=None, qpoints=None, BSE_dir='bse', LELPH_dir='lelph', 
                  DIP_dir='gw', save_files=True):
         """
         Initialize the Luminescence class.
@@ -46,6 +46,8 @@ class Luminescence(BaseOpticalProperties):
             Pre-loaded dipoles database.
         bands_range : list, optional
             Range of bands to load.
+        qpoints : list, optional
+            List of q-points to consider. Defaults to all q-points.
         BSE_dir : str, optional
             BSE directory name. Defaults to 'bse'.
         LELPH_dir : str, optional
@@ -57,7 +59,7 @@ class Luminescence(BaseOpticalProperties):
         """
         # Initialize base class
         super().__init__(path=path, save=save, latdb=latdb, wfdb=wfdb, 
-                        bands_range=bands_range, BSE_dir=BSE_dir, save_files=save_files)
+                        bands_range=bands_range, qpoints=qpoints, BSE_dir=BSE_dir, save_files=save_files)
         
         # Setup additional directories
         self._setup_directories(LELPH_dir=LELPH_dir, DIP_dir=DIP_dir)
