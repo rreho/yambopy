@@ -99,7 +99,7 @@ class YamboExcitonDB(object):
         if not os.path.isfile(path_filename):
             raise FileNotFoundError("File %s not found in YamboExcitonDB"%path_filename)
         
-        l_residual, r_residual = None, None
+        l_residual, r_residual, spin_pol = None, None, None
 
         # Qpoint
         Qpt = filename.split("Q",1)[1]
@@ -153,6 +153,8 @@ class YamboExcitonDB(object):
                 spin_vars = [int(database.variables['SPIN_VARS'][:][0]), int(database.variables['SPIN_VARS'][:][1])]
                 if spin_vars[0] == 2 and spin_vars[1] == 1:
                     spin_pol = 'pol'
+                else:
+                    spin_pol = 'no'
             else:
                spin_pol = 'no'
         # Check if Coulomb cutoff is present

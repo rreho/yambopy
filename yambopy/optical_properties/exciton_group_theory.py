@@ -131,8 +131,18 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         """Read databases and setup symmetry."""
         self.read_common_databases(latdb=latdb, wfdb=wfdb, bands_range=bands_range)
         # self.qpts = latdb.qpoints
-        if qpoints is None:
+        if lelph_db is not None and LELPH_dir is not None:
             self.lelph_db = read_lelph_database(LELPH_dir, lelph_db)
+        elif qpoints is None:
+            import os, re
+            warnings.warn("No qpoints or lelphdir provided. Trying to find all databases in the given dir.")
+            pattern = re.compile(r"ndb\.BS_diago_Q(\d+)$") 
+            qpts = []
+            for f in os.listdir(self.BSE_dir):
+                m = pattern.match(f)
+                if m:
+                    qpts.append(int(m.group(1)))
+            self.qpts = sorted(qpts)
         else:
             self.qpts = qpoints
         
@@ -242,7 +252,10 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             raise ImportError("spgrep is required for this analysis")
         
         # Read BSE data
-        bands_range, BS_eigs, BS_wfcs = self._read_bse_data(iQ, nstates)
+        bands_range, BS_eigs, BS_wfcs, qpt = self._read_bse_data(iQ, nstates)
+        if not hasattr(self, 'lelph_db'):
+            self.qpts = np.array([qpt])
+
         BS_eigs = BS_eigs * 27.2114  # Convert to eV
         
         print(f"\nAnalyzing {nstates} exciton states at Q = {self.qpts[iQ-1]}")
@@ -268,6 +281,8 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             # Get characters
             characters = np.array([np.trace(rep_mat).real for rep_mat in rep_matrices])
             print(f"Characters: {characters}")
+            print(f"Characters sum: {np.sum(characters)}")
+
             
             # Use spgrep to analyze irreps
             try:
@@ -327,16 +342,16 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                             irrep_multiplicities.append((label, int(round(mult.real))))
                     
                     if irrep_multiplicities:
-                        irrep_result = " + ".join([f"{mult}{symbol}" if mult > 1 else symbol 
+                        irrep_label = " + ".join([f"{mult}{symbol}" if mult > 1 else symbol 
                                                  for symbol, mult in irrep_multiplicities])
                         
                         # Add activity analysis
                         activity_info = self._analyze_activity(irrep_multiplicities)
-                        irrep_result += f" ({activity_info})"
+                        irrep_text = irrep_label +  f" ({activity_info})"
                     else:
-                        irrep_result = "No clear irrep identification"
+                        irrep_text = "No clear irrep identification"
                         
-                    print(f"Irrep decomposition: {irrep_result}")
+                    print(f"Irrep decomposition: {irrep_text}")
                     
                 except Exception as e2:
                     print(f"spgrep irrep decomposition failed: {e2}")
@@ -346,7 +361,8 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                     'energy': energy,
                     'degeneracy': degen,
                     'characters': characters,
-                    'irrep': irrep_result
+                    'irrep': irrep_label,
+                    'irrep_text': irrep_text
                 })
                 
             except Exception as e:
@@ -449,11 +465,12 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         bands_range = bse_db_iq.nbands
         BS_eigs = bse_db_iq.eigenvalues[:nstates]
         BS_wfcs = bse_db_iq.get_Akcv()[:nstates]
+        qpt = bse_db_iq.car_qpoint
         
         # Convert to Hartree units
         BS_eigs = BS_eigs / ha2ev
         
-        return bands_range, BS_eigs, BS_wfcs
+        return bands_range, BS_eigs, BS_wfcs, qpt
 
     def _compute_representation_matrices(self, subspace_wfcs, iQ):
         """Compute representation matrices for a degenerate subspace."""
