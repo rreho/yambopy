@@ -317,23 +317,13 @@ class ExcitonGroupTheory(BaseOpticalProperties):
                     decomposition = np.array(decomposition)
                     
                     # Format the result with proper notation for text output
-                    # For D6h point group, use standard Mulliken notation
-                    if self.point_group_label == '6/mmm':  # D6h
-                        d6h_labels = ['A1g', 'A2g', 'B1g', 'B2g', 'E1g', 'E2g', 
-                                     'A1u', 'A2u', 'B1u', 'B2u', 'E1u', 'E2u']
-                    elif self.point_group_label == '4/mmm':  # D4h  
-                        d4h_labels = ['A1g', 'A2g', 'B1g', 'B2g', 'Eg', 
-                                     'A1u', 'A2u', 'B1u', 'B2u', 'Eu']
-                        d6h_labels = d4h_labels + ['Γ11', 'Γ12']  # Pad to 12
-                    else:
-                        # Generic labels
-                        d6h_labels = ['Γ1', 'Γ2', 'Γ3', 'Γ4', 'Γ5', 'Γ6',
-                                     'Γ7', 'Γ8', 'Γ9', 'Γ10', 'Γ11', 'Γ12']
+                    # Use comprehensive irrep labeling for all point groups
+                    irrep_labels = self._get_irrep_labels_for_point_group(self.point_group_label)
                     
                     irrep_multiplicities = []
                     for i, mult in enumerate(decomposition):
                         if abs(mult) > 0.1:  # Only keep significant contributions
-                            label = d6h_labels[i] if i < len(d6h_labels) else f"Γ{i+1}"
+                            label = irrep_labels[i] if i < len(irrep_labels) else f"Γ{i+1}"
                             irrep_multiplicities.append((label, int(round(mult.real))))
                     
                     if irrep_multiplicities:
@@ -865,6 +855,93 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             return 'cubic'
         else:
             return 'unknown'
+
+    def _get_irrep_labels_for_point_group(self, point_group_symbol):
+        """
+        Get proper irreducible representation labels for any point group.
+        
+        Parameters
+        ----------
+        point_group_symbol : str
+            Point group symbol (Hermann-Mauguin or Schoenflies notation)
+            
+        Returns
+        -------
+        list
+            List of irrep labels in standard Mulliken notation
+        """
+        # Comprehensive irrep labels for all 32 crystallographic point groups
+        IRREP_LABELS = {
+            # Triclinic
+            'C1': ['A'],
+            'Ci': ['Ag', 'Au'],
+            
+            # Monoclinic  
+            'C2': ['A', 'B'],
+            'Cs': ['A\'', 'A\'\''],
+            'C2h': ['Ag', 'Bg', 'Au', 'Bu'],
+            
+            # Orthorhombic
+            'C2v': ['A1', 'A2', 'B1', 'B2'],
+            'D2': ['A', 'B1', 'B2', 'B3'],
+            'D2h': ['Ag', 'B1g', 'B2g', 'B3g', 'Au', 'B1u', 'B2u', 'B3u'],
+            
+            # Tetragonal
+            'C4': ['A', 'B', 'E'],
+            'S4': ['A', 'B', 'E'],
+            'C4h': ['Ag', 'Bg', 'Eg', 'Au', 'Bu', 'Eu'],
+            'C4v': ['A1', 'A2', 'B1', 'B2', 'E'],
+            'D4': ['A1', 'A2', 'B1', 'B2', 'E'],
+            'D2d': ['A1', 'A2', 'B1', 'B2', 'E'],
+            'D4h': ['A1g', 'A2g', 'B1g', 'B2g', 'Eg', 'A1u', 'A2u', 'B1u', 'B2u', 'Eu'],
+            
+            # Trigonal
+            'C3': ['A', 'E'],
+            'C3i': ['Ag', 'Eg', 'Au', 'Eu'],
+            'C3v': ['A1', 'A2', 'E'],
+            'D3': ['A1', 'A2', 'E'],
+            'D3d': ['A1g', 'A2g', 'Eg', 'A1u', 'A2u', 'Eu'],
+            
+            # Hexagonal
+            'C6': ['A', 'B', 'E1', 'E2'],
+            'C3h': ['A\'', 'A\'\'', 'E\'', 'E\'\''],
+            'C6h': ['Ag', 'Bg', 'E1g', 'E2g', 'Au', 'Bu', 'E1u', 'E2u'],
+            'C6v': ['A1', 'A2', 'B1', 'B2', 'E1', 'E2'],
+            'D6': ['A1', 'A2', 'B1', 'B2', 'E1', 'E2'],
+            'D3h': ['A1\'', 'A2\'', 'E\'', 'A1\'\'', 'A2\'\'', 'E\'\''],
+            'D6h': ['A1g', 'A2g', 'B1g', 'B2g', 'E1g', 'E2g', 'A1u', 'A2u', 'B1u', 'B2u', 'E1u', 'E2u'],
+            
+            # Cubic
+            'T': ['A', 'E', 'T'],
+            'Th': ['Ag', 'Eg', 'Tg', 'Au', 'Eu', 'Tu'],
+            'Td': ['A1', 'A2', 'E', 'T1', 'T2'],
+            'O': ['A1', 'A2', 'E', 'T1', 'T2'],
+            'Oh': ['A1g', 'A2g', 'Eg', 'T1g', 'T2g', 'A1u', 'A2u', 'Eu', 'T1u', 'T2u'],
+        }
+        
+        # Hermann-Mauguin to Schoenflies mapping
+        HM_TO_SF = {
+            '1': 'C1', '-1': 'Ci', '2': 'C2', 'm': 'Cs', '2/m': 'C2h',
+            'mm2': 'C2v', '222': 'D2', 'mmm': 'D2h',
+            '4': 'C4', '-4': 'S4', '4/m': 'C4h', '4mm': 'C4v', '422': 'D4', '-42m': 'D2d', '4/mmm': 'D4h',
+            '3': 'C3', '-3': 'C3i', '3m': 'C3v', '32': 'D3', '-3m': 'D3d',
+            '6': 'C6', '-6': 'C3h', '6/m': 'C6h', '6mm': 'C6v', '622': 'D6', '-6m2': 'D3h', '6/mmm': 'D6h',
+            '23': 'T', 'm-3': 'Th', '-43m': 'Td', '432': 'O', 'm-3m': 'Oh',
+        }
+        
+        # Try direct lookup first
+        if point_group_symbol in IRREP_LABELS:
+            return IRREP_LABELS[point_group_symbol]
+        
+        # Try Hermann-Mauguin to Schoenflies conversion
+        if point_group_symbol in HM_TO_SF:
+            schoenflies = HM_TO_SF[point_group_symbol]
+            if schoenflies in IRREP_LABELS:
+                return IRREP_LABELS[schoenflies]
+        
+        # Fallback to generic labels
+        print(f"Warning: Point group '{point_group_symbol}' not found in irrep database. Using generic labels.")
+        return ['Γ1', 'Γ2', 'Γ3', 'Γ4', 'Γ5', 'Γ6', 'Γ7', 'Γ8', 'Γ9', 'Γ10', 'Γ11', 'Γ12']
 
     def display_symmetry_operations(self):
         """
