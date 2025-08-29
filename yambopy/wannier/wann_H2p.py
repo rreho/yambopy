@@ -1238,7 +1238,9 @@ class H2P():
         return np.real(occupations)
 
     def convert_to_yambo_table(self, nv_ks):
-        # nv_ks is the number of valence bands in the kohn-sham ground state calculation. Not the subspace used my wannier
+        """ nv_ks is the number of valence bands in the kohn-sham ground state calculation. 
+        Not the subspace used my wannier """
+
         nv_factor = nv_ks - self.nv
         nk_col = self.BSE_table[:,0]+1
         nv_col = self.BSE_table[:,1] + nv_factor +1
