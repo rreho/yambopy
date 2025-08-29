@@ -282,23 +282,166 @@ def _generate_class_label(mat: np.ndarray) -> str:
 
 
 def _generate_irrep_labels(pg_label: str, n_irreps: int, char_tab: np.ndarray) -> List[str]:
-    """Generate standard crystallographic irrep labels using spgrep's database."""
+    """
+    Generate standard crystallographic irrep labels by matching character tables.
+    
+    This is the CORRECT way to solve the ordering problem - we match spgrep's 
+    character table to the standard character table to determine the proper labels.
+    """
     try:
-        # Use spgrep's internal database for proper crystallographic labels
-        # This ensures we get the standard Mulliken symbols
+        # Get standard character table and labels for this point group
+        standard_chars, standard_labels = _get_standard_character_table_with_labels(pg_label)
         
-        # Map point group labels to standard crystallographic irrep labels
-        standard_labels = _get_standard_irrep_labels(pg_label)
-        
-        if standard_labels and len(standard_labels) >= n_irreps:
-            return standard_labels[:n_irreps]
-        else:
-            # Fallback to generic labels if standard ones not available
+        if not standard_chars or not standard_labels:
+            print(f"No standard character table for {pg_label}, using generic labels")
             return [f"Γ{i+1}" for i in range(n_irreps)]
+        
+        # Match spgrep character table to standard character table
+        matched_labels = []
+        used_indices = set()
+        
+        for i in range(n_irreps):
+            spgrep_chars = char_tab[i] if i < len(char_tab) else None
+            if spgrep_chars is None:
+                matched_labels.append(f"Γ{i+1}")
+                continue
             
+            best_match_idx = None
+            best_score = float('inf')
+            
+            # Find the best matching standard irrep by comparing characters
+            for j, std_chars in enumerate(standard_chars):
+                if j in used_indices:
+                    continue
+                    
+                if len(spgrep_chars) == len(std_chars):
+                    # Calculate character difference (allowing for complex conjugation)
+                    score1 = np.sum(np.abs(spgrep_chars - std_chars))
+                    score2 = np.sum(np.abs(spgrep_chars - np.conj(std_chars)))
+                    score = min(score1, score2)
+                    
+                    if score < best_score:
+                        best_score = score
+                        best_match_idx = j
+            
+            if best_match_idx is not None and best_score < 1e-6:
+                matched_labels.append(standard_labels[best_match_idx])
+                used_indices.add(best_match_idx)
+                print(f"Matched spgrep Γ{i+1} → {standard_labels[best_match_idx]} (score: {best_score:.2e})")
+            else:
+                matched_labels.append(f"Γ{i+1}")
+                print(f"No match for spgrep Γ{i+1}, keeping generic label")
+        
+        return matched_labels
+        
     except Exception as e:
-        # Fallback to generic labels
+        print(f"Character matching failed: {e}")
         return [f"Γ{i+1}" for i in range(n_irreps)]
+
+
+def _get_standard_character_table_with_labels(pg_label: str) -> Tuple[List[np.ndarray], List[str]]:
+    """
+    Get standard character table with corresponding irrep labels.
+    
+    Returns
+    -------
+    tuple
+        (character_vectors, irrep_labels) where character_vectors[i] corresponds to irrep_labels[i]
+    """
+    # Standard character tables for key point groups
+    # Format: {point_group: [(label, character_vector), ...]}
+    STANDARD_TABLES = {
+        'C1': [
+            ('A', [1])
+        ],
+        '1': [
+            ('A', [1])
+        ],
+        'C2': [
+            ('A', [1, 1]),
+            ('B', [1, -1])
+        ],
+        '2': [
+            ('A', [1, 1]),
+            ('B', [1, -1])
+        ],
+        'C2v': [
+            ('A1', [1, 1, 1, 1]),
+            ('A2', [1, 1, -1, -1]),
+            ('B1', [1, -1, 1, -1]),
+            ('B2', [1, -1, -1, 1])
+        ],
+        'mm2': [
+            ('A1', [1, 1, 1, 1]),
+            ('A2', [1, 1, -1, -1]),
+            ('B1', [1, -1, 1, -1]),
+            ('B2', [1, -1, -1, 1])
+        ],
+        'D2': [
+            ('A', [1, 1, 1, 1]),
+            ('B1', [1, 1, -1, -1]),
+            ('B2', [1, -1, 1, -1]),
+            ('B3', [1, -1, -1, 1])
+        ],
+        '222': [
+            ('A', [1, 1, 1, 1]),
+            ('B1', [1, 1, -1, -1]),
+            ('B2', [1, -1, 1, -1]),
+            ('B3', [1, -1, -1, 1])
+        ],
+        'D3h': [
+            ('A1\'', [1, 1, 1, 1, 1, 1]),
+            ('A2\'', [1, 1, 1, -1, -1, -1]),
+            ('E\'', [2, -1, -1, 2, -1, -1]),
+            ('A1\'\'', [1, 1, 1, -1, -1, -1]),
+            ('A2\'\'', [1, 1, 1, 1, 1, 1]),
+            ('E\'\'', [2, -1, -1, -2, 1, 1])
+        ],
+        '-6m2': [
+            ('A1\'', [1, 1, 1, 1, 1, 1]),
+            ('A2\'', [1, 1, 1, -1, -1, -1]),
+            ('E\'', [2, -1, -1, 2, -1, -1]),
+            ('A1\'\'', [1, 1, 1, -1, -1, -1]),
+            ('A2\'\'', [1, 1, 1, 1, 1, 1]),
+            ('E\'\'', [2, -1, -1, -2, 1, 1])
+        ],
+        'D6h': [
+            ('A1g', [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+            ('A2g', [1, 1, 1, -1, -1, -1, 1, 1, 1, -1, -1, -1]),
+            ('B1g', [1, -1, 1, 1, -1, 1, 1, -1, 1, 1, -1, 1]),
+            ('B2g', [1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1]),
+            ('E1g', [2, 1, -1, 2, 1, -1, 2, 1, -1, 2, 1, -1]),
+            ('E2g', [2, -1, -1, 2, -1, -1, 2, -1, -1, 2, -1, -1]),
+            ('A1u', [1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1]),
+            ('A2u', [1, 1, 1, -1, -1, -1, -1, -1, -1, 1, 1, 1]),
+            ('B1u', [1, -1, 1, 1, -1, 1, -1, 1, -1, -1, 1, -1]),
+            ('B2u', [1, -1, 1, -1, 1, -1, -1, 1, -1, 1, -1, 1]),
+            ('E1u', [2, 1, -1, 2, 1, -1, -2, -1, 1, -2, -1, 1]),
+            ('E2u', [2, -1, -1, 2, -1, -1, -2, 1, 1, -2, 1, 1])
+        ],
+        '6/mmm': [
+            ('A1g', [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+            ('A2g', [1, 1, 1, -1, -1, -1, 1, 1, 1, -1, -1, -1]),
+            ('B1g', [1, -1, 1, 1, -1, 1, 1, -1, 1, 1, -1, 1]),
+            ('B2g', [1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1]),
+            ('E1g', [2, 1, -1, 2, 1, -1, 2, 1, -1, 2, 1, -1]),
+            ('E2g', [2, -1, -1, 2, -1, -1, 2, -1, -1, 2, -1, -1]),
+            ('A1u', [1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1]),
+            ('A2u', [1, 1, 1, -1, -1, -1, -1, -1, -1, 1, 1, 1]),
+            ('B1u', [1, -1, 1, 1, -1, 1, -1, 1, -1, -1, 1, -1]),
+            ('B2u', [1, -1, 1, -1, 1, -1, -1, 1, -1, 1, -1, 1]),
+            ('E1u', [2, 1, -1, 2, 1, -1, -2, -1, 1, -2, -1, 1]),
+            ('E2u', [2, -1, -1, 2, -1, -1, -2, 1, 1, -2, 1, 1])
+        ]
+    }
+    
+    if pg_label in STANDARD_TABLES:
+        entries = STANDARD_TABLES[pg_label]
+        labels = [entry[0] for entry in entries]
+        char_vectors = [np.array(entry[1], dtype=complex) for entry in entries]
+        return char_vectors, labels
+    else:
+        return [], []
 
 
 def _get_standard_irrep_labels(pg_label: str) -> List[str]:
@@ -308,14 +451,56 @@ def _get_standard_irrep_labels(pg_label: str) -> List[str]:
     This generates labels based on the systematic naming conventions used in
     crystallography, derived from the point group symbol and irrep dimensions.
     """
-    try:
-        # For now, return empty to use the generic Γ labels
-        # This avoids hardcoding while still providing systematic labeling
-        # The generic labels Γ1, Γ2, etc. are universally understood
-        return []
+    # Standard Mulliken labels for crystallographic point groups
+    STANDARD_LABELS = {
+        # Triclinic
+        'C1': ['A'], '1': ['A'],
+        'Ci': ['Ag', 'Au'], '-1': ['Ag', 'Au'],
         
-    except Exception:
-        return []
+        # Monoclinic  
+        'C2': ['A', 'B'], '2': ['A', 'B'],
+        'Cs': ['A\'', 'A\'\''], 'm': ['A\'', 'A\'\''],
+        'C2h': ['Ag', 'Bg', 'Au', 'Bu'], '2/m': ['Ag', 'Bg', 'Au', 'Bu'],
+        
+        # Orthorhombic
+        'C2v': ['A1', 'A2', 'B1', 'B2'], 'mm2': ['A1', 'A2', 'B1', 'B2'],
+        'D2': ['A', 'B1', 'B2', 'B3'], '222': ['A', 'B1', 'B2', 'B3'],
+        'D2h': ['Ag', 'B1g', 'B2g', 'B3g', 'Au', 'B1u', 'B2u', 'B3u'], 'mmm': ['Ag', 'B1g', 'B2g', 'B3g', 'Au', 'B1u', 'B2u', 'B3u'],
+        
+        # Tetragonal
+        'C4': ['A', 'B', 'E'], '4': ['A', 'B', 'E'],
+        'S4': ['A', 'B', 'E'], '-4': ['A', 'B', 'E'],
+        'C4h': ['Ag', 'Bg', 'Eg', 'Au', 'Bu', 'Eu'], '4/m': ['Ag', 'Bg', 'Eg', 'Au', 'Bu', 'Eu'],
+        'C4v': ['A1', 'A2', 'B1', 'B2', 'E'], '4mm': ['A1', 'A2', 'B1', 'B2', 'E'],
+        'D4': ['A1', 'A2', 'B1', 'B2', 'E'], '422': ['A1', 'A2', 'B1', 'B2', 'E'],
+        'D2d': ['A1', 'A2', 'B1', 'B2', 'E'], '-42m': ['A1', 'A2', 'B1', 'B2', 'E'],
+        'D4h': ['A1g', 'A2g', 'B1g', 'B2g', 'Eg', 'A1u', 'A2u', 'B1u', 'B2u', 'Eu'], '4/mmm': ['A1g', 'A2g', 'B1g', 'B2g', 'Eg', 'A1u', 'A2u', 'B1u', 'B2u', 'Eu'],
+        
+        # Trigonal
+        'C3': ['A', 'E'], '3': ['A', 'E'],
+        'C3i': ['Ag', 'Eg', 'Au', 'Eu'], '-3': ['Ag', 'Eg', 'Au', 'Eu'],
+        'C3v': ['A1', 'A2', 'E'], '3m': ['A1', 'A2', 'E'],
+        'D3': ['A1', 'A2', 'E'], '32': ['A1', 'A2', 'E'],
+        'D3d': ['A1g', 'A2g', 'Eg', 'A1u', 'A2u', 'Eu'], '-3m': ['A1g', 'A2g', 'Eg', 'A1u', 'A2u', 'Eu'],
+        
+        # Hexagonal
+        'C6': ['A', 'B', 'E1', 'E2'], '6': ['A', 'B', 'E1', 'E2'],
+        'C3h': ['A\'', 'A\'\'', 'E\'', 'E\'\''], '-6': ['A\'', 'A\'\'', 'E\'', 'E\'\''],
+        'C6h': ['Ag', 'Bg', 'E1g', 'E2g', 'Au', 'Bu', 'E1u', 'E2u'], '6/m': ['Ag', 'Bg', 'E1g', 'E2g', 'Au', 'Bu', 'E1u', 'E2u'],
+        'C6v': ['A1', 'A2', 'B1', 'B2', 'E1', 'E2'], '6mm': ['A1', 'A2', 'B1', 'B2', 'E1', 'E2'],
+        'D6': ['A1', 'A2', 'B1', 'B2', 'E1', 'E2'], '622': ['A1', 'A2', 'B1', 'B2', 'E1', 'E2'],
+        'D3h': ['A1\'', 'A2\'', 'E\'', 'A1\'\'', 'A2\'\'', 'E\'\''], '-6m2': ['A1\'', 'A2\'', 'E\'', 'A1\'\'', 'A2\'\'', 'E\'\''],
+        'D6h': ['A1g', 'A2g', 'B1g', 'B2g', 'E1g', 'E2g', 'A1u', 'A2u', 'B1u', 'B2u', 'E1u', 'E2u'], '6/mmm': ['A1g', 'A2g', 'B1g', 'B2g', 'E1g', 'E2g', 'A1u', 'A2u', 'B1u', 'B2u', 'E1u', 'E2u'],
+        
+        # Cubic
+        'T': ['A', 'E', 'T'], '23': ['A', 'E', 'T'],
+        'Th': ['Ag', 'Eg', 'Tg', 'Au', 'Eu', 'Tu'], 'm-3': ['Ag', 'Eg', 'Tg', 'Au', 'Eu', 'Tu'],
+        'Td': ['A1', 'A2', 'E', 'T1', 'T2'], '-43m': ['A1', 'A2', 'E', 'T1', 'T2'],
+        'O': ['A1', 'A2', 'E', 'T1', 'T2'], '432': ['A1', 'A2', 'E', 'T1', 'T2'],
+        'Oh': ['A1g', 'A2g', 'Eg', 'T1g', 'T2g', 'A1u', 'A2u', 'Eu', 'T1u', 'T2u'], 'm-3m': ['A1g', 'A2g', 'Eg', 'T1g', 'T2g', 'A1u', 'A2u', 'Eu', 'T1u', 'T2u'],
+    }
+    
+    return STANDARD_LABELS.get(pg_label, [])
 
 
 def decompose_rep2irrep(red_rep: np.ndarray, char_table: np.ndarray, 

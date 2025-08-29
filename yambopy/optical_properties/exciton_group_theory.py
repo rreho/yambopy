@@ -7,6 +7,7 @@ import numpy as np
 import warnings
 from yambopy.optical_properties.base_optical import BaseOpticalProperties
 from yambopy.optical_properties.utils import read_lelph_database, compute_symmetry_matrices
+from yambopy.optical_properties.spgrep_point_group_ops import get_pg_info
 
 warnings.filterwarnings('ignore')
 
@@ -143,42 +144,39 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             self._build_kpoint_tree(self.lelph_db.kpoints)
 
     def _setup_symmetry(self):
-        """Setup symmetry using both spglib and Yambo matrices."""
+        """Setup symmetry using spgrep_point_group_ops module."""
         try:
             import spglib
-            import spgrep
             
-            # Yambo's symmetry matrices are already read in read_common_databases()
-            # They are available as self.symm_mats
-            
-            # Get crystal structure and spglib symmetries
+            # Get crystal structure for space group identification
             lattice = self.lat_vecs
             positions = self.ydb.red_atomic_positions
             numbers = self.ydb.atomic_numbers
             cell = (lattice, positions, numbers)
             
-            # Get spglib symmetries (for spgrep analysis)
-            symmetry = spglib.get_symmetry(cell, symprec=1e-5)
-            self.spg_rotations = symmetry['rotations']
-            self.spg_translations = symmetry['translations']
-            
-            # Get space group info
+            # Get space group info from spglib
             spacegroup = spglib.get_spacegroup(cell, symprec=1e-5)
             self.spacegroup_label = spacegroup
             
-            # Use spglib's symmetry matrices for point group identification
-            point_group = spgrep.pointgroup.get_pointgroup(self.spg_rotations)
-            self.point_group_label = point_group[0]  # Extract the symbol
+            # Use the dedicated spgrep_point_group_ops module for point group analysis
+            # This handles all the spgrep complexity and provides proper irrep labels
+            pg_label, classes, class_dict, char_tab, irrep_labels = get_pg_info(
+                self.symm_mats, 
+                time_rev=True  # Yambo typically includes time-reversal
+            )
+            
+            # Store results
+            self.point_group_label = pg_label
+            self.symmetry_classes = classes
+            self.class_dict = class_dict
+            self.character_table = char_tab
+            self.irrep_labels = irrep_labels
             
             print(f"Space group: {self.spacegroup_label}")
-            print(f"Point group: {self.point_group_label} (D6h)")
-            print(f"Symmetry operations: {len(self.spg_rotations)} (spglib) / {len(self.symm_mats)} (Yambo)")
-            
-            # Store spglib irreps for later use
-            self.spglib_irreps = spgrep.get_crystallographic_pointgroup_irreps_from_symmetry(
-                self.spg_rotations, None
-            )
-            print(f"Irreducible representations: {len(self.spglib_irreps)} found")
+            print(f"Point group: {self.point_group_label}")
+            print(f"Symmetry operations: {len(self.symm_mats)} (Yambo)")
+            print(f"Irreducible representations: {len(self.irrep_labels)} found")
+            print(f"Irrep labels: {self.irrep_labels}")
             
             # Compute D-matrices using Yambo's symmetries
             self._compute_spglib_dmats()
@@ -201,16 +199,16 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         print(f"Setting up D-matrices: {nsym} symmetries, {nk} k-points, {total_bands} bands")
         
         # Initialize D-matrices with correct dimensions
-        self.spglib_Dmats = np.zeros((nsym, nk, total_bands, total_bands), dtype=complex)
+        self.Dmats = np.zeros((nsym, nk, total_bands, total_bands), dtype=complex)
         
         # For each symmetry operation
         for isym in range(nsym):
             # For now, use identity matrices as placeholder
             # In a full implementation, you'd compute the actual representation matrices
             for ik in range(nk):
-                self.spglib_Dmats[isym, ik] = np.eye(total_bands, dtype=complex)
+                self.Dmats[isym, ik] = np.eye(total_bands, dtype=complex)
         
-        print(f"Successfully computed D-matrices: {self.spglib_Dmats.shape}")
+        print(f"Successfully computed D-matrices: {self.Dmats.shape}")
 
     def analyze_exciton_symmetry(self, iQ, nstates, degen_thres=0.001):
         """
@@ -263,78 +261,62 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             characters = np.array([np.trace(rep_mat).real for rep_mat in rep_matrices])
             print(f"Characters: {characters}")
             
-            # Use spgrep to analyze irreps
+            # Use the character table from spgrep_point_group_ops for decomposition
             try:
-                # We need to map Yambo characters to spglib symmetries
-                # This is tricky because they might have different numbers of operations
-                
-                if len(characters) == len(self.spg_rotations):
-                    # Same number of operations - direct mapping
-                    spglib_characters = characters
-                else:
-                    # Different number of operations - need to map
-                    print(f" Mapping needed: Yambo has {len(characters)}, spglib has {len(self.spg_rotations)}")
-                    
-                    # Map Yambo characters to spglib operations
-                    spglib_characters = []
-                    
-                    for spg_rot in self.spg_rotations:
-                        # Find the closest Yambo rotation
-                        min_diff = float('inf')
-                        best_char = 0.0
-                        
-                        for i, yambo_rot in enumerate(np.rint(self.symm_mats).astype(int)):
-                            diff = np.sum(np.abs(spg_rot - yambo_rot))
-                            if diff < min_diff:
-                                min_diff = diff
-                                best_char = characters[i]
-                        
-                        spglib_characters.append(best_char)
-                    
-                    spglib_characters = np.array(spglib_characters)
-                
-                # Now decompose using spglib irreps
-                try:
-                    # Extract characters as traces of the representation matrices
-                    irrep_chars = []
-                    for irrep in self.spglib_irreps:
-                        # irrep has shape (nsym, dim, dim) - take trace of each matrix
-                        chars = [np.trace(irrep[i]).real for i in range(len(irrep))]
-                        irrep_chars.append(chars)
-                    
-                    # Decompose using orthogonality relations
-                    # Inner product: (1/|G|) * sum(chi_rep * chi_irrep*)
-                    decomposition = []
-                    for irrep_char in irrep_chars:
-                        inner_product = np.sum(spglib_characters * np.conj(irrep_char)) / len(spglib_characters)
-                        decomposition.append(inner_product)
-                    decomposition = np.array(decomposition)
-                    
-                    # Format the result with proper notation for text output
-                    # Use comprehensive irrep labeling for all point groups
-                    irrep_labels = self._get_irrep_labels_for_point_group(self.point_group_label)
-                    
-                    irrep_multiplicities = []
-                    for i, mult in enumerate(decomposition):
-                        if abs(mult) > 0.1:  # Only keep significant contributions
-                            label = irrep_labels[i] if i < len(irrep_labels) else f"Γ{i+1}"
-                            irrep_multiplicities.append((label, int(round(mult.real))))
-                    
-                    if irrep_multiplicities:
-                        irrep_result = " + ".join([f"{mult}{symbol}" if mult > 1 else symbol 
-                                                 for symbol, mult in irrep_multiplicities])
-                        
-                        # Add activity analysis
-                        activity_info = self._analyze_activity(irrep_multiplicities)
-                        irrep_result += f" ({activity_info})"
+                # Map characters to conjugacy classes
+                class_characters = []
+                for class_idx, ops in self.class_dict.items():
+                    # Take the character of the first operation in each class
+                    # (all operations in the same class have the same character)
+                    op_idx = ops[0]
+                    if op_idx < len(characters):
+                        class_characters.append(characters[op_idx])
                     else:
-                        irrep_result = "No clear irrep identification"
-                        
-                    print(f"Irrep decomposition: {irrep_result}")
+                        class_characters.append(0.0)  # Fallback
+                
+                class_characters = np.array(class_characters)
+                print(f"Class characters: {class_characters}")
+                
+                # Decompose using the character table from spgrep_point_group_ops
+                # Use standard reduction formula: a_i = (1/|G|) * sum_R(chi_red(R) * chi_i(R)*)
+                pg_order = len(self.symm_mats)
+                class_orders = [len(ops) for ops in self.class_dict.values()]
+                
+                decomposition = []
+                for i in range(len(self.irrep_labels)):
+                    if i < len(self.character_table):
+                        irrep_chars = self.character_table[i]
+                        # Inner product with class multiplicities
+                        inner_product = np.sum(np.array(class_orders) * class_characters * np.conj(irrep_chars)) / pg_order
+                        decomposition.append(inner_product)
+                    else:
+                        decomposition.append(0.0)
+                
+                decomposition = np.array(decomposition)
+                print(f"Decomposition coefficients: {decomposition}")
+                
+                # Format results
+                irrep_multiplicities = []
+                for i, mult in enumerate(decomposition):
+                    if abs(mult) > 0.1:  # Only keep significant contributions
+                        label = self.irrep_labels[i] if i < len(self.irrep_labels) else f"Γ{i+1}"
+                        irrep_multiplicities.append((label, int(round(mult.real))))
+                
+                if irrep_multiplicities:
+                    irrep_result = " + ".join([f"{mult}{symbol}" if mult > 1 else symbol 
+                                             for symbol, mult in irrep_multiplicities])
                     
-                except Exception as e2:
-                    print(f"spgrep irrep decomposition failed: {e2}")
-                    irrep_result = f"Point group: {self.point_group_label} (characters computed)"
+                    # Add activity analysis
+                    activity_info = self._analyze_activity(irrep_multiplicities)
+                    irrep_result += f" ({activity_info})"
+                else:
+                    irrep_result = "No clear irrep identification"
+                
+                print(f"Irrep decomposition: {irrep_result}")
+                
+            except Exception as e2:
+                print(f"spgrep irrep decomposition failed: {e2}")
+                irrep_result = f"Point group: {self.point_group_label} (characters computed)"
                 
                 results.append({
                     'energy': energy,
@@ -850,92 +832,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         else:
             return 'unknown'
 
-    def _get_irrep_labels_for_point_group(self, point_group_symbol):
-        """
-        Get proper irreducible representation labels for any point group.
-        
-        Parameters
-        ----------
-        point_group_symbol : str
-            Point group symbol (Hermann-Mauguin or Schoenflies notation)
-            
-        Returns
-        -------
-        list
-            List of irrep labels in standard Mulliken notation
-        """
-        # Comprehensive irrep labels for all 32 crystallographic point groups
-        IRREP_LABELS = {
-            # Triclinic
-            'C1': ['A'],
-            'Ci': ['Ag', 'Au'],
-            
-            # Monoclinic  
-            'C2': ['A', 'B'],
-            'Cs': ['A\'', 'A\'\''],
-            'C2h': ['Ag', 'Bg', 'Au', 'Bu'],
-            
-            # Orthorhombic
-            'C2v': ['A1', 'A2', 'B1', 'B2'],
-            'D2': ['A', 'B1', 'B2', 'B3'],
-            'D2h': ['Ag', 'B1g', 'B2g', 'B3g', 'Au', 'B1u', 'B2u', 'B3u'],
-            
-            # Tetragonal
-            'C4': ['A', 'B', 'E'],
-            'S4': ['A', 'B', 'E'],
-            'C4h': ['Ag', 'Bg', 'Eg', 'Au', 'Bu', 'Eu'],
-            'C4v': ['A1', 'A2', 'B1', 'B2', 'E'],
-            'D4': ['A1', 'A2', 'B1', 'B2', 'E'],
-            'D2d': ['A1', 'A2', 'B1', 'B2', 'E'],
-            'D4h': ['A1g', 'A2g', 'B1g', 'B2g', 'Eg', 'A1u', 'A2u', 'B1u', 'B2u', 'Eu'],
-            
-            # Trigonal
-            'C3': ['A', 'E'],
-            'C3i': ['Ag', 'Eg', 'Au', 'Eu'],
-            'C3v': ['A1', 'A2', 'E'],
-            'D3': ['A1', 'A2', 'E'],
-            'D3d': ['A1g', 'A2g', 'Eg', 'A1u', 'A2u', 'Eu'],
-            
-            # Hexagonal
-            'C6': ['A', 'B', 'E1', 'E2'],
-            'C3h': ['A\'', 'A\'\'', 'E\'', 'E\'\''],
-            'C6h': ['Ag', 'Bg', 'E1g', 'E2g', 'Au', 'Bu', 'E1u', 'E2u'],
-            'C6v': ['A1', 'A2', 'B1', 'B2', 'E1', 'E2'],
-            'D6': ['A1', 'A2', 'B1', 'B2', 'E1', 'E2'],
-            'D3h': ['A1\'', 'A2\'', 'E\'', 'A1\'\'', 'A2\'\'', 'E\'\''],
-            'D6h': ['A1g', 'A2g', 'B1g', 'B2g', 'E1g', 'E2g', 'A1u', 'A2u', 'B1u', 'B2u', 'E1u', 'E2u'],
-            
-            # Cubic
-            'T': ['A', 'E', 'T'],
-            'Th': ['Ag', 'Eg', 'Tg', 'Au', 'Eu', 'Tu'],
-            'Td': ['A1', 'A2', 'E', 'T1', 'T2'],
-            'O': ['A1', 'A2', 'E', 'T1', 'T2'],
-            'Oh': ['A1g', 'A2g', 'Eg', 'T1g', 'T2g', 'A1u', 'A2u', 'Eu', 'T1u', 'T2u'],
-        }
-        
-        # Hermann-Mauguin to Schoenflies mapping
-        HM_TO_SF = {
-            '1': 'C1', '-1': 'Ci', '2': 'C2', 'm': 'Cs', '2/m': 'C2h',
-            'mm2': 'C2v', '222': 'D2', 'mmm': 'D2h',
-            '4': 'C4', '-4': 'S4', '4/m': 'C4h', '4mm': 'C4v', '422': 'D4', '-42m': 'D2d', '4/mmm': 'D4h',
-            '3': 'C3', '-3': 'C3i', '3m': 'C3v', '32': 'D3', '-3m': 'D3d',
-            '6': 'C6', '-6': 'C3h', '6/m': 'C6h', '6mm': 'C6v', '622': 'D6', '-6m2': 'D3h', '6/mmm': 'D6h',
-            '23': 'T', 'm-3': 'Th', '-43m': 'Td', '432': 'O', 'm-3m': 'Oh',
-        }
-        
-        # Try direct lookup first
-        if point_group_symbol in IRREP_LABELS:
-            return IRREP_LABELS[point_group_symbol]
-        
-        # Try Hermann-Mauguin to Schoenflies conversion
-        if point_group_symbol in HM_TO_SF:
-            schoenflies = HM_TO_SF[point_group_symbol]
-            if schoenflies in IRREP_LABELS:
-                return IRREP_LABELS[schoenflies]
-        
-        # Fallback to generic labels
-        print(f"Warning: Point group '{point_group_symbol}' not found in irrep database. Using generic labels.")
-        return ['Γ1', 'Γ2', 'Γ3', 'Γ4', 'Γ5', 'Γ6', 'Γ7', 'Γ8', 'Γ9', 'Γ10', 'Γ11', 'Γ12']
+
 
     def display_symmetry_operations(self):
         """
