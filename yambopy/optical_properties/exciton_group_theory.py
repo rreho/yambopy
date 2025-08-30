@@ -13,6 +13,7 @@ import warnings
 from yambopy.optical_properties.base_optical import BaseOpticalProperties
 from yambopy.optical_properties.utils import read_lelph_database, compute_symmetry_matrices
 from yambopy.optical_properties.spgrep_point_group_ops import get_pg_info, decompose_rep
+from yambopy.units import ha2ev
 
 warnings.filterwarnings('ignore')
 
@@ -174,19 +175,21 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             Analysis results
         """
         # Read BSE data
-        bands_range, BS_eigs, BS_wfcs = self._read_bse_data(iQ, nstates)
-        BS_eigs = BS_eigs * 27.2114  # Convert to eV
+        bands_range, BS_eigs, BS_wfcs = self._read_bse_data(self.BSE_dir,iQ, nstates)
+        BS_eigs_eV = BS_eigs * ha2ev  # Convert to eV
         
         print(f"\nAnalyzing {nstates} exciton states at Q = {self.qpts[iQ-1]}")
-        print(f"Energies: {BS_eigs.real} eV")
+        print(f"Energies: {BS_eigs_eV.real} eV")
         
         # Group degenerate states
-        unique_energies, degeneracies = self._group_degenerate_states(BS_eigs, degen_thres)
+        uni_eigs, degen_eigs = np.unique((BS_eigs_eV / degen_thres).astype(int),
+                                        return_counts=True)
+        uni_eigs = uni_eigs * degen_thres
         
         results = []
         state_idx = 0
         
-        for i, (energy, degen) in enumerate(zip(unique_energies, degeneracies)):
+        for i, (energy, degen) in enumerate(zip(uni_eigs, degen_eigs)):
             print(f"\nSubspace {i+1}: {energy:.4f} eV (degeneracy {degen})")
             
             # Extract degenerate subspace
@@ -290,8 +293,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             # Rotate each wavefunction in the subspace
             rotated_wfcs = []
             for wfc in subspace_wfcs:
-                wfc_single = wfc[None, ...]  # Add state dimension
-                
+                wfc_single = wfc[None,...]  # Add state dimension
                 rotated_wfc = rotate_exc_wf(
                     wfc_single,
                     symm_mat_red,
@@ -318,36 +320,38 @@ class ExcitonGroupTheory(BaseOpticalProperties):
         
         return np.array(rep_matrices)
 
-    def _group_degenerate_states(self, energies, threshold):
-        """Group states by energy degeneracy."""
-        unique_energies = []
-        degeneracies = []
-        
-        i = 0
-        while i < len(energies):
-            current_energy = energies[i].real
-            degen = 1
-            
-            # Count degenerate states
-            j = i + 1
-            while j < len(energies) and abs(energies[j].real - current_energy) < threshold:
-                degen += 1
-                j += 1
-            
-            unique_energies.append(current_energy)
-            degeneracies.append(degen)
-            i = j
-        
-        return unique_energies, degeneracies
+    def _read_bse_data(self, BSE_dir, iQ, nstates):
+        """
+        Read yambo exciton database for a specific Q-point.
 
-    def _read_bse_data(self, iQ, nstates):
-        """Read BSE eigenvalues and eigenvectors."""
-        # Placeholder - implement actual BSE data reading
-        bands_range = self.bands_range or [1, 10]
+        Parameters
+        ----------
+        BSE_dir : str
+            The directory containing the BSE calculation data.
+        iQ : int
+            The Q-point index (1-based indexing as in Yambo).
+        nstates : int
+            Number of exciton states to read.
+
+        Returns
+        -------
+        tuple
+            (bands_range, BS_eigs, BS_wfcs) for the specific Q-point.
+        """
+        from yambopy.dbs.excitondb import YamboExcitonDB
         
-        # Mock data for testing
-        BS_eigs = np.random.random(nstates) * 0.1 + 2.0  # eV range
-        BS_wfcs = np.random.random((nstates, 100)) + 1j * np.random.random((nstates, 100))
+        try:
+            bse_db_iq = YamboExcitonDB.from_db_file(self.ydb, folder=BSE_dir,
+                                                   filename=f'ndb.BS_diago_Q{iQ+1}')
+        except Exception as e:
+            raise IOError(f'Cannot read ndb.BS_diago_Q{iQ+1} file: {e}')
+            
+        bands_range = bse_db_iq.nbands
+        BS_eigs = bse_db_iq.eigenvalues[:nstates]
+        BS_wfcs = bse_db_iq.get_Akcv()[:nstates]
+        
+        # Convert to Hartree units
+        BS_eigs = BS_eigs / ha2ev
         
         return bands_range, BS_eigs, BS_wfcs
 
