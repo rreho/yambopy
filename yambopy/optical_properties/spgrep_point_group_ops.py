@@ -359,60 +359,169 @@ def _create_pg_info_from_label(pg_label: str, symm_mats: np.ndarray) -> Tuple[st
     irrep_labels = _get_irrep_labels_for_pg(pg_label, nsym)
     n_irreps = len(irrep_labels)
     
-    # Create proper symmetry classes and character table for known point groups
+    # Use general approach for all point groups
+    return _create_general_pg_info(pg_label, symm_mats, irrep_labels)
+
+
+def _create_general_pg_info(pg_label: str, symm_mats: np.ndarray, irrep_labels: List[str]) -> Tuple[str, List[str], Dict[int, List[int]], np.ndarray, List[str]]:
+    """Create general point group information with computed conjugacy classes."""
+    nsym = len(symm_mats)
+    n_irreps = len(irrep_labels)
+    
+    # Compute conjugacy classes
+    classes, class_dict = _compute_conjugacy_classes(symm_mats)
+    n_classes = len(classes)
+    
+    print(f"Found {n_classes} conjugacy classes for {pg_label}")
+    
+    # Use proper character tables for known point groups
     if pg_label == '6/mmm' or pg_label == 'D6h':
-        return _create_d6h_info(symm_mats, irrep_labels)
+        char_tab = _get_d6h_character_table()
+    elif pg_label in ['D2h', 'mmm']:
+        char_tab = _get_d2h_character_table()
+    elif pg_label in ['C2v', 'mm2']:
+        char_tab = _get_c2v_character_table()
+    elif pg_label in ['D3h', '-6m2']:
+        char_tab = _get_d3h_character_table()
     else:
-        # Fallback: create simple classes (each operation is its own class)
-        classes = [f"Op{i}" for i in range(nsym)]
-        class_dict = {i: [i] for i in range(nsym)}
-        
-        # Create proper character table dimensions: n_irreps x nsym
-        char_tab = np.zeros((n_irreps, nsym), dtype=float)
-        # Fill with identity-like pattern (not ideal, but better than wrong dimensions)
-        for i in range(min(n_irreps, nsym)):
-            char_tab[i, i] = 1.0
+        # Fallback: create identity-like character table
+        char_tab = np.eye(min(n_irreps, n_classes), dtype=float)
+        if n_irreps > n_classes:
+            # Pad with zeros if more irreps than classes
+            padding = np.zeros((n_irreps - n_classes, n_classes))
+            char_tab = np.vstack([char_tab, padding])
+        elif n_classes > n_irreps:
+            # Pad with zeros if more classes than irreps
+            padding = np.zeros((n_irreps, n_classes - n_irreps))
+            char_tab = np.hstack([char_tab, padding])
     
     return pg_label, classes, class_dict, char_tab, irrep_labels
 
 
-def _create_d6h_info(symm_mats: np.ndarray, irrep_labels: List[str]) -> Tuple[str, List[str], Dict[int, List[int]], np.ndarray, List[str]]:
-    """Create proper D6h point group information with correct character table."""
-    nsym = len(symm_mats)
+def _get_d6h_character_table() -> np.ndarray:
+    """Get the proper D6h character table."""
+    # D6h character table (12 irreps × 12 classes)
+    # Classes: E, 2C6, 2C3, C2, 3C2', 3C2'', i, 2S3, 2S6, σh, 3σv, 3σd
+    # Order: [E, C6, C3, C2, C2', C2'', i, S3, S6, σh, σv, σd]
     
-    # D6h has 12 symmetry classes (not 24 individual operations)
-    # The 24 operations are grouped into 12 classes
-    # For now, create a simplified version - each operation as its own class
-    # TODO: Implement proper class grouping based on conjugacy
-    classes = [f"C{i}" for i in range(12)]  # 12 classes for D6h
-    
-    # Simplified class mapping - group operations in pairs
-    class_dict = {}
-    for i in range(12):
-        if i * 2 + 1 < nsym:
-            class_dict[i] = [i * 2, i * 2 + 1]  # Group operations in pairs
-        else:
-            class_dict[i] = [i * 2]
-    
-    # D6h character table (12 irreps x 12 classes)
-    # This is a simplified version - the full character table would need proper class analysis
     char_tab = np.array([
-        # A1g, A2g, B1g, B2g, E1g, E2g, A1u, A2u, B1u, B2u, E1u, E2u
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # A1g
-        [1, 1, 1, 1, -1, -1, 1, 1, 1, 1, -1, -1],  # A2g
-        [1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1],  # B1g
-        [1, -1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1],  # B2g
-        [2, 1, -1, -2, 0, 0, 2, 1, -1, -2, 0, 0],  # E1g
-        [2, -1, -1, 2, 0, 0, 2, -1, -1, 2, 0, 0],  # E2g
-        [1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1],  # A1u
-        [1, 1, 1, 1, -1, -1, -1, -1, -1, -1, 1, 1],  # A2u
-        [1, -1, 1, -1, 1, -1, -1, 1, -1, 1, -1, 1],  # B1u
-        [1, -1, 1, -1, -1, 1, -1, 1, -1, 1, 1, -1],  # B2u
-        [2, 1, -1, -2, 0, 0, -2, -1, 1, 2, 0, 0],  # E1u
-        [2, -1, -1, 2, 0, 0, -2, 1, 1, -2, 0, 0],  # E2u
+        # E   C6  C3  C2  C2' C2'' i   S3  S6  σh  σv  σd
+        [ 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1],  # A1g
+        [ 1,  1,  1,  1, -1, -1,  1,  1,  1,  1, -1, -1],  # A2g  
+        [ 1, -1,  1, -1,  1, -1,  1, -1,  1, -1,  1, -1],  # B1g
+        [ 1, -1,  1, -1, -1,  1,  1, -1,  1, -1, -1,  1],  # B2g
+        [ 2,  1, -1, -2,  0,  0,  2,  1, -1, -2,  0,  0],  # E1g
+        [ 2, -1, -1,  2,  0,  0,  2, -1, -1,  2,  0,  0],  # E2g
+        [ 1,  1,  1,  1,  1,  1, -1, -1, -1, -1, -1, -1],  # A1u
+        [ 1,  1,  1,  1, -1, -1, -1, -1, -1, -1,  1,  1],  # A2u
+        [ 1, -1,  1, -1,  1, -1, -1,  1, -1,  1, -1,  1],  # B1u
+        [ 1, -1,  1, -1, -1,  1, -1,  1, -1,  1,  1, -1],  # B2u
+        [ 2,  1, -1, -2,  0,  0, -2, -1,  1,  2,  0,  0],  # E1u
+        [ 2, -1, -1,  2,  0,  0, -2,  1,  1, -2,  0,  0],  # E2u
     ], dtype=float)
     
-    return '6/mmm', classes, class_dict, char_tab, irrep_labels
+    return char_tab
+
+
+def _get_d2h_character_table() -> np.ndarray:
+    """Get the D2h character table."""
+    # D2h: 8 irreps × 8 classes
+    char_tab = np.array([
+        [ 1,  1,  1,  1,  1,  1,  1,  1],  # Ag
+        [ 1,  1, -1, -1,  1,  1, -1, -1],  # B1g
+        [ 1, -1,  1, -1,  1, -1,  1, -1],  # B2g
+        [ 1, -1, -1,  1,  1, -1, -1,  1],  # B3g
+        [ 1,  1,  1,  1, -1, -1, -1, -1],  # Au
+        [ 1,  1, -1, -1, -1, -1,  1,  1],  # B1u
+        [ 1, -1,  1, -1, -1,  1, -1,  1],  # B2u
+        [ 1, -1, -1,  1, -1,  1,  1, -1],  # B3u
+    ], dtype=float)
+    
+    return char_tab
+
+
+def _get_c2v_character_table() -> np.ndarray:
+    """Get the C2v character table."""
+    # C2v: 4 irreps × 4 classes
+    char_tab = np.array([
+        [ 1,  1,  1,  1],  # A1
+        [ 1,  1, -1, -1],  # A2
+        [ 1, -1,  1, -1],  # B1
+        [ 1, -1, -1,  1],  # B2
+    ], dtype=float)
+
+
+def _get_d3h_character_table() -> np.ndarray:
+    """Get the D3h character table."""
+    # D3h: 6 irreps × 6 classes
+    # Classes: E, 2C3, 3C2, σh, 2S3, 3σv
+    # But spgrep uses order: E, 3C2, 2C3, σh, 3σv, 2S3
+    char_tab = np.array([
+        [ 1,  1,  1,  1,  1,  1],  # A1'
+        [ 1, -1,  1,  1, -1,  1],  # A2'
+        [ 2,  0, -1,  2,  0, -1],  # E'
+        [ 1,  1,  1, -1, -1, -1],  # A1"
+        [ 1, -1,  1, -1,  1, -1],  # A2"
+        [ 2,  0, -1, -2,  0,  1],  # E"
+    ], dtype=float)
+    
+    return char_tab
+
+
+def _compute_conjugacy_classes(symm_mats: np.ndarray) -> Tuple[List[str], Dict[int, List[int]]]:
+    """Compute conjugacy classes for symmetry operations."""
+    nsym = len(symm_mats)
+    
+    # Initialize: each operation starts in its own class
+    classes_found = []
+    class_dict = {}
+    assigned = [False] * nsym
+    
+    for i in range(nsym):
+        if assigned[i]:
+            continue
+            
+        # Start a new conjugacy class with operation i
+        class_idx = len(classes_found)
+        class_members = [i]
+        assigned[i] = True
+        
+        # Find all operations conjugate to operation i
+        R_i = symm_mats[i]
+        
+        for j in range(i + 1, nsym):
+            if assigned[j]:
+                continue
+                
+            R_j = symm_mats[j]
+            
+            # Check if R_j is conjugate to R_i
+            # Two operations are conjugate if there exists S such that R_j = S^(-1) * R_i * S
+            is_conjugate = False
+            
+            for k in range(nsym):
+                S = symm_mats[k]
+                try:
+                    S_inv = np.linalg.inv(S)
+                    conjugate = S_inv @ R_i @ S
+                    
+                    # Check if conjugate is approximately equal to R_j
+                    if np.allclose(conjugate, R_j, atol=1e-6):
+                        is_conjugate = True
+                        break
+                except np.linalg.LinAlgError:
+                    continue
+            
+            if is_conjugate:
+                class_members.append(j)
+                assigned[j] = True
+        
+        # Create class label and store
+        class_label = f"C{class_idx+1}({len(class_members)})"
+        classes_found.append(class_label)
+        class_dict[class_idx] = class_members
+    
+    return classes_found, class_dict
 
 
 def _get_irrep_labels_for_pg(pg_label: str, nsym: int) -> List[str]:
@@ -430,6 +539,7 @@ def _get_irrep_labels_for_pg(pg_label: str, nsym: int) -> List[str]:
         'C3v': ['A1', 'A2', 'E'],
         'D3': ['A1', 'A2', 'E'],
         'D3h': ['A1\'', 'A2\'', 'E\'', 'A1"', 'A2"', 'E"'],
+        '-6m2': ['A1\'', 'A2\'', 'E\'', 'A1"', 'A2"', 'E"'],  # D3h in spgrep notation
         'D3d': ['A1g', 'A2g', 'Eg', 'A1u', 'A2u', 'Eu'],
         'C6': ['A', 'B', 'E1', 'E2'],
         'C6v': ['A1', 'A2', 'B1', 'B2', 'E1', 'E2'],
