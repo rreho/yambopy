@@ -22,6 +22,19 @@ class NNKP_Grids(KPointGenerator):
         self.nkpoints = len(self.k)
         self.weights = 1/self.nkpoints
         self.k_tree = cKDTree(self.k)
+        
+        # Try to infer grid dimensions (assume 2D for most cases)
+        # This is needed for compute_flux_2D function
+        success = self.infer_grid_dimensions(assume_2d=True)
+        if not success:
+            # Try 3D if 2D fails
+            success = self.infer_grid_dimensions(assume_2d=False)
+        
+        if success:
+            print(f"Inferred grid dimensions: nkx={self.nkx}, nky={self.nky}, nkz={self.nkz}")
+        else:
+            print(f"Warning: Could not infer grid dimensions from {self.nkpoints} k-points")
+            print("You may need to set them manually using set_grid_dimensions()")
 
     def get_kmq_grid(self,qgrid):
         # if not isinstance(qmpgrid, NNKP_Grids):

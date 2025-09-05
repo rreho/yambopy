@@ -10,6 +10,14 @@ class KPointGenerator():
         self.red_kpoints = None
         self.car_kpoints = None
         self.k_tree = None
+        # Grid dimensions (for regular grids)
+        self.nkx = None
+        self.nky = None
+        self.nkz = None
+        # Aliases for compatibility
+        self.nqx = None
+        self.nqy = None
+        self.nqz = None
     
     @staticmethod
     def create_instance(type_, *args, **kwargs):
@@ -23,6 +31,81 @@ class KPointGenerator():
             return tb_Monkhorst_Pack(*args, **kwargs)        
         else:
             return KPointGenerator()  # Default to A if type is unknown
+
+    def set_grid_dimensions(self, nkx=None, nky=None, nkz=None):
+        """
+        Set the grid dimensions for regular k-point grids.
+        
+        Parameters
+        ----------
+        nkx, nky, nkz : int, optional
+            Number of k-points in x, y, z directions
+        """
+        self.nkx = nkx
+        self.nky = nky  
+        self.nkz = nkz
+        # Set aliases for compatibility
+        self.nqx = nkx
+        self.nqy = nky
+        self.nqz = nkz
+        
+    def infer_grid_dimensions(self, assume_2d=False):
+        """
+        Try to infer grid dimensions from the total number of k-points.
+        
+        Parameters
+        ----------
+        assume_2d : bool, default False
+            If True, assume nkz = 1 and infer nkx, nky from nkpoints
+            
+        Returns
+        -------
+        success : bool
+            True if dimensions were successfully inferred
+        """
+        if self.nkpoints is None:
+            return False
+            
+        if assume_2d:
+            # For 2D systems, assume nkz = 1
+            self.nkz = 1
+            # Try to find square grid first
+            sqrt_nk = int(np.sqrt(self.nkpoints))
+            if sqrt_nk * sqrt_nk == self.nkpoints:
+                self.nkx = self.nky = sqrt_nk
+            else:
+                # Try to factorize, preferring more balanced factorizations
+                best_nkx, best_nky = None, None
+                min_ratio = float('inf')
+                
+                for nkx in range(1, int(np.sqrt(self.nkpoints)) + 1):
+                    if self.nkpoints % nkx == 0:
+                        nky = self.nkpoints // nkx
+                        # Prefer factorizations where nkx and nky are closer to each other
+                        ratio = max(nkx, nky) / min(nkx, nky)
+                        if ratio < min_ratio:
+                            min_ratio = ratio
+                            best_nkx, best_nky = nkx, nky
+                
+                if best_nkx is not None:
+                    self.nkx, self.nky = best_nkx, best_nky
+                else:
+                    return False
+        else:
+            # For 3D systems, try to find cubic grid first
+            cbrt_nk = int(round(self.nkpoints ** (1/3)))
+            if cbrt_nk ** 3 == self.nkpoints:
+                self.nkx = self.nky = self.nkz = cbrt_nk
+            else:
+                # This is more complex for 3D - would need more sophisticated factorization
+                return False
+                
+        # Set aliases
+        self.nqx = self.nkx
+        self.nqy = self.nky
+        self.nqz = self.nkz
+        
+        return True
 
     def validate(self):
         """Validate the generated k-points."""

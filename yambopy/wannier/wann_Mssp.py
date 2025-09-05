@@ -86,7 +86,6 @@ def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
     for t in range(0,trange):
         for tp in range(0,trange):
             for iq, q in enumerate(nnkp_qgrid.red_kpoints):
-                print(iq)
                 for ib in range(nb):
                     Mssp_ttp = 0
                     iqpb = nnkp_qgrid.qpb_grid_table[iq, ib, 1]
@@ -112,7 +111,7 @@ def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
     h2p.Mssp = Mssp
     return Mssp
 
-def compute_flux_2D(Mssp, qgrid, b_vectors=None, exciton_states=None, periodic_boundary=True):
+def compute_flux_2D(Mssp, qgrid, exciton_states=None, periodic_boundary=True):
     """
     Compute the flux F(Q) over a 2D Brillouin Zone using the plaquette method.
     
@@ -129,9 +128,8 @@ def compute_flux_2D(Mssp, qgrid, b_vectors=None, exciton_states=None, periodic_b
         - nq: number of Q points  
         - nb: number of B vectors (Wannier90 neighbors)
     qgrid : object
-        Q-point grid object containing the 2D grid information
-    b_vectors : ndarray or None
-        B vectors from Wannier90 with shape (nb, 3). If None, will try to get from qgrid.
+        Q-point grid object containing the 2D grid information and b_list
+        qgrid.b_list should have shape (nq, nb, 3) with B vectors in reduced coordinates
     exciton_states : list or None
         List of exciton state indices to compute flux for. If None, uses all states.
     periodic_boundary : bool
@@ -151,55 +149,92 @@ def compute_flux_2D(Mssp, qgrid, b_vectors=None, exciton_states=None, periodic_b
     else:
         nstates = len(exciton_states)
     
-    # Get B vectors
-    if b_vectors is None:
-        if hasattr(qgrid, 'b_list') and len(qgrid.b_list) > 0:
-            b_vectors = qgrid.b_list[0]  # Assuming first q-point has the B vectors
-        else:
-            raise ValueError("B vectors not provided and cannot be found in qgrid")
+    # Get B vectors from qgrid
+    if not hasattr(qgrid, 'b_list') or qgrid.b_list is None:
+        raise ValueError("qgrid must have b_list attribute with B vectors")
     
-    # Find indices for x and y direction B vectors
+    b_list = qgrid.b_list  # Shape: (nq, nb, 3)
+    nq_total, nb_total = Mssp.shape[2], Mssp.shape[3]
+    
+    if b_list.shape[0] != nq_total:
+        raise ValueError(f"b_list has {b_list.shape[0]} k-points but Mssp has {nq_total}")
+    if b_list.shape[1] != nb_total:
+        raise ValueError(f"b_list has {b_list.shape[1]} B vectors but Mssp has {nb_total}")
+    
+    # Find indices for x and y direction B vectors by examining the first k-point
     # For 2D materials, we look for B vectors that are primarily in x and y directions
+    b_vectors_first = b_list[0]  # B vectors for first k-point
     b_x_idx = None
     b_y_idx = None
     
     # Tolerance for identifying x and y directions
     tol = 1e-6
     
-    for ib, b_vec in enumerate(b_vectors):
+    for ib, b_vec in enumerate(b_vectors_first):
         # Check if this is primarily an x-direction vector (b_y ≈ 0, b_z ≈ 0)
         if abs(b_vec[1]) < tol and abs(b_vec[2]) < tol and abs(b_vec[0]) > tol:
-            if b_x_idx is None or abs(b_vec[0]) < abs(b_vectors[b_x_idx][0]):
+            if b_x_idx is None or abs(b_vec[0]) < abs(b_vectors_first[b_x_idx][0]):
                 b_x_idx = ib
         # Check if this is primarily a y-direction vector (b_x ≈ 0, b_z ≈ 0)  
         elif abs(b_vec[0]) < tol and abs(b_vec[2]) < tol and abs(b_vec[1]) > tol:
-            if b_y_idx is None or abs(b_vec[1]) < abs(b_vectors[b_y_idx][1]):
+            if b_y_idx is None or abs(b_vec[1]) < abs(b_vectors_first[b_y_idx][1]):
                 b_y_idx = ib
     
     if b_x_idx is None or b_y_idx is None:
         print("Warning: Could not identify x and y direction B vectors automatically.")
-        print("Available B vectors:")
-        for ib, b_vec in enumerate(b_vectors):
+        print("Available B vectors for first k-point:")
+        for ib, b_vec in enumerate(b_vectors_first):
             print(f"  B[{ib}] = {b_vec}")
         # Use first two B vectors as fallback
-        b_x_idx = 0 if len(b_vectors) > 0 else None
-        b_y_idx = 1 if len(b_vectors) > 1 else None
+        b_x_idx = 0 if nb_total > 0 else None
+        b_y_idx = 1 if nb_total > 1 else None
         
     if b_x_idx is None or b_y_idx is None:
         raise ValueError("Cannot identify appropriate B vectors for x and y directions")
         
-    print(f"Using B vector {b_x_idx} for x-direction: {b_vectors[b_x_idx]}")
-    print(f"Using B vector {b_y_idx} for y-direction: {b_vectors[b_y_idx]}")
+    print(f"Using B vector {b_x_idx} for x-direction: {b_vectors_first[b_x_idx]}")
+    print(f"Using B vector {b_y_idx} for y-direction: {b_vectors_first[b_y_idx]}")
+    
+    # Validate that B vectors are consistent across k-points (optional check)
+    # This is important for irregular grids or boundary effects
+    inconsistent_count = 0
+    for iq in range(min(10, nq_total)):  # Check first 10 k-points as sample
+        b_vec_x_current = b_list[iq, b_x_idx]
+        b_vec_y_current = b_list[iq, b_y_idx]
+        
+        # Check if the direction is still correct
+        x_is_x = abs(b_vec_x_current[1]) < tol and abs(b_vec_x_current[2]) < tol and abs(b_vec_x_current[0]) > tol
+        y_is_y = abs(b_vec_y_current[0]) < tol and abs(b_vec_y_current[2]) < tol and abs(b_vec_y_current[1]) > tol
+        
+        if not (x_is_x and y_is_y):
+            inconsistent_count += 1
+    
+    if inconsistent_count > 0:
+        print(f"Warning: Found {inconsistent_count} k-points with inconsistent B vector directions.")
+        print("This might indicate an irregular grid or boundary effects.")
+        print("Results should be interpreted carefully.")
     
     # Get 2D grid dimensions
-    if hasattr(qgrid, 'nqx') and hasattr(qgrid, 'nqy'):
+    if hasattr(qgrid, 'nqx') and hasattr(qgrid, 'nqy') and qgrid.nqx is not None and qgrid.nqy is not None:
         nqx, nqy = qgrid.nqx, qgrid.nqy
     else:
         # Try to infer from total number of q points (assuming square grid)
         nq_total = Mssp.shape[2]
         nqx = nqy = int(np.sqrt(nq_total))
         if nqx * nqy != nq_total:
-            raise ValueError(f"Cannot infer 2D grid dimensions from {nq_total} q-points")
+            # Try to factorize for non-square grids
+            found = False
+            for test_nqx in range(1, int(np.sqrt(nq_total)) + 1):
+                if nq_total % test_nqx == 0:
+                    nqx = test_nqx
+                    nqy = nq_total // test_nqx
+                    found = True
+                    break
+            if not found:
+                raise ValueError(f"Cannot infer 2D grid dimensions from {nq_total} q-points. "
+                               f"Please set grid dimensions manually using qgrid.set_grid_dimensions(nqx, nqy)")
+        
+        print(f"Inferred grid dimensions from Mssp shape: nqx={nqx}, nqy={nqy}")
     
     # Initialize flux array
     flux = np.zeros((nstates, nqx, nqy), dtype=np.float64)
