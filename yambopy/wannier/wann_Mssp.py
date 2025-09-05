@@ -112,6 +112,309 @@ def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
     h2p.Mssp = Mssp
     return Mssp
 
+def compute_flux_2D(Mssp, qgrid, b_vectors=None, exciton_states=None, periodic_boundary=True):
+    """
+    Compute the flux F(Q) over a 2D Brillouin Zone using the plaquette method.
+    
+    The flux is computed as:
+    F(Q) = arg[U_x(Q) * U_y(Q+Δx) * U_x(Q+Δy)^(-1) * U_y(Q)^(-1)]
+    
+    where U_x(Q) = M(Q, Q+Δx) / |M(Q, Q+Δx)| and U_y(Q) = M(Q, Q+Δy) / |M(Q, Q+Δy)|
+    
+    Parameters
+    ----------
+    Mssp : ndarray
+        Overlap matrix with shape (nstates, nstates, nq, nb) where:
+        - nstates: number of exciton states
+        - nq: number of Q points  
+        - nb: number of B vectors (Wannier90 neighbors)
+    qgrid : object
+        Q-point grid object containing the 2D grid information
+    b_vectors : ndarray or None
+        B vectors from Wannier90 with shape (nb, 3). If None, will try to get from qgrid.
+    exciton_states : list or None
+        List of exciton state indices to compute flux for. If None, uses all states.
+    periodic_boundary : bool
+        Whether to use periodic boundary conditions for the grid
+        
+    Returns
+    -------
+    flux : ndarray
+        Flux array with shape (nstates, nqx, nqy) for 2D grid
+    chern_numbers : ndarray
+        Chern numbers for each exciton state, shape (nstates,)
+    """
+    
+    if exciton_states is None:
+        nstates = Mssp.shape[0]
+        exciton_states = list(range(nstates))
+    else:
+        nstates = len(exciton_states)
+    
+    # Get B vectors
+    if b_vectors is None:
+        if hasattr(qgrid, 'b_list') and len(qgrid.b_list) > 0:
+            b_vectors = qgrid.b_list[0]  # Assuming first q-point has the B vectors
+        else:
+            raise ValueError("B vectors not provided and cannot be found in qgrid")
+    
+    # Find indices for x and y direction B vectors
+    # For 2D materials, we look for B vectors that are primarily in x and y directions
+    b_x_idx = None
+    b_y_idx = None
+    
+    # Tolerance for identifying x and y directions
+    tol = 1e-6
+    
+    for ib, b_vec in enumerate(b_vectors):
+        # Check if this is primarily an x-direction vector (b_y ≈ 0, b_z ≈ 0)
+        if abs(b_vec[1]) < tol and abs(b_vec[2]) < tol and abs(b_vec[0]) > tol:
+            if b_x_idx is None or abs(b_vec[0]) < abs(b_vectors[b_x_idx][0]):
+                b_x_idx = ib
+        # Check if this is primarily a y-direction vector (b_x ≈ 0, b_z ≈ 0)  
+        elif abs(b_vec[0]) < tol and abs(b_vec[2]) < tol and abs(b_vec[1]) > tol:
+            if b_y_idx is None or abs(b_vec[1]) < abs(b_vectors[b_y_idx][1]):
+                b_y_idx = ib
+    
+    if b_x_idx is None or b_y_idx is None:
+        print("Warning: Could not identify x and y direction B vectors automatically.")
+        print("Available B vectors:")
+        for ib, b_vec in enumerate(b_vectors):
+            print(f"  B[{ib}] = {b_vec}")
+        # Use first two B vectors as fallback
+        b_x_idx = 0 if len(b_vectors) > 0 else None
+        b_y_idx = 1 if len(b_vectors) > 1 else None
+        
+    if b_x_idx is None or b_y_idx is None:
+        raise ValueError("Cannot identify appropriate B vectors for x and y directions")
+        
+    print(f"Using B vector {b_x_idx} for x-direction: {b_vectors[b_x_idx]}")
+    print(f"Using B vector {b_y_idx} for y-direction: {b_vectors[b_y_idx]}")
+    
+    # Get 2D grid dimensions
+    if hasattr(qgrid, 'nqx') and hasattr(qgrid, 'nqy'):
+        nqx, nqy = qgrid.nqx, qgrid.nqy
+    else:
+        # Try to infer from total number of q points (assuming square grid)
+        nq_total = Mssp.shape[2]
+        nqx = nqy = int(np.sqrt(nq_total))
+        if nqx * nqy != nq_total:
+            raise ValueError(f"Cannot infer 2D grid dimensions from {nq_total} q-points")
+    
+    # Initialize flux array
+    flux = np.zeros((nstates, nqx, nqy), dtype=np.float64)
+    
+    # Find the indices for x and y direction shifts in the Q grid
+    def get_neighbor_indices(iq, direction, nqx, nqy):
+        """Get neighbor indices for x and y directions"""
+        ix = iq % nqx
+        iy = iq // nqx
+        
+        if direction == 'x':
+            ix_new = (ix + 1) % nqx if periodic_boundary else ix + 1
+            if not periodic_boundary and ix_new >= nqx:
+                return None
+            return iy * nqx + ix_new
+        elif direction == 'y':
+            iy_new = (iy + 1) % nqy if periodic_boundary else iy + 1
+            if not periodic_boundary and iy_new >= nqy:
+                return None
+            return iy_new * nqx + ix
+        else:
+            raise ValueError("Direction must be 'x' or 'y'")
+    
+    # Compute flux for each plaquette
+    for ix in range(nqx - (0 if periodic_boundary else 1)):
+        for iy in range(nqy - (0 if periodic_boundary else 1)):
+            iq = iy * nqx + ix
+            
+            # Get the four corner points of the plaquette
+            iq_x = get_neighbor_indices(iq, 'x', nqx, nqy)  # Q + Δx
+            iq_y = get_neighbor_indices(iq, 'y', nqx, nqy)  # Q + Δy
+            iq_xy = get_neighbor_indices(iq_x, 'y', nqx, nqy) if iq_x is not None else None  # Q + Δx + Δy
+            
+            if iq_x is None or iq_y is None or iq_xy is None:
+                continue
+                
+            for istate, state_idx in enumerate(exciton_states):
+                # Get overlap matrix elements using the identified B vector indices
+                # M(Q, Q+Δx) corresponds to Mssp[state, state, Q, b_x_idx]
+                # M(Q, Q+Δy) corresponds to Mssp[state, state, Q, b_y_idx]
+                
+                M_q_qx = Mssp[state_idx, state_idx, iq, b_x_idx]      # M(Q, Q+Δx)
+                M_qx_qxy = Mssp[state_idx, state_idx, iq_x, b_y_idx]  # M(Q+Δx, Q+Δx+Δy)
+                M_qy_qxy = Mssp[state_idx, state_idx, iq_y, b_x_idx]  # M(Q+Δy, Q+Δx+Δy)
+                M_q_qy = Mssp[state_idx, state_idx, iq, b_y_idx]      # M(Q, Q+Δy)
+                
+                # Compute U matrices (normalized overlaps)
+                U_x_q = M_q_qx / np.abs(M_q_qx) if np.abs(M_q_qx) > 1e-12 else 0
+                U_y_qx = M_qx_qxy / np.abs(M_qx_qxy) if np.abs(M_qx_qxy) > 1e-12 else 0
+                U_x_qy_inv = np.conj(M_qy_qxy / np.abs(M_qy_qxy)) if np.abs(M_qy_qxy) > 1e-12 else 0
+                U_y_q_inv = np.conj(M_q_qy / np.abs(M_q_qy)) if np.abs(M_q_qy) > 1e-12 else 0
+                
+                # Compute the plaquette product
+                plaquette_product = U_x_q * U_y_qx * U_x_qy_inv * U_y_q_inv
+                
+                # Compute flux as the argument of the plaquette product
+                flux[istate, ix, iy] = np.angle(plaquette_product)
+    
+    # Compute Chern numbers
+    chern_numbers = np.zeros(nstates)
+    for istate in range(nstates):
+        chern_numbers[istate] = np.sum(flux[istate]) / (2 * np.pi)
+    
+    return flux, chern_numbers
+
+
+def compute_chern_number_2D(h2p, nnkp_qgrid, exciton_states=None, trange=1, b_vectors=None):
+    """
+    Compute Chern numbers for exciton states using the plaquette method.
+    
+    This function first computes the overlap matrix Mssp if not already computed,
+    then calculates the flux and Chern numbers.
+    
+    Parameters
+    ----------
+    h2p : H2P object
+        The two-particle Hamiltonian object containing exciton information
+    nnkp_qgrid : object
+        Q-point grid object for the calculation
+    exciton_states : list or None
+        List of exciton state indices to compute Chern numbers for
+    trange : int
+        Number of exciton states to consider
+    b_vectors : ndarray or None
+        B vectors from Wannier90. If None, will try to get from nnkp_qgrid.
+        
+    Returns
+    -------
+    chern_numbers : ndarray
+        Chern numbers for each exciton state
+    flux : ndarray
+        Flux array for visualization and analysis
+    """
+    
+    # Compute Mssp if not already computed
+    if not hasattr(h2p, 'Mssp') or h2p.Mssp is None:
+        print("Computing Mssp overlap matrix...")
+        Mssp = compute_Mssp(h2p, h2p.kmpgrid, nnkp_qgrid, trange=trange)
+    else:
+        Mssp = h2p.Mssp
+        print("Using existing Mssp overlap matrix...")
+    
+    # Compute flux and Chern numbers
+    print("Computing flux and Chern numbers...")
+    flux, chern_numbers = compute_flux_2D(Mssp, nnkp_qgrid, b_vectors=b_vectors, exciton_states=exciton_states)
+    
+    # Store results in h2p object
+    h2p.flux = flux
+    h2p.chern_numbers = chern_numbers
+    
+    print(f"Computed Chern numbers: {chern_numbers}")
+    
+    return chern_numbers, flux
+
+
+def plot_flux_and_chern(flux, chern_numbers, exciton_states=None, save_path=None):
+    """
+    Plot the flux distribution and display Chern numbers.
+    
+    Parameters
+    ----------
+    flux : ndarray
+        Flux array with shape (nstates, nqx, nqy)
+    chern_numbers : ndarray
+        Chern numbers for each exciton state
+    exciton_states : list or None
+        List of exciton state indices. If None, uses all states.
+    save_path : str or None
+        Path to save the plot. If None, displays the plot.
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib.colors as colors
+    except ImportError:
+        print("Matplotlib not available. Cannot plot flux.")
+        return
+    
+    nstates = flux.shape[0]
+    if exciton_states is None:
+        exciton_states = list(range(nstates))
+    
+    # Create subplots
+    ncols = min(3, len(exciton_states))
+    nrows = (len(exciton_states) + ncols - 1) // ncols
+    
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4*ncols, 4*nrows))
+    if nrows == 1 and ncols == 1:
+        axes = [axes]
+    elif nrows == 1:
+        axes = axes
+    else:
+        axes = axes.flatten()
+    
+    for i, state_idx in enumerate(exciton_states):
+        if i >= len(axes):
+            break
+            
+        ax = axes[i]
+        
+        # Plot flux
+        im = ax.imshow(flux[state_idx].T, origin='lower', cmap='RdBu_r', 
+                      vmin=-np.pi, vmax=np.pi)
+        ax.set_title(f'Exciton State {state_idx}\nChern Number: {chern_numbers[state_idx]:.3f}')
+        ax.set_xlabel('Q_x index')
+        ax.set_ylabel('Q_y index')
+        
+        # Add colorbar
+        plt.colorbar(im, ax=ax, label='Flux (rad)')
+    
+    # Hide unused subplots
+    for i in range(len(exciton_states), len(axes)):
+        axes[i].set_visible(False)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Flux plot saved to {save_path}")
+    else:
+        plt.show()
+
+
+def example_usage():
+    """
+    Example of how to use the Chern number calculation functions.
+    
+    This is a template that shows the typical workflow.
+    """
+    print("Example usage of Chern number calculation:")
+    print("""
+    # 1. Set up your H2P object and grids
+    h2p = H2P(...)  # Your H2P object
+    nnkp_qgrid = ...  # Your Q-point grid
+    
+    # 2. Compute Chern numbers
+    chern_numbers, flux = compute_chern_number_2D(
+        h2p, 
+        nnkp_qgrid, 
+        exciton_states=[0, 1],  # Compute for first two exciton states
+        trange=2  # Consider 2 exciton states
+    )
+    
+    # 3. Plot results
+    plot_flux_and_chern(flux, chern_numbers, exciton_states=[0, 1])
+    
+    # 4. Access results
+    print(f"Chern numbers: {chern_numbers}")
+    print(f"Total Chern number: {np.sum(chern_numbers)}")
+    
+    # The flux and Chern numbers are also stored in the h2p object:
+    # h2p.flux
+    # h2p.chern_numbers
+    """)
+
+
 def Mmn_kkp(G0_bra, wfc_bra, gvec_bra, G0_ket, wfc_ket, gvec_ket, ket_Gtree=None):
     """
     Computes the inner product between two wavefunctions in reciprocal space. <k_bra | k_ket>
