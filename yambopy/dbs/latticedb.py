@@ -253,11 +253,7 @@ class YamboLatticeDB(object):
         _, _, counts = np.unique(red_kpoints, axis=0, return_index=True, return_counts=True)
         has_duplicates = len(np.where(counts > 1)[0]) > 0
         
-        # Additional heuristic: compare with expected IBZ size
-        expected_ibz_size = len(self.iku_kpoints) // max(1, self.nsym // (self.time_rev + 1))
-        many_kpoints = len(self.iku_kpoints) > expected_ibz_size * 2
-        
-        return has_duplicates or many_kpoints
+        return has_duplicates
 
     def expand_kpoints(self,verbose=1,atol=1.e-6):
         """
@@ -266,12 +262,6 @@ class YamboLatticeDB(object):
         Take a list of qpoints and symmetry operations and return the full brillouin zone
         with the corresponding index in the irreducible brillouin zone
         """
-        
-        # Check if k-points might already be expanded by comparing with expected IBZ size
-        # This is a heuristic: if we have many k-points relative to symmetries, they might be expanded
-        expected_ibz_size = len(self.iku_kpoints) // max(1, self.nsym // (self.time_rev + 1))
-        if len(self.iku_kpoints) > expected_ibz_size * 2:
-            if verbose: print(f"K-points appear to be already expanded ({len(self.iku_kpoints)} k-points with {self.nsym} symmetries)")
 
         weights, kpoints_indexes, symmetry_indexes, kpoints_full_or_red = expand_kpoints(self.car_kpoints,self.sym_car,self.rlat,atol=atol)
 
