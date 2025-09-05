@@ -31,6 +31,17 @@ def expand_kpoints(car_kpoints,sym_car,rlat,atol=1.e-6):
     * kpoints_full: kpoints in the full brillouin zone
     """
 
+    # Check if the input kpoints are already expanded by looking for duplicates
+    # Convert to reduced coordinates for comparison
+    red_kpoints_input = car_red(np.array(car_kpoints), rlat)
+    _, _, counts = np.unique(red_kpoints_input, axis=0, return_index=True, return_counts=True)
+    if len(np.where(counts > 1)[0]) > 0:
+        print("[WARNING] Kpoints were already expanded, skipping expansion")
+        weights = None
+        kpoints_indexes = None
+        symmetry_indexes = None
+        return weights, kpoints_indexes, symmetry_indexes, red_kpoints_input
+
     kpoints_indexes  = []
     kpoints_full     = []
     symmetry_indexes = []
@@ -66,15 +77,6 @@ def expand_kpoints(car_kpoints,sym_car,rlat,atol=1.e-6):
     for nk in kpoints_full_i:
         weights[nk] = np.float64(len(kpoints_full_i[nk]))/nkpoints_full
     
-    #check if the kpoints were already exapnded
-    _, _, counts = np.unique(kpoints_full, axis=0, return_index=True, return_counts=True)
-    if len(np.where(counts > 1)[0]) > 0:
-        print("[WARNING] Kpoints were already expanded, skipping expansion")
-        red_kpoints = car_red(np.array(car_kpoints),rlat)
-        weights = None
-        kpoints_indexes = None
-        symmetry_indexes = None
-        return weights, kpoints_indexes, symmetry_indexes, red_kpoints
     return np.array(weights), np.array(kpoints_indexes), np.array(symmetry_indexes), np.array(kpoints_full)
 
 def get_path_car(kpts_path_car,path):

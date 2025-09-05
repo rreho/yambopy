@@ -11,6 +11,7 @@ import spglib
 class symmetrized_mp_grid(KPointGenerator):
     def __init__(self, grid_shape, latdb, shift=np.array([0.0,0.0,0.0])):
         super().__init__()
+        print("[Warning] This IBZ monkhorst pack should not be used for the k-grid to compute the BSE Kernel.")
         self.grid_shape = grid_shape
         self.latdb = latdb
         self.rlat = self.latdb.rlat*2*np.pi*ang2bohr
@@ -20,9 +21,8 @@ class symmetrized_mp_grid(KPointGenerator):
 
     def generate(self):
         """
-        Generate a monkhorst mesh symmetriced
+        Generate a monkhorst mesh symmetrized
         """
-
         point_map, kpoints_mesh = spglib.get_ir_reciprocal_mesh(self.grid_shape,self.cell)
         self.red_kpoints_full = kpoints_mesh/self.grid_shape
         red_kpoints_ibz, sort_indices = np.unique(self.red_kpoints_full[point_map], axis=0, return_index=True)

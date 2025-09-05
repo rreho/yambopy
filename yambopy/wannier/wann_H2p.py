@@ -570,8 +570,6 @@ class H2P():
         pl0 = np.zeros((len(w),3,3), dtype=np.complex128)
         for i in range(eps.shape[0]):
             np.fill_diagonal(eps[i,:,:], 1.0)
-        # First I have to compute the dipoles, then chi = 1 + FF*lorentzian
-
         h2peigvec_vck=self.h2peigvec_vck[self.q0index]
         h2peigv_vck = self.h2peigv_vck[self.q0index]
         h2peigvec = self.h2peigvec[self.q0index]
@@ -579,7 +577,8 @@ class H2P():
 
         #IP approximation, he doesn not haveh2peigvec_vck and then you call _get_dipoles()
         tb_dipoles = TB_dipoles(self.nc, self.nv, self.bse_nc, self.bse_nv, self.nk, self.eigv,self.eigvec, self.eta, hlm, self.T_table, self.BSE_table, h2peigvec, \
-                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck= h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
+                                self.eigv_diff_ttp,self.eigvecc_t,self.eigvecv_t,mpgrid=self.model.mpgrid,cpot=self.cpot, h2peigv_vck=h2peigv_vck, h2peigvec_vck=h2peigvec_vck, method='real',ktype=self.ktype)
+        self.tb_dipoles = tb_dipoles
         # compute osc strength
         if(self.ktype=='IP'):
             F_kcv = tb_dipoles.F_kcv
@@ -609,21 +608,15 @@ class H2P():
             # self.dipoles_kcv = tb_dipoles.dipoles_kcv       #testing purposes
             self.dipoles_bse_kcv = tb_dipoles.dipoles_bse_kcv   #testing purposes
             ediff = h2peigv[:, np.newaxis]-w[np.newaxis, :]
-            ibz_factor = 1
-
-            weight_bse = np.zeros(self.ntransitions)+1
-            if hasattr(self.model.mpgrid, 'red_kpoints_full'): # ibz case
-
-                weight_bse = (self.model.mpgrid.kpoint_weights[self.BSE_table[:,0]])#*self.model.mpgrid.nkpoints
 
             vbz = np.prod(self.cpot.ngrid)*self.electronsdb.lat_vol*bohr2ang**3 #* ibz_factor**2
             piVk = 8*np.pi/(vbz)
-            eps = piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
-            eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
+            eps = piVk * np.einsum('txy,tw->wxy',F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
+            eps += 1j*piVk * np.einsum('txy,tw->wxy',F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
             
             f_pl = TB_occupations(self.h2peigv[0],Tel = Tel, Tbos=Tbos, Eb=self.h2peigv[0][0], sigma=sigma)._get_fkn(method=method)
-            pl0 = piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (ediff)/(np.abs(ediff)**2+eta**2))
-            pl0 += 1j*piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv * weight_bse[:,None,None], (eta)/(np.abs(ediff)**2+eta**2))
+            pl0 = piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv, (ediff)/(np.abs(ediff)**2+eta**2))
+            pl0 += 1j*piVk * np.einsum('txy,tw->wxy',f_pl[:,None,None]*F_kcv, (eta)/(np.abs(ediff)**2+eta**2))
             # pl0 = eps + f_pl * piVk* F_kcv*(h2peigv[t]-es)/(np.abs(es-h2peigv[t])**2+eta**2) \
                         #  + 1j*piVk* F_kcv*(eta)/(np.abs(es-h2peigv[t])**2+eta**2) 
             print('Excitonic Direct Ground state: ', np.min(h2peigv[:]), ' [eV]')
@@ -748,37 +741,8 @@ class H2P():
             vec_vck[q, :, :, :, :] *= np.exp(-1j * current_phase[:,None,None,None])
 
 
-        # # Step 1: Global phase fix — make first significant element real and positive
-        # ref_idx = np.argmax(np.abs(A_flat), axis=2)
-        # ref_vals = np.take_along_axis(A_flat, ref_idx[:, :, None], axis=2)[:, :, 0]
-        # global_phase = ref_vals / np.abs(ref_vals)
-        # A_flat = A_flat * np.conj(global_phase[:, :, None])
-
-        # # Step 2: Relative phase alignment — align all Q to Q=0
-        # A0 = A_flat[0]  # shape (nS, ntrans)
-        # for q in range(1, nQ):
-        #     for s in range(nS):
-        #         dot = np.vdot(A0[s], A_flat[q, s])  # complex scalar
-        #         rel_phase = dot / np.abs(dot)
-        #         A_flat[q, s] *= np.conj(rel_phase)
-
         print("*** Fixed global and relative phases across Q ***")
         return vec, vec_vck
-    
-    def check_hermitian(self,Mssp):
-        """
-        Check that M^{Q,B} = [M^{Q+B,-B}]^dagger
-        """
-        nt,ntp,nq,nb = Mssp.shape
-        dev = 0
-        for t in range(nt):
-            for t2 in range(ntp):
-                for qi in range(nq):
-                    for bi in range(nb):
-                        qpb = self.qmpgrid.qpb_grid_table[qi,bi,1]
-                        dev += Mssp[t,t2,qi,bi] - np.conjugate(Mssp[t,t2,qpb, (bi+4)%nb])
-
-        print(f"Hermitian deviation: {dev:.3e}")
 
 
     def check_A_norms(self,A):
@@ -811,13 +775,6 @@ class H2P():
         
         return degenerate_eigenvectors    
 
-    # def ensure_conjugate_symmetry(self,matrix):
-    #     n = matrix.shape[0]
-    #     for i in range(n):
-    #         for j in range(i+1, n):
-    #             if np.isclose(matrix[i, j].real, matrix[j, i].real) and np.isclose(matrix[i, j].imag, -matrix[j, i].imag):
-    #                 matrix[j, i] = np.conjugate(matrix[i, j])
-    #     return matrix
     def _get_aux_maps(self):
         yexc_atk = YamboExcitonDB.from_db_file(self.latdb, filename=f'{self.excitons_path}/ndb.BS_diago_Q1')
         aux_t = np.lexsort((yexc_atk.table[:, 2], yexc_atk.table[:, 1], yexc_atk.table[:, 0]))
@@ -830,6 +787,38 @@ class H2P():
     def _get_occupations(self, eigv, fermie):
         occupations = fermi_dirac(eigv,fermie)
         return np.real(occupations)
+
+    def convert_to_yambo_table(self, nv_ks):
+        # nv_ks is the number of valence bands in the kohn-sham ground state calculation. Not the subspace used my wannier
+        nv_factor = nv_ks - self.nv
+        nk_col = self.BSE_table[:,0]+1
+        nv_col = self.BSE_table[:,1] + nv_factor +1
+        nc_col = self.BSE_table[:,2] + nv_factor +1
+
+        new_table = np.zeros((self.BSE_table.shape[0],5), dtype = int)
+        arr_ones = np.ones(shape=(self.BSE_table.shape[0]),dtype=int)
+        new_table = np.column_stack([nk_col,nv_col, nc_col,arr_ones,arr_ones])
+        return  new_table
+
+    def write_exc_wf_cube(self, wf_path,iexe, car_qpoint=None, **args):
+        from yambopy.dbs.wfdb import YamboWFDB
+        wfdb = None
+        if wf_path is None:
+            try:
+                wfdb = YamboWFDB(path=self.electronsdb_path,latdb=self.latdb, bands_range=[])
+            except: print("Provide a correct path where the wavefunction dbs can be found.")
+        else:
+            wfdb = YamboWFDB(path=wf_path,latdb=self.latdb, bands_range=[])
+
+        wfdb.expand_fullBZ()
+        if car_qpoint is None:
+            Qpt= self.q0index
+            car_qpoint = np.array([0,0,0])
+        ydb = YamboExcitonDB(lattice=self.latdb,Qpt=0, eigenvalues=self.h2peigv[0],l_residual=self.F_kcv,r_residual=1, table=self.convert_to_yambo_table(self.electronsdb.nelectrons),car_qpoint=np.array(car_qpoint))
+        ydb.eigenvectors =self.h2peigvec
+        ydb.real_wf_to_cube(iexe=iexe, wfdb=wfdb, **args)
+
+
 
     def convert_to_yambo_table(self, nv_ks):
         # nv_ks is the number of valence bands in the kohn-sham ground state calculation. Not the subspace used my wannier

@@ -38,7 +38,22 @@ class YamboLatticeDB(object):
      
     @classmethod
     def from_db_file(cls,folder='.',filename='ns.db1',Expand=False, atol=1e-6):
-        """ Initialize YamboLattice from a local dbfile """
+        """ 
+        Initialize YamboLattice from a local dbfile 
+        
+        Parameters
+        ----------
+        folder : str
+            Folder containing the database file
+        filename : str  
+            Name of the database file
+        Expand : bool or str
+            - False: Do not expand k-points
+            - True: Expand k-points (but skip if already expanded)
+            - 'force': Force expansion even if k-points appear to be already expanded
+        atol : float
+            Tolerance for k-point comparison
+        """
         path_filename = os.path.join(folder,filename)
         if not os.path.isfile(path_filename):
             raise FileNotFoundError(f"error opening %s in YamboLatticeDB"%path_filename)
@@ -73,7 +88,20 @@ class YamboLatticeDB(object):
                          mag_syms             = mag_syms)
 
         y = cls(**args)
-        if Expand: y.expand_kpoints(atol=atol)
+        
+        # Handle k-point expansion based on Expand parameter
+        if Expand == 'force':
+            # Force expansion even if k-points appear to be already expanded
+            y.expand_kpoints(atol=atol)
+        elif Expand:
+            # Check if k-points are already expanded before expanding
+            if y.is_kpoints_expanded(atol=atol):
+                print("K-points appear to be already expanded, skipping expansion.")
+                print(f"Current k-point count: {len(y.iku_kpoints)}")
+                print("Use Expand='force' to force expansion anyway.")
+            else:
+                y.expand_kpoints(atol=atol)
+        
         return y
  
     @classmethod    
@@ -199,6 +227,34 @@ class YamboLatticeDB(object):
         time_rev_list = np.arange(self.nsym) >= threshold
         return time_rev_list
 
+    def is_kpoints_expanded(self, atol=1e-6):
+        """
+        Check if k-points are already expanded to the full Brillouin zone.
+        
+        This method uses the same logic as the expand_kpoints function to detect
+        if k-points are already expanded by looking for duplicate k-points.
+        
+        Parameters
+        ----------
+        atol : float
+            Tolerance for comparing k-points
+            
+        Returns
+        -------
+        bool
+            True if k-points appear to be already expanded, False otherwise
+        """
+        from yambopy.lattice import car_red
+        
+        # Convert to reduced coordinates for comparison
+        red_kpoints = car_red(self.car_kpoints, self.rlat)
+        
+        # Check for duplicates using the same logic as expand_kpoints
+        _, _, counts = np.unique(red_kpoints, axis=0, return_index=True, return_counts=True)
+        has_duplicates = len(np.where(counts > 1)[0]) > 0
+        
+        return has_duplicates
+
     def expand_kpoints(self,verbose=1,atol=1.e-6):
         """
         Wrapper for expand_kpoints in kpoints module
@@ -207,20 +263,27 @@ class YamboLatticeDB(object):
         with the corresponding index in the irreducible brillouin zone
         """
 
-        weights, kpoints_indexes, symmetry_indexes, kpoints_full = expand_kpoints(self.car_kpoints,self.sym_car,self.rlat,atol=atol)
+        weights, kpoints_indexes, symmetry_indexes, kpoints_full_or_red = expand_kpoints(self.car_kpoints,self.sym_car,self.rlat,atol=atol)
 
         if weights is None:
-            self.iku_kpoints      = np.array(kpoints_full*self.alat)
+            # K-points were already expanded, kpoints_full_or_red is actually red_kpoints
+            # Convert from reduced coordinates back to Cartesian, then to iku
+            from yambopy.lattice import red_car
+            car_kpoints_expanded = red_car(kpoints_full_or_red, self.rlat)
+            self.iku_kpoints = np.array(car_kpoints_expanded * self.alat)
+            if verbose: print("K-points were already expanded, keeping original k-point set")
             return
-        if verbose: print("%d kpoints expanded to %d"%(len(self.car_kpoints),len(kpoints_full)))
-                # Store original kpoints in iku coordinates
-        self.ibz_kpoints = self.iku_kpoints
-        self.ibz_kpoints_standard = car_red(np.array([k/self.alat for k in self.ibz_kpoints]), self.rlat)
-        #set the variables
-        self.weights_ibz      = weights
-        self.kpoints_indexes  = kpoints_indexes
-        self.symmetry_indexes = symmetry_indexes
-        self.iku_kpoints      = np.array(kpoints_full*self.alat)
+        else:
+            # K-points were expanded, kpoints_full_or_red is actually kpoints_full in Cartesian coordinates
+            if verbose: print("%d kpoints expanded to %d"%(len(self.car_kpoints),len(kpoints_full_or_red)))
+            # Store original kpoints in iku coordinates
+            self.ibz_kpoints = self.iku_kpoints
+            self.ibz_kpoints_standard = car_red(np.array([k/self.alat for k in self.ibz_kpoints]), self.rlat)
+            #set the variables
+            self.weights_ibz      = weights
+            self.kpoints_indexes  = kpoints_indexes
+            self.symmetry_indexes = symmetry_indexes
+            self.iku_kpoints      = np.array(kpoints_full_or_red * self.alat)
 
     def get_units_info(self):
 
