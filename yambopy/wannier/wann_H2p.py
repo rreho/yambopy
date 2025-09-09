@@ -344,8 +344,8 @@ class H2P():
                 # Populate the inverse mapping
                 inverse_aux_t[aux_t] = np.arange(aux_t.size)
                 self.inverse_aux_t = inverse_aux_t
-                tmph2peigvec = yexc_atk.eigenvectors.filled(0).copy()
-                tmph2peigv = yexc_atk.eigenvalues.filled(0).copy()
+                tmph2peigvec = yexc_atk.eigenvectors.copy()
+                tmph2peigv = yexc_atk.eigenvalues.copy()
 
                 BSE_table = np.array(self.BSE_table)
                 ik = BSE_table[inverse_aux_t, 0]

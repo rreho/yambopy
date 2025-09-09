@@ -36,7 +36,7 @@ class NNKP_Grids(KPointGenerator):
             print(f"Warning: Could not infer grid dimensions from {self.nkpoints} k-points")
             print("You may need to set them manually using set_grid_dimensions()")
 
-    def get_kmq_grid(self,qmpgrid, sign):
+    def get_kmq_grid(self,qmpgrid):
         # if not isinstance(qmpgrid, NNKP_Grids):
         #     raise TypeError('Argument must be an instance of NNKP_Grids')
         #here I need to use the k-q grid and then apply -b/2
@@ -83,6 +83,75 @@ class NNKP_Grids(KPointGenerator):
         self.kmq_grid = kmq_grid     
         
         return kmq_grid, kmq_grid_table
+
+    def get_kmqmb_grid(self, qmpgrid, kmpgrid):
+        """
+        Compute k-Q-B grid for all combinations of k, Q, and B vectors.
+        This is needed for the valence overlap term ⟨u_{v'k-Q-B} | u_{vk-Q}⟩ in Mssp calculation.
+        
+        Parameters
+        ----------
+        qmpgrid : NNKP_Grids
+            Q-point grid
+        kmpgrid : NNKP_Grids  
+            K-point grid containing B vectors
+            
+        Returns
+        -------
+        kmqmb_grid : ndarray
+            Grid of k-Q-B points, shape (nkpoints, nqpoints, nb, 3)
+        kmqmb_grid_table : ndarray
+            Table with indices and G-vectors, shape (nkpoints, nqpoints, nb, 5)
+        """
+        if not isinstance(qmpgrid, NNKP_Grids):
+            raise TypeError('qmpgrid must be an instance of NNKP_Grids')
+        if not isinstance(kmpgrid, NNKP_Grids):
+            raise TypeError('kmpgrid must be an instance of NNKP_Grids')
+
+        # Get dimensions
+        nkpoints = self.nkpoints
+        nqpoints = qmpgrid.nkpoints
+        nb = kmpgrid.nnkpts  # Number of B vectors
+        
+        # Get B vectors from kmpgrid
+        # B vectors are computed as k_neighbor + G - k for each k-point and neighbor
+        kpb_grid_table = kmpgrid.nnkp.copy()
+        k0 = self.k  # shape (nk, 3)
+        neighbor_indices = kpb_grid_table[:, :, 1]  # shape (nk, nb)
+        Gvecs = kpb_grid_table[:, :, 2:5]  # shape (nk, nb, 3)
+        k_neighbors = self.k[neighbor_indices]  # shape (nk, nb, 3)
+        Bvecs = k_neighbors + Gvecs - k0[:, None, :]  # shape (nk, nb, 3)
+        
+        # Broadcast grids for k-Q-B calculation
+        k_grid = self.k[:, None, None, :]  # Shape (nkpoints, 1, 1, 3)
+        q_grid = qmpgrid.k[None, :, None, :]  # Shape (1, nqpoints, 1, 3)
+        b_grid = Bvecs[:, None, :, :]  # Shape (nkpoints, 1, nb, 3)
+        
+        # Calculate k - Q - B for all combinations
+        kmqmb = k_grid - q_grid - b_grid  # Shape (nkpoints, nqpoints, nb, 3)
+        
+        # Fold into the Brillouin Zone and get G-vectors
+        kmqmb_folded, Gvec = self.fold_into_bz_Gs(kmqmb.reshape(-1, 3), include_upper_bound=False)
+        kmqmb_folded = kmqmb_folded.reshape(nkpoints, nqpoints, nb, 3)
+        Gvec = Gvec.reshape(nkpoints, nqpoints, nb, 3)
+        
+        # Find closest k-points for all points
+        closest_indices = self.find_closest_kpoint(kmqmb_folded.reshape(-1, 3)).reshape(nkpoints, nqpoints, nb)
+        
+        # Create the grid table
+        kmqmb_grid_table = np.stack([
+            np.arange(nkpoints)[:, None, None].repeat(nqpoints, axis=1).repeat(nb, axis=2),  # ik
+            closest_indices,  # index of k-Q-B point in the grid
+            Gvec[..., 0].astype(int),  # Gx
+            Gvec[..., 1].astype(int),  # Gy
+            Gvec[..., 2].astype(int)   # Gz
+        ], axis=-1).astype(int)  # Shape (nkpoints, nqpoints, nb, 5)
+        
+        # Store as instance attributes
+        self.kmqmb_grid = kmqmb_folded
+        self.kmqmb_grid_table = kmqmb_grid_table
+        
+        return kmqmb_folded, kmqmb_grid_table
 
     def get_kpq_grid(self, qmpgrid):
 

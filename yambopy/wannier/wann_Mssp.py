@@ -47,8 +47,65 @@ def compute_overlap_kmq(wfdb, nnkp_kgrid):
             Mkmq[ik,iq] = Mmn_kkp(G0_bra, wfc_k1, gvec_k1, G0_ket, wfc_k1, gvec_k1)
     return Mkmq
 
+def compute_overlap_kmqmb_kmq(wfdb, nnkp_kgrid, nnkp_qgrid):
+    """
+    Compute overlap matrix ⟨u_{v'k-Q-B} | u_{vk-Q}⟩ for valence bands.
+    This computes overlaps between k-Q-B and k-Q points for all k, Q, B combinations.
+    
+    Parameters
+    ----------
+    wfdb : WaveFunction database
+        Contains the wavefunctions for BSE bands
+    nnkp_kgrid : NNKP_Grids
+        K-point grid containing B vectors
+    nnkp_qgrid : NNKP_Grids  
+        Q-point grid
+        
+    Returns
+    -------
+    Mkmqmb_kmq : ndarray
+        Overlap matrix with shape (nk, nq, nb, nbands, nbands)
+        Mkmqmb_kmq[ik, iq, ib, iv', iv] = ⟨u_{v'k-Q-B} | u_{vk-Q}⟩
+    """
+    if getattr(wfdb, 'wf_bz', None) is None: 
+        wfdb.expand_fullBZ()
+    
+    # Ensure k-Q-B grid is computed
+    if not hasattr(nnkp_kgrid, 'kmqmb_grid_table'):
+        print("Computing k-Q-B grid for valence overlaps...")
+        nnkp_kgrid.get_kmqmb_grid(nnkp_qgrid, nnkp_kgrid)
+    
+    nk = nnkp_kgrid.nkpoints
+    nq = nnkp_qgrid.nkpoints  
+    nb = nnkp_kgrid.nnkpts
+    nbands = wfdb.nbands
+    
+    Mkmqmb_kmq = np.zeros(shape=(nk, nq, nb, nbands, nbands), dtype=np.complex128)
+    
+    for ik in range(nk):
+        for iq in range(nq):
+            # Get k-Q index
+            ikmq = nnkp_kgrid.kmq_grid_table[ik, iq, 1]
+            
+            for ib in range(nb):
+                # Get k-Q-B index
+                ikmqmb = nnkp_kgrid.kmqmb_grid_table[ik, iq, ib, 1]
+                
+                # Get wavefunctions
+                G0_bra = [0, 0, 0]  # Using wannier90 grid
+                G0_ket = [0, 0, 0]  # Using wannier90 grid
+                
+                wfc_kmqmb, gvec_kmqmb = wfdb.get_BZ_wf(ikmqmb)  # k-Q-B
+                wfc_kmq, gvec_kmq = wfdb.get_BZ_wf(ikmq)        # k-Q
+                
+                # Compute overlap ⟨u_{k-Q-B} | u_{k-Q}⟩
+                Mkmqmb_kmq[ik, iq, ib] = Mmn_kkp(G0_bra, wfc_kmqmb, gvec_kmqmb, 
+                                                  G0_ket, wfc_kmq, gvec_kmq)
+    
+    return Mkmqmb_kmq
+
 def compute_overlap_kkpb(wfdb, nnkp):
-    '''\bra{u_{ck}}\ket{u_{c'k+ B}}
+    '''\bra{u_{nk}}\ket{u_{mk+B}} for all bands n,m
     Make sure the wfdb used contains only the bse bands.
     '''
     if getattr(wfdb, 'wf_bz', None) is None: wfdb.expand_fullBZ()
@@ -76,34 +133,46 @@ def compute_overlap_kkpb(wfdb, nnkp):
     return Mkpb
 
 
-
 def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
     """
+    Compute M_{SS'}(Q,B) = ∑_{cvk} A^{SQ*}_{cvk} A^{S'Q+B}_{c'v'k+B} ⟨u_{ck} | u_{c'k+B}⟩ ⟨u_{v'k-Q-B} | u_{vk-Q}⟩
     Make sure the wfdb used contains only the bse bands.
     """
     nb = nnkp_kgrid.b_list[0].shape[0]
     Mssp = np.zeros(shape=(trange,trange,h2p.nq,nb ))
+    
+    # Ensure we have the k-Q-B grid computed
+    if not hasattr(h2p.kmpgrid, 'kmqmb_grid_table'):
+        print("Computing k-Q-B grid for valence overlaps...")
+        h2p.kmpgrid.get_kmqmb_grid(nnkp_qgrid, nnkp_kgrid)
+    
+    # Compute valence overlap matrix if not already computed
+    if not hasattr(h2p, 'Mkmqmb_kmq'):
+        print("Computing valence overlap matrix ⟨u_{v'k-Q-B} | u_{vk-Q}⟩...")
+        h2p.Mkmqmb_kmq = compute_overlap_kmqmb_kmq(h2p.wfdb, h2p.kmpgrid, nnkp_qgrid)
+    
     for t in range(0,trange):
         for tp in range(0,trange):
             for iq, q in enumerate(nnkp_qgrid.red_kpoints):
                 for ib in range(nb):
                     Mssp_ttp = 0
-                    iqpb = nnkp_qgrid.qpb_grid_table[iq, ib, 1]
+                    iqpb = nnkp_qgrid.qpb_grid_table[iq, ib, 1]  # Q+B index
                     bset = h2p.bse_nc*h2p.bse_nv
                     k = h2p.BSE_table[:, 0]
                     v = h2p.BSE_table[:, 1]
                     c = h2p.BSE_table[:, 2]
                     for ik, iv, ic in zip(k,v,c):  # ∑_{cvk}
-                        ikpb = h2p.kmpgrid.kpb_grid_table[ik, ib, 1]  # (N, 1)
-                        # ikmq = h2p.kmpgrid.kmq_grid_table[ik, iq, 1]  # (N, 1)
+                        ikpb = h2p.kmpgrid.kpb_grid_table[ik, ib, 1]  # k+B index
                         for ivp, icp in zip(v[:bset], c[:bset]):
 
                             # term1: A^{SQ*}_{cvk}
-                            term1 = np.conjugate(h2p.h2peigvec_vck[iq, t, h2p.bse_nv - h2p.nv + iv, ic - h2p.nv, ik])  # shape (N, 1)
+                            term1 = np.conjugate(h2p.h2peigvec_vck[iq, t, h2p.bse_nv - h2p.nv + iv, ic - h2p.nv, ik])
                             # term2: A^{S'Q+B}_{c'v'k+B}
-                            term2 = h2p.h2peigvec_vck[iqpb, tp, h2p.bse_nv - h2p.nv + ivp, icp - h2p.nv, ikpb]  # shape (N, M)
-                            term3 = h2p.Mkpb[ik,ib,h2p.bse_nv - h2p.nv + ic, h2p.bse_nv - h2p.nv + icp] # this is already saved in terms of kpb
-                            term4 = h2p.Mkmq[ik,iq,h2p.bse_nv - h2p.nv + ivp, h2p.bse_nv - h2p.nv + iv] # This is already saved in terms of ikmq
+                            term2 = h2p.h2peigvec_vck[iqpb, tp, h2p.bse_nv - h2p.nv + ivp, icp - h2p.nv, ikpb]
+                            # term3: ⟨u_{ck} | u_{c'k+B}⟩ = δ_{cc'} = 1 (orthogonality of Bloch states)
+                            term3 = 1
+                            # term4: ⟨u_{v'k-Q-B} | u_{vk-Q}⟩ using proper valence overlap matrix
+                            term4 = h2p.Mkmqmb_kmq[ik, iq, ib, h2p.bse_nv - h2p.nv + ivp, h2p.bse_nv - h2p.nv + iv]
                             
                             Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
 
@@ -241,27 +310,32 @@ def compute_flux_2D(Mssp, qgrid, exciton_states=None, periodic_boundary=True):
     
     # Find the indices for x and y direction shifts in the Q grid
     def get_neighbor_indices(iq, direction, nqx, nqy):
-        """Get neighbor indices for x and y directions"""
-        ix = iq % nqx
-        iy = iq // nqx
+        """Get neighbor indices for x and y directions
+        
+        Grid storage: qx is slow index, qy is fast index
+        iq = ix * nqy + iy where ix is qx index, iy is qy index
+        """
+        iy = iq % nqy  # qy index (fast index)
+        ix = iq // nqy  # qx index (slow index)
         
         if direction == 'x':
             ix_new = (ix + 1) % nqx if periodic_boundary else ix + 1
             if not periodic_boundary and ix_new >= nqx:
                 return None
-            return iy * nqx + ix_new
+            return ix_new * nqy + iy
         elif direction == 'y':
             iy_new = (iy + 1) % nqy if periodic_boundary else iy + 1
             if not periodic_boundary and iy_new >= nqy:
                 return None
-            return iy_new * nqx + ix
+            return ix * nqy + iy_new
         else:
             raise ValueError("Direction must be 'x' or 'y'")
     
     # Compute flux for each plaquette
+    # ix is qx index (slow), iy is qy index (fast)
     for ix in range(nqx - (0 if periodic_boundary else 1)):
         for iy in range(nqy - (0 if periodic_boundary else 1)):
-            iq = iy * nqx + ix
+            iq = ix * nqy + iy
             
             # Get the four corner points of the plaquette
             iq_x = get_neighbor_indices(iq, 'x', nqx, nqy)  # Q + Δx
