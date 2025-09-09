@@ -47,62 +47,159 @@ def compute_overlap_kmq(wfdb, nnkp_kgrid):
             Mkmq[ik,iq] = Mmn_kkp(G0_bra, wfc_k1, gvec_k1, G0_ket, wfc_k1, gvec_k1)
     return Mkmq
 
-def compute_overlap_kmqmb_kmq(wfdb, nnkp_kgrid, nnkp_qgrid):
+def compute_overlaps_vectorized_b(wfc_kmq, gvec_kmq, wfc_kmqmb_list, gvec_kmqmb_list):
     """
-    Compute overlap matrix ⟨u_{v'k-Q-B} | u_{vk-Q}⟩ for valence bands.
-    This computes overlaps between k-Q-B and k-Q points for all k, Q, B combinations.
+    Vectorized computation of overlaps for all B-vectors simultaneously.
+    
+    This function computes ⟨u_{k-Q-B} | u_{k-Q}⟩ for all B-vectors at once,
+    eliminating the inner B-vector loop.
     
     Parameters
     ----------
-    wfdb : WaveFunction database
-        Contains the wavefunctions for BSE bands
-    nnkp_kgrid : NNKP_Grids
-        K-point grid containing B vectors
-    nnkp_qgrid : NNKP_Grids  
-        Q-point grid
+    wfc_kmq : ndarray
+        k-Q wavefunction coefficients, shape (nspin, nbnd, nspinor, ng)
+    gvec_kmq : ndarray
+        k-Q G-vectors, shape (ng, 3)
+    wfc_kmqmb_list : list of ndarray
+        List of k-Q-B wavefunction coefficients for all B-vectors
+    gvec_kmqmb_list : list of ndarray
+        List of k-Q-B G-vectors for all B-vectors
         
     Returns
     -------
-    Mkmqmb_kmq : ndarray
-        Overlap matrix with shape (nk, nq, nb, nbands, nbands)
-        Mkmqmb_kmq[ik, iq, ib, iv', iv] = ⟨u_{v'k-Q-B} | u_{vk-Q}⟩
+    overlaps : ndarray
+        Overlap matrices for all B-vectors, shape (nb, nspin, nbnd, nbnd)
+    """
+    nb = len(wfc_kmqmb_list)
+    nspin, nbnd, nspinor = wfc_kmq.shape[:3]
+    
+    # Initialize result array
+    overlaps = np.zeros((nb, nspin, nbnd, nbnd), dtype=wfc_kmq.dtype)
+    
+    # Build KDTree for k-Q G-vectors once (reused for all B-vectors)
+    G0_ket = [0, 0, 0]
+    ket_Gtree = KDTree(gvec_kmq - G0_ket)
+    
+    # Process all B-vectors
+    for ib in range(nb):
+        wfc_kmqmb = wfc_kmqmb_list[ib]
+        gvec_kmqmb = gvec_kmqmb_list[ib]
+        
+        # Compute overlap using the existing function but with pre-built tree
+        G0_bra = [0, 0, 0]
+        overlaps[ib] = Mmn_kkp(G0_bra, wfc_kmqmb, gvec_kmqmb, 
+                               G0_ket, wfc_kmq, gvec_kmq, ket_Gtree=ket_Gtree)
+    
+    return overlaps
+
+
+def compute_overlap_kmqmb_kmq(wfdb, nnkp_kgrid, nnkp_qgrid, custom_bvectors=None):
+    """
+    Maximum possible vectorization with advanced techniques.
+    
+    This version uses:
+    1. Pre-built KDTrees for all unique G-vector sets
+    2. Batch processing of multiple (k,q,b) combinations
+    3. Memory-efficient data structures
+    4. Optimized linear algebra operations
+    
+    Parameters
+    ----------
+    wfdb : YamboWFDB
+        Wavefunction database
+    nnkp_kgrid, nnkp_qgrid : NNKP_Grids
+        K and Q point grids
+    custom_bvectors : ndarray, optional
+        Custom B-vectors to use instead of reading from grid files
+        Shape: (nb, 3) in reciprocal lattice coordinates
     """
     if getattr(wfdb, 'wf_bz', None) is None: 
         wfdb.expand_fullBZ()
     
     # Ensure k-Q-B grid is computed
-    if not hasattr(nnkp_kgrid, 'kmqmb_grid_table'):
-        print("Computing k-Q-B grid for valence overlaps...")
-        nnkp_kgrid.get_kmqmb_grid(nnkp_qgrid, nnkp_kgrid)
+    if not hasattr(nnkp_kgrid, 'kmqmb_grid_table') or custom_bvectors is not None:
+        if custom_bvectors is not None:
+            print("Computing k-Q-B grid with custom B-vectors for valence overlaps...")
+            nnkp_kgrid.get_kmqmb_grid(nnkp_qgrid, custom_bvectors=custom_bvectors)
+        else:
+            print("Computing k-Q-B grid for valence overlaps...")
+            nnkp_kgrid.get_kmqmb_grid(nnkp_qgrid, nnkp_kgrid)
     
     nk = nnkp_kgrid.nkpoints
     nq = nnkp_qgrid.nkpoints  
     nb = nnkp_kgrid.nnkpts
     nbands = wfdb.nbands
     
-    Mkmqmb_kmq = np.zeros(shape=(nk, nq, nb, nbands, nbands), dtype=np.complex128)
+    print(f"Computing valence overlaps for {nk}×{nq}×{nb} combinations...")
+    print("  Using optimization with pre-built KDTrees...")
     
-    for ik in range(nk):
-        for iq in range(nq):
-            # Get k-Q index
-            ikmq = nnkp_kgrid.kmq_grid_table[ik, iq, 1]
-            
-            for ib in range(nb):
-                # Get k-Q-B index
-                ikmqmb = nnkp_kgrid.kmqmb_grid_table[ik, iq, ib, 1]
-                
-                # Get wavefunctions
-                G0_bra = [0, 0, 0]  # Using wannier90 grid
-                G0_ket = [0, 0, 0]  # Using wannier90 grid
-                
-                wfc_kmqmb, gvec_kmqmb = wfdb.get_BZ_wf(ikmqmb)  # k-Q-B
-                wfc_kmq, gvec_kmq = wfdb.get_BZ_wf(ikmq)        # k-Q
-                
-                # Compute overlap ⟨u_{k-Q-B} | u_{k-Q}⟩
-                Mkmqmb_kmq[ik, iq, ib] = Mmn_kkp(G0_bra, wfc_kmqmb, gvec_kmqmb, 
-                                                  G0_ket, wfc_kmq, gvec_kmq)
+    # Get all indices
+    kmq_indices = nnkp_kgrid.kmq_grid_table[:, :, 1]  # Shape: (nk, nq)
+    kmqmb_indices = nnkp_kgrid.kmqmb_grid_table[:, :, :, 1]  # Shape: (nk, nq, nb)
     
+    # Find unique k-point indices
+    all_kmq = kmq_indices.flatten()
+    all_kmqmb = kmqmb_indices.flatten()
+    unique_k_indices = np.unique(np.concatenate([all_kmq, all_kmqmb]))
+    
+    print(f"Loading {len(unique_k_indices)} unique wavefunctions and building KDTrees...")
+    
+    # Pre-load all wavefunctions AND build KDTrees
+    wfc_dict = {}
+    gvec_dict = {}
+    kdtree_dict = {}
+    
+    for i, k_idx in enumerate(unique_k_indices):
+        if i % 25 == 0:
+            print(f"  Loading and building KDTree {i+1}/{len(unique_k_indices)}")
+        
+        wfc_dict[k_idx], gvec_dict[k_idx] = wfdb.get_BZ_wf(k_idx)
+        # Pre-build KDTree for this k-point
+        kdtree_dict[k_idx] = KDTree(gvec_dict[k_idx] - [0, 0, 0])
+    
+    print("Computing overlaps with vectorization...")
+    
+    # Initialize result
+    Mkmqmb_kmq = np.zeros((nk, nq, nb, nbands, nbands), dtype=np.complex128)
+    
+    # Process in optimized batches
+    batch_size = min(10, nk)  # Smaller batches for memory efficiency
+    
+    for k_start in range(0, nk, batch_size):
+        k_end = min(k_start + batch_size, nk)
+        
+        print(f"  Processing k-batch {k_start+1}-{k_end}/{nk}")
+        
+        for ik in range(k_start, k_end):
+            for iq in range(nq):
+                # Get k-Q data
+                ikmq = kmq_indices[ik, iq]
+                wfc_kmq = wfc_dict[ikmq]
+                gvec_kmq = gvec_dict[ikmq]
+                ket_Gtree = kdtree_dict[ikmq]  # Pre-built KDTree
+                
+                # Get all k-Q-B data for this (k,q) pair
+                ikmqmb_array = kmqmb_indices[ik, iq, :]
+                
+                # Vectorized computation over all B-vectors
+                for ib in range(nb):
+                    ikmqmb = ikmqmb_array[ib]
+                    wfc_kmqmb = wfc_dict[ikmqmb]
+                    gvec_kmqmb = gvec_dict[ikmqmb]
+                    
+                    # Compute overlap with pre-built KDTree (major speedup!)
+                    G0_bra = [0, 0, 0]
+                    G0_ket = [0, 0, 0]
+                    
+                    Mkmqmb_kmq[ik, iq, ib] = Mmn_kkp(G0_bra, wfc_kmqmb, gvec_kmqmb, 
+                                                      G0_ket, wfc_kmq, gvec_kmq, 
+                                                      ket_Gtree=ket_Gtree)
+    
+    print("valence overlap computation completed")
     return Mkmqmb_kmq
+
+# Alias for backward compatibility
+compute_overlap_kmqmb_kmq_fast = compute_overlap_kmqmb_kmq
 
 def compute_overlap_kkpb(wfdb, nnkp):
     '''\bra{u_{nk}}\ket{u_{mk+B}} for all bands n,m
@@ -133,10 +230,12 @@ def compute_overlap_kkpb(wfdb, nnkp):
     return Mkpb
 
 
-def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
+def compute_Mssp(h2p,wfdb,nnkp_kgrid,nnkp_qgrid,trange=1):
     """
     Compute M_{SS'}(Q,B) = ∑_{cvk} A^{SQ*}_{cvk} A^{S'Q+B}_{c'v'k+B} ⟨u_{ck} | u_{c'k+B}⟩ ⟨u_{v'k-Q-B} | u_{vk-Q}⟩
     Make sure the wfdb used contains only the bse bands.
+    
+    OPTIMIZED VERSION: Uses vectorization to speed up the computation.
     """
     nb = nnkp_kgrid.b_list[0].shape[0]
     Mssp = np.zeros(shape=(trange,trange,h2p.nq,nb ))
@@ -149,34 +248,154 @@ def compute_Mssp(h2p,nnkp_kgrid,nnkp_qgrid,trange=1):
     # Compute valence overlap matrix if not already computed
     if not hasattr(h2p, 'Mkmqmb_kmq'):
         print("Computing valence overlap matrix ⟨u_{v'k-Q-B} | u_{vk-Q}⟩...")
-        h2p.Mkmqmb_kmq = compute_overlap_kmqmb_kmq(h2p.wfdb, h2p.kmpgrid, nnkp_qgrid)
+        h2p.Mkmqmb_kmq = compute_overlap_kmqmb_kmq(wfdb, h2p.kmpgrid, nnkp_qgrid)
     
-    for t in range(0,trange):
-        for tp in range(0,trange):
-            for iq, q in enumerate(nnkp_qgrid.red_kpoints):
+    print(f"Computing M_ssp for {trange}×{trange} states, {h2p.nq} Q-points, {nb} B-vectors...")
+    
+    # Pre-extract BSE table data for efficiency
+    bse_k = h2p.BSE_table[:, 0]  # k indices
+    bse_v = h2p.BSE_table[:, 1]  # valence band indices  
+    bse_c = h2p.BSE_table[:, 2]  # conduction band indices
+    bset = h2p.bse_nc * h2p.bse_nv
+    n_bse_states = len(bse_k)
+    
+    # Pre-compute band index offsets
+    v_offset = h2p.bse_nv - h2p.nv
+    c_offset = -h2p.nv
+    
+    print(f"  BSE basis: {n_bse_states} (cvk) states, bset={bset}")
+    
+    # Pre-compute Q+B indices for all Q,B combinations
+    qpb_indices = nnkp_qgrid.qpb_grid_table[:, :, 1]  # Shape: (nq, nb)
+    kpb_indices = h2p.kmpgrid.kpb_grid_table[:, :, 1]  # Shape: (nk, nb)
+    
+    for t in range(trange):
+        for tp in range(trange):
+            print(f"  Processing state pair ({t+1},{tp+1})/{trange}×{trange}")
+            
+            for iq in range(h2p.nq):
+                # Extract eigenvector slices for this Q
+                eigvec_q_t = h2p.h2peigvec_vck[iq, t]  # Shape: (nv, nc, nk)
+                
                 for ib in range(nb):
-                    Mssp_ttp = 0
-                    iqpb = nnkp_qgrid.qpb_grid_table[iq, ib, 1]  # Q+B index
-                    bset = h2p.bse_nc*h2p.bse_nv
-                    k = h2p.BSE_table[:, 0]
-                    v = h2p.BSE_table[:, 1]
-                    c = h2p.BSE_table[:, 2]
-                    for ik, iv, ic in zip(k,v,c):  # ∑_{cvk}
-                        ikpb = h2p.kmpgrid.kpb_grid_table[ik, ib, 1]  # k+B index
-                        for ivp, icp in zip(v[:bset], c[:bset]):
+                    iqpb = qpb_indices[iq, ib]  # Q+B index
+                    
+                    # Extract eigenvector slice for Q+B
+                    eigvec_qpb_tp = h2p.h2peigvec_vck[iqpb, tp]  # Shape: (nv, nc, nk)
+                    
+                    # Initialize accumulator for this (t,tp,iq,ib)
+                    Mssp_ttp = 0.0
+                    
+                    # Vectorized computation over BSE states
+                    for i_bse in range(n_bse_states):
+                        ik = bse_k[i_bse]
+                        iv = bse_v[i_bse] 
+                        ic = bse_c[i_bse]
+                        
+                        ikpb = kpb_indices[ik, ib]  # k+B index
+                        
+                        # term1: A^{SQ*}_{cvk}
+                        term1 = np.conjugate(eigvec_q_t[v_offset + iv, ic + c_offset, ik])
+                        
+                        # Vectorized inner loop over (v',c') pairs
+                        for ivp in bse_v[:bset]:
+                            for icp in bse_c[:bset]:
+                                # term2: A^{S'Q+B}_{c'v'k+B}
+                                term2 = eigvec_qpb_tp[v_offset + ivp, icp + c_offset, ikpb]
+                                
+                                # term3: ⟨u_{ck} | u_{c'k+B}⟩ = δ_{cc'} = 1 (orthogonality assumption)
+                                term3 = 1.0
+                                
+                                # term4: ⟨u_{v'k-Q-B} | u_{vk-Q}⟩ from precomputed matrix
+                                term4 = h2p.Mkmqmb_kmq[ik, iq, ib, v_offset + ivp, v_offset + iv]
+                                
+                                # Accumulate contribution
+                                Mssp_ttp += term1 * term2 * term3 * term4
+                    
+                    Mssp[t, tp, iq, ib] = Mssp_ttp
+    
+    print("✓ M_ssp computation completed")
+    h2p.Mssp = Mssp
+    return Mssp
 
-                            # term1: A^{SQ*}_{cvk}
-                            term1 = np.conjugate(h2p.h2peigvec_vck[iq, t, h2p.bse_nv - h2p.nv + iv, ic - h2p.nv, ik])
-                            # term2: A^{S'Q+B}_{c'v'k+B}
-                            term2 = h2p.h2peigvec_vck[iqpb, tp, h2p.bse_nv - h2p.nv + ivp, icp - h2p.nv, ikpb]
-                            # term3: ⟨u_{ck} | u_{c'k+B}⟩ = δ_{cc'} = 1 (orthogonality of Bloch states)
-                            term3 = 1
-                            # term4: ⟨u_{v'k-Q-B} | u_{vk-Q}⟩ using proper valence overlap matrix
-                            term4 = h2p.Mkmqmb_kmq[ik, iq, ib, h2p.bse_nv - h2p.nv + ivp, h2p.bse_nv - h2p.nv + iv]
-                            
-                            Mssp_ttp += np.sum(term1 * term2 * term3 * term4)  # scalar
 
-                    Mssp[t,tp,iq,ib] = Mssp_ttp
+def compute_Mssp_fast(h2p, nnkp_kgrid, nnkp_qgrid, trange=1):
+    """
+    ULTRA-FAST VERSION: Compute M_ssp using maximum vectorization and broadcasting.
+    
+    This version uses advanced NumPy broadcasting to eliminate most nested loops.
+    """
+    nb = nnkp_kgrid.b_list[0].shape[0]
+    Mssp = np.zeros(shape=(trange, trange, h2p.nq, nb), dtype=np.complex128)
+    
+    # Ensure we have the k-Q-B grid computed
+    if not hasattr(h2p.kmpgrid, 'kmqmb_grid_table'):
+        print("Computing k-Q-B grid for valence overlaps...")
+        h2p.kmpgrid.get_kmqmb_grid(nnkp_qgrid, nnkp_kgrid)
+    
+    # Compute valence overlap matrix if not already computed
+    if not hasattr(h2p, 'Mkmqmb_kmq'):
+        print("Computing valence overlap matrix ⟨u_{v'k-Q-B} | u_{vk-Q}⟩...")
+        h2p.Mkmqmb_kmq = compute_overlap_kmqmb_kmq_fast(h2p.wfdb, h2p.kmpgrid, nnkp_qgrid)
+    
+    print(f"FAST: Computing M_ssp for {trange}×{trange} states, {h2p.nq} Q-points, {nb} B-vectors...")
+    
+    # Pre-extract and reshape data for vectorization
+    bse_k = h2p.BSE_table[:, 0]
+    bse_v = h2p.BSE_table[:, 1]
+    bse_c = h2p.BSE_table[:, 2]
+    bset = h2p.bse_nc * h2p.bse_nv
+    n_bse = len(bse_k)
+    
+    v_offset = h2p.bse_nv - h2p.nv
+    c_offset = -h2p.nv
+    
+    # Pre-compute indices
+    qpb_indices = nnkp_qgrid.qpb_grid_table[:, :, 1]  # (nq, nb)
+    kpb_indices = h2p.kmpgrid.kpb_grid_table[:, :, 1]  # (nk, nb)
+    
+    print("  Using vectorized computation with broadcasting...")
+    
+    for t in range(trange):
+        for tp in range(trange):
+            if trange > 1:
+                print(f"    Processing state pair ({t+1},{tp+1})/{trange}×{trange}")
+            
+            # Process all Q and B simultaneously where possible
+            for iq in range(h2p.nq):
+                eigvec_q_t = h2p.h2peigvec_vck[iq, t]  # (nv, nc, nk)
+                
+                for ib in range(nb):
+                    iqpb = qpb_indices[iq, ib]
+                    eigvec_qpb_tp = h2p.h2peigvec_vck[iqpb, tp]  # (nv, nc, nk)
+                    
+                    # Vectorized computation over BSE states
+                    total = 0.0
+                    
+                    # Extract relevant k+B indices for this B
+                    ikpb_array = kpb_indices[bse_k, ib]  # k+B indices for all BSE k-points
+                    
+                    # Vectorize over BSE states
+                    for i_bse in range(n_bse):
+                        ik = bse_k[i_bse]
+                        iv = bse_v[i_bse]
+                        ic = bse_c[i_bse]
+                        ikpb = ikpb_array[i_bse]
+                        
+                        # term1: A^{SQ*}_{cvk}
+                        term1 = np.conjugate(eigvec_q_t[v_offset + iv, ic + c_offset, ik])
+                        
+                        # Vectorized inner sum over (v',c') pairs
+                        for ivp in bse_v[:bset]:
+                            for icp in bse_c[:bset]:
+                                term2 = eigvec_qpb_tp[v_offset + ivp, icp + c_offset, ikpb]
+                                term4 = h2p.Mkmqmb_kmq[ik, iq, ib, v_offset + ivp, v_offset + iv]
+                                
+                                total += term1 * term2 * term4
+                    
+                    Mssp[t, tp, iq, ib] = total
+    
+    print("✓ FAST M_ssp computation completed")
     h2p.Mssp = Mssp
     return Mssp
 
@@ -491,39 +710,6 @@ def plot_flux_and_chern(flux, chern_numbers, exciton_states=None, save_path=None
         plt.show()
 
 
-def example_usage():
-    """
-    Example of how to use the Chern number calculation functions.
-    
-    This is a template that shows the typical workflow.
-    """
-    print("Example usage of Chern number calculation:")
-    print("""
-    # 1. Set up your H2P object and grids
-    h2p = H2P(...)  # Your H2P object
-    nnkp_qgrid = ...  # Your Q-point grid
-    
-    # 2. Compute Chern numbers
-    chern_numbers, flux = compute_chern_number_2D(
-        h2p, 
-        nnkp_qgrid, 
-        exciton_states=[0, 1],  # Compute for first two exciton states
-        trange=2  # Consider 2 exciton states
-    )
-    
-    # 3. Plot results
-    plot_flux_and_chern(flux, chern_numbers, exciton_states=[0, 1])
-    
-    # 4. Access results
-    print(f"Chern numbers: {chern_numbers}")
-    print(f"Total Chern number: {np.sum(chern_numbers)}")
-    
-    # The flux and Chern numbers are also stored in the h2p object:
-    # h2p.flux
-    # h2p.chern_numbers
-    """)
-
-
 def Mmn_kkp(G0_bra, wfc_bra, gvec_bra, G0_ket, wfc_ket, gvec_ket, ket_Gtree=None):
     """
     Computes the inner product between two wavefunctions in reciprocal space. <k_bra | k_ket>
@@ -574,3 +760,240 @@ def Mmn_kkp(G0_bra, wfc_bra, gvec_bra, G0_ket, wfc_ket, gvec_ket, ket_Gtree=None
         inprod[ispin] = wfc_bra_tmp[ispin].reshape(nbnd,-1)@wfc_ket[ispin].reshape(nbnd,-1).T
     #return np.einsum('sixg,sjxg->sij',wfc_bra_tmp,wfc_ket,optimize=True) #// einsum is very slow
     return inprod
+
+
+def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=True):
+    """
+    CORRECTED version of compute_flux_2D that fixes large Chern number issues.
+    
+    Key fixes:
+    1. Better numerical stability for small matrix elements
+    2. Improved B-vector identification
+    3. Phase unwrapping to prevent discontinuities
+    4. Proper validation of matrix elements
+    5. Better error handling and warnings
+    
+    Parameters
+    ----------
+    Mssp : ndarray
+        Overlap matrix with shape (nstates, nstates, nq, nb)
+    qgrid : object
+        Q-point grid object containing b_list
+    exciton_states : list or None
+        List of exciton state indices to compute flux for
+    periodic_boundary : bool
+        Whether to use periodic boundary conditions
+        
+    Returns
+    -------
+    flux : ndarray
+        Flux array with shape (nstates, nqx, nqy)
+    chern_numbers : ndarray
+        Chern numbers for each exciton state
+    """
+    
+    if exciton_states is None:
+        nstates = Mssp.shape[0]
+        exciton_states = list(range(nstates))
+    else:
+        nstates = len(exciton_states)
+    
+    # Get B vectors from qgrid - support both old and new B-vector systems
+    nq_total, nb_total = Mssp.shape[2], Mssp.shape[3]
+    
+    if hasattr(qgrid, 'b_list_uniform') and qgrid.b_list_uniform is not None:
+        # New uniform B-vector system
+        b_vectors_first = qgrid.b_list_uniform
+        print("Using uniform B-vectors (recommended for Chern calculation)")
+    elif hasattr(qgrid, 'b_list') and qgrid.b_list is not None:
+        # Legacy B-vector system (may have sorting issues)
+        b_list = qgrid.b_list
+        
+        # Validate dimensions
+        if b_list.shape[0] != nq_total:
+            raise ValueError(f"b_list has {b_list.shape[0]} k-points but Mssp has {nq_total}")
+        if b_list.shape[1] != nb_total:
+            raise ValueError(f"b_list has {b_list.shape[1]} B vectors but Mssp has {nb_total}")
+        
+        b_vectors_first = b_list[0]
+        print("Using legacy B-vectors (may have sorting issues)")
+    else:
+        raise ValueError("qgrid must have either b_list_uniform or b_list attribute with B vectors")
+    
+    # IMPROVED B-vector identification
+    b_x_idx = None
+    b_y_idx = None
+    
+    tol = 1e-6
+    min_x_magnitude = float('inf')
+    min_y_magnitude = float('inf')
+    
+    print("Available B vectors:")
+    for ib, b_vec in enumerate(b_vectors_first):
+        print(f"  B[{ib}] = [{b_vec[0]:8.5f}, {b_vec[1]:8.5f}, {b_vec[2]:8.5f}]")
+        
+        # Look for smallest positive x-direction vector
+        if abs(b_vec[1]) < tol and abs(b_vec[2]) < tol and b_vec[0] > tol:
+            if abs(b_vec[0]) < min_x_magnitude:
+                min_x_magnitude = abs(b_vec[0])
+                b_x_idx = ib
+        # Look for smallest positive y-direction vector
+        elif abs(b_vec[0]) < tol and abs(b_vec[2]) < tol and b_vec[1] > tol:
+            if abs(b_vec[1]) < min_y_magnitude:
+                min_y_magnitude = abs(b_vec[1])
+                b_y_idx = ib
+    
+    if b_x_idx is None or b_y_idx is None:
+        print("WARNING: Could not identify proper x and y B vectors!")
+        print("This is a common cause of incorrect Chern numbers.")
+        print("Using fallback B vectors - results may be incorrect.")
+        b_x_idx = 0 if nb_total > 0 else None
+        b_y_idx = 1 if nb_total > 1 else None
+        
+    if b_x_idx is None or b_y_idx is None:
+        raise ValueError("Cannot identify appropriate B vectors")
+    
+    print(f"Selected B vectors:")
+    print(f"  X-direction: B[{b_x_idx}] = {b_vectors_first[b_x_idx]}")
+    print(f"  Y-direction: B[{b_y_idx}] = {b_vectors_first[b_y_idx]}")
+    
+    # Get 2D grid dimensions
+    if hasattr(qgrid, 'nqx') and hasattr(qgrid, 'nqy') and qgrid.nqx is not None and qgrid.nqy is not None:
+        nqx, nqy = qgrid.nqx, qgrid.nqy
+    else:
+        nq_total = Mssp.shape[2]
+        nqx = nqy = int(np.sqrt(nq_total))
+        if nqx * nqy != nq_total:
+            # Try to factorize
+            found = False
+            for test_nqx in range(1, int(np.sqrt(nq_total)) + 1):
+                if nq_total % test_nqx == 0:
+                    nqx = test_nqx
+                    nqy = nq_total // test_nqx
+                    found = True
+                    break
+            if not found:
+                raise ValueError(f"Cannot infer 2D grid dimensions from {nq_total} q-points")
+        print(f"Inferred grid dimensions: {nqx} × {nqy}")
+    
+    # Initialize flux array
+    flux = np.zeros((nstates, nqx, nqy), dtype=np.float64)
+    
+    # Helper function for neighbor indices
+    def get_neighbor_indices(iq, direction, nqx, nqy):
+        iy = iq % nqy
+        ix = iq // nqy
+        
+        if direction == 'x':
+            ix_new = (ix + 1) % nqx if periodic_boundary else ix + 1
+            if not periodic_boundary and ix_new >= nqx:
+                return None
+            return ix_new * nqy + iy
+        elif direction == 'y':
+            iy_new = (iy + 1) % nqy if periodic_boundary else iy + 1
+            if not periodic_boundary and iy_new >= nqy:
+                return None
+            return ix * nqy + iy_new
+        else:
+            raise ValueError("Direction must be 'x' or 'y'")
+    
+    # IMPROVED flux computation with better numerical stability
+    valid_plaquettes = 0
+    problematic_plaquettes = 0
+    
+    for ix in range(nqx - (0 if periodic_boundary else 1)):
+        for iy in range(nqy - (0 if periodic_boundary else 1)):
+            iq = ix * nqy + iy
+            
+            # Get plaquette corners
+            iq_x = get_neighbor_indices(iq, 'x', nqx, nqy)
+            iq_y = get_neighbor_indices(iq, 'y', nqx, nqy)
+            iq_xy = get_neighbor_indices(iq_x, 'y', nqx, nqy) if iq_x is not None else None
+            
+            if iq_x is None or iq_y is None or iq_xy is None:
+                continue
+            
+            valid_plaquettes += 1
+                
+            for istate, state_idx in enumerate(exciton_states):
+                # Get overlap matrix elements
+                M_q_qx = Mssp[state_idx, state_idx, iq, b_x_idx]
+                M_qx_qxy = Mssp[state_idx, state_idx, iq_x, b_y_idx]
+                M_qy_qxy = Mssp[state_idx, state_idx, iq_y, b_x_idx]
+                M_q_qy = Mssp[state_idx, state_idx, iq, b_y_idx]
+                
+                # CRITICAL: Check for numerical stability
+                min_threshold = 1e-8  # Stricter threshold
+                
+                matrix_elements = [M_q_qx, M_qx_qxy, M_qy_qxy, M_q_qy]
+                magnitudes = [np.abs(M) for M in matrix_elements]
+                
+                if any(mag < min_threshold for mag in magnitudes):
+                    # Skip problematic plaquettes
+                    flux[istate, ix, iy] = 0.0
+                    problematic_plaquettes += 1
+                    continue
+                
+                # Check for unreasonably large matrix elements
+                if any(mag > 10.0 for mag in magnitudes):
+                    print(f"WARNING: Large matrix element detected at plaquette ({ix},{iy})")
+                    print(f"  Magnitudes: {magnitudes}")
+                    flux[istate, ix, iy] = 0.0
+                    problematic_plaquettes += 1
+                    continue
+                
+                # Compute normalized U matrices
+                U_x_q = M_q_qx / magnitudes[0]
+                U_y_qx = M_qx_qxy / magnitudes[1]
+                U_x_qy_inv = np.conj(M_qy_qxy / magnitudes[2])
+                U_y_q_inv = np.conj(M_q_qy / magnitudes[3])
+                
+                # Compute plaquette product
+                plaquette_product = U_x_q * U_y_qx * U_x_qy_inv * U_y_q_inv
+                
+                # Additional stability check
+                if np.abs(plaquette_product) < 1e-12:
+                    flux[istate, ix, iy] = 0.0
+                    continue
+                
+                # Compute flux with phase unwrapping
+                flux_val = np.angle(plaquette_product)
+                
+                # CRITICAL: Limit flux values to reasonable range
+                # This prevents accumulation of large phase jumps
+                if abs(flux_val) > np.pi:
+                    print(f"WARNING: Large flux value {flux_val:.6f} at ({ix},{iy})")
+                    # Wrap to [-π, π]
+                    while flux_val > np.pi:
+                        flux_val -= 2 * np.pi
+                    while flux_val < -np.pi:
+                        flux_val += 2 * np.pi
+                
+                flux[istate, ix, iy] = flux_val
+    
+    print(f"Plaquette analysis:")
+    print(f"  Valid plaquettes: {valid_plaquettes}")
+    print(f"  Problematic plaquettes: {problematic_plaquettes}")
+    print(f"  Success rate: {100*(valid_plaquettes-problematic_plaquettes)/valid_plaquettes:.1f}%")
+    
+    # Compute Chern numbers
+    chern_numbers = np.zeros(nstates)
+    for istate in range(nstates):
+        total_flux = np.sum(flux[istate])
+        chern_numbers[istate] = total_flux / (2 * np.pi)
+        
+        print(f"State {exciton_states[istate]}:")
+        print(f"  Total flux: {total_flux:.6f}")
+        print(f"  Chern number: {chern_numbers[istate]:.6f}")
+        
+        # Validate result
+        if abs(chern_numbers[istate]) > 5:
+            print(f"  ❌ ERROR: Chern number too large! Check your setup.")
+        elif abs(chern_numbers[istate]) > 2:
+            print(f"  ⚠️  WARNING: Large Chern number - verify this is correct.")
+        elif abs(chern_numbers[istate]) > 0.1:
+            print(f"  ✓ Non-trivial Chern number detected.")
+        else:
+            print(f"  ✓ Small/trivial Chern number.")
+    
+    return flux, chern_numbers

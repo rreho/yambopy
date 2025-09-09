@@ -36,13 +36,28 @@ class NNKP_Grids(KPointGenerator):
             print(f"Warning: Could not infer grid dimensions from {self.nkpoints} k-points")
             print("You may need to set them manually using set_grid_dimensions()")
 
-    def get_kmq_grid(self,qmpgrid):
+    def get_kmq_grid(self, qmpgrid, sign='-'):
+        """
+        Compute k-Q grid for all k and Q combinations.
+        
+        Parameters
+        ----------
+        qmpgrid : NNKP_Grids
+            Q-point grid
+        sign : str, optional
+            Sign for the operation: '-' for k-Q (default), '+' for k+Q
+        """
         # if not isinstance(qmpgrid, NNKP_Grids):
         #     raise TypeError('Argument must be an instance of NNKP_Grids')
-        #here I need to use the k-q grid and then apply -b/2
-        # Prepare dimensions
-
-        kmq_grid = self.k[:,None,:] - qmpgrid.k[None,:,:]
+        
+        if sign not in ['+', '-']:
+            raise ValueError("sign must be '+' or '-'")
+        
+        # Compute k±Q grid
+        if sign == '-':
+            kmq_grid = self.k[:,None,:] - qmpgrid.k[None,:,:]
+        else:
+            kmq_grid = self.k[:,None,:] + qmpgrid.k[None,:,:]
 
         nkpoints = self.nkpoints
         nqpoints = qmpgrid.nkpoints
@@ -84,7 +99,44 @@ class NNKP_Grids(KPointGenerator):
         
         return kmq_grid, kmq_grid_table
 
-    def get_kmqmb_grid(self, qmpgrid, kmpgrid):
+    def generate_2D_bvectors(self, nqx, nqy):
+        """
+        Generate proper B-vectors for 2D rectangular grids.
+        
+        For a 2D grid, the minimal set of B-vectors should connect each point
+        to its nearest neighbors in a consistent way for Chern number calculation.
+        
+        Parameters
+        ----------
+        nqx, nqy : int
+            Grid dimensions in x and y directions
+            
+        Returns
+        -------
+        bvectors : ndarray
+            B-vectors in reciprocal lattice coordinates, shape (nb, 3)
+        """
+        # For 2D rectangular grids, we need B-vectors that connect to nearest neighbors
+        # Standard choice: right, up, and their combinations for proper flux calculation
+        
+        # Basic nearest neighbor vectors in fractional coordinates
+        bvectors = []
+        
+        # Primary directions (essential for 2D Chern calculation)
+        bvectors.append([1.0/nqx, 0.0, 0.0])      # +x direction
+        bvectors.append([0.0, 1.0/nqy, 0.0])      # +y direction
+        bvectors.append([-1.0/nqx, 0.0, 0.0])     # -x direction  
+        bvectors.append([0.0, -1.0/nqy, 0.0])     # -y direction
+        
+        # Diagonal directions (for completeness and numerical stability)
+        bvectors.append([1.0/nqx, 1.0/nqy, 0.0])   # +x+y diagonal
+        bvectors.append([1.0/nqx, -1.0/nqy, 0.0])  # +x-y diagonal
+        bvectors.append([-1.0/nqx, 1.0/nqy, 0.0])  # -x+y diagonal
+        bvectors.append([-1.0/nqx, -1.0/nqy, 0.0]) # -x-y diagonal
+        
+        return np.array(bvectors)
+
+    def get_kmqmb_grid(self, qmpgrid, kmpgrid=None, custom_bvectors=None):
         """
         Compute k-Q-B grid for all combinations of k, Q, and B vectors.
         This is needed for the valence overlap term ⟨u_{v'k-Q-B} | u_{vk-Q}⟩ in Mssp calculation.
@@ -93,8 +145,11 @@ class NNKP_Grids(KPointGenerator):
         ----------
         qmpgrid : NNKP_Grids
             Q-point grid
-        kmpgrid : NNKP_Grids  
-            K-point grid containing B vectors
+        kmpgrid : NNKP_Grids, optional
+            K-point grid containing B vectors (legacy mode)
+        custom_bvectors : ndarray, optional
+            Custom B-vectors to use instead of reading from kmpgrid, shape (nb, 3)
+            If None, will generate proper 2D B-vectors automatically
             
         Returns
         -------
@@ -105,33 +160,61 @@ class NNKP_Grids(KPointGenerator):
         """
         if not isinstance(qmpgrid, NNKP_Grids):
             raise TypeError('qmpgrid must be an instance of NNKP_Grids')
-        if not isinstance(kmpgrid, NNKP_Grids):
-            raise TypeError('kmpgrid must be an instance of NNKP_Grids')
 
         # Get dimensions
         nkpoints = self.nkpoints
         nqpoints = qmpgrid.nkpoints
-        nb = kmpgrid.nnkpts  # Number of B vectors
         
-        # Get B vectors from kmpgrid
-        # B vectors are computed as k_neighbor + G - k for each k-point and neighbor
-        kpb_grid_table = kmpgrid.nnkp.copy()
-        k0 = self.k  # shape (nk, 3)
-        neighbor_indices = kpb_grid_table[:, :, 1]  # shape (nk, nb)
-        Gvecs = kpb_grid_table[:, :, 2:5]  # shape (nk, nb, 3)
-        k_neighbors = self.k[neighbor_indices]  # shape (nk, nb, 3)
-        Bvecs = k_neighbors + Gvecs - k0[:, None, :]  # shape (nk, nb, 3)
+        # Determine B-vectors to use
+        if custom_bvectors is not None:
+            # Use provided custom B-vectors
+            Bvecs_uniform = custom_bvectors
+            nb = len(custom_bvectors)
+            print(f"Using {nb} custom B-vectors")
+        elif hasattr(self, 'nkx') and hasattr(self, 'nky'):
+            # Generate proper 2D B-vectors automatically
+            Bvecs_uniform = self.generate_2D_bvectors(self.nkx, self.nky)
+            nb = len(Bvecs_uniform)
+            print(f"Generated {nb} proper 2D B-vectors for {self.nkx}×{self.nky} grid")
+        elif kmpgrid is not None:
+            # Legacy mode: use B-vectors from kmpgrid (may have sorting issues)
+            if not isinstance(kmpgrid, NNKP_Grids):
+                raise TypeError('kmpgrid must be an instance of NNKP_Grids')
+            
+            nb = kmpgrid.nnkpts  # Number of B vectors
+            kpb_grid_table = kmpgrid.nnkp.copy()
+            k0 = self.k  # shape (nk, 3)
+            neighbor_indices = kpb_grid_table[:, :, 1]  # shape (nk, nb)
+            Gvecs = kpb_grid_table[:, :, 2:5]  # shape (nk, nb, 3)
+            k_neighbors = self.k[neighbor_indices]  # shape (nk, nb, 3)
+            Bvecs = k_neighbors + Gvecs - k0[:, None, :]  # shape (nk, nb, 3)
+            
+            # Use B-vectors from first k-point (assuming uniform grid)
+            Bvecs_uniform = Bvecs[0]  # shape (nb, 3)
+            print(f"Using {nb} B-vectors from kmpgrid (legacy mode)")
+            print("WARNING: This may have B-vector sorting issues affecting Chern calculation")
+        else:
+            raise ValueError("Must provide either custom_bvectors, kmpgrid, or have grid dimensions set")
+        
+        # Broadcast B-vectors uniformly across all k-points
+        # Shape: (nkpoints, nb, 3)
+        Bvecs_broadcast = np.tile(Bvecs_uniform[None, :, :], (nkpoints, 1, 1))
         
         # Broadcast grids for k-Q-B calculation
         k_grid = self.k[:, None, None, :]  # Shape (nkpoints, 1, 1, 3)
         q_grid = qmpgrid.k[None, :, None, :]  # Shape (1, nqpoints, 1, 3)
-        b_grid = Bvecs[:, None, :, :]  # Shape (nkpoints, 1, nb, 3)
+        b_grid = Bvecs_broadcast[:, None, :, :]  # Shape (nkpoints, 1, nb, 3)
         
         # Calculate k - Q - B for all combinations
         kmqmb = k_grid - q_grid - b_grid  # Shape (nkpoints, nqpoints, nb, 3)
         
         # Fold into the Brillouin Zone and get G-vectors
-        kmqmb_folded, Gvec = self.fold_into_bz_Gs(kmqmb.reshape(-1, 3), include_upper_bound=False)
+        # Use [0, 1) range to match our k-grid convention
+        kmqmb_folded, Gvec = self.fold_into_bz_Gs(
+            kmqmb.reshape(-1, 3), 
+            bz_range=(0.0, 1.0), 
+            include_upper_bound=False
+        )
         kmqmb_folded = kmqmb_folded.reshape(nkpoints, nqpoints, nb, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, nb, 3)
         
@@ -150,6 +233,7 @@ class NNKP_Grids(KPointGenerator):
         # Store as instance attributes
         self.kmqmb_grid = kmqmb_folded
         self.kmqmb_grid_table = kmqmb_grid_table
+        self.b_list_uniform = Bvecs_uniform  # Store the uniform B-vectors used
         
         return kmqmb_folded, kmqmb_grid_table
 
@@ -164,7 +248,11 @@ class NNKP_Grids(KPointGenerator):
         kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
 
         # Fold into the Brillouin Zone and get G-vectors
-        kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3),include_upper_bound=False)  # Flatten for batch processing
+        kpq_folded, Gvec = self.fold_into_bz_Gs(
+            kq_add.reshape(-1, 3), 
+            bz_range=(0.0, 1.0), 
+            include_upper_bound=False
+        )  # Flatten for batch processing
         kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
