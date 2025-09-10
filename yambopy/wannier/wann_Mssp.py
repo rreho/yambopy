@@ -117,47 +117,46 @@ def compute_overlap_kmqmb_kmq(wfdb, nnkp_kgrid, nnkp_qgrid, custom_bvectors=None
         wfdb.expand_fullBZ()
     
     # Ensure k-Q-B grid is computed
-    if not hasattr(nnkp_kgrid, 'kmqmb_grid_table') or custom_bvectors is not None:
-        if custom_bvectors is not None:
-            print("Computing k-Q-B grid with custom B-vectors for valence overlaps...")
-            nnkp_kgrid.get_kmqmb_grid(nnkp_qgrid, custom_bvectors=custom_bvectors)
-        else:
-            print("Computing k-Q-B grid for valence overlaps...")
-            nnkp_kgrid.get_kmqmb_grid(nnkp_qgrid, nnkp_kgrid)
+    #if not hasattr(nnkp_kgrid, 'kmqmb_grid_table') or custom_bvectors is not None:
+    #    if custom_bvectors is not None:
+    #        print("Computing k-Q-B grid with custom B-vectors for valence overlaps...")
+    #        nnkp_kgrid.get_kmqmb_grid(nnkp_qgrid, custom_bvectors=custom_bvectors)
+    #    else:
+    #        print("Computing k-Q-B grid for valence overlaps...")
+    #        nnkp_kgrid.get_kmqmb_grid(nnkp_qgrid, nnkp_kgrid)
     
     nk = nnkp_kgrid.nkpoints
     nq = nnkp_qgrid.nkpoints  
     nb = nnkp_kgrid.nnkpts
     nbands = wfdb.nbands
-    
-    print(f"Computing valence overlaps for {nk}×{nq}×{nb} combinations...")
-    print("  Using optimization with pre-built KDTrees...")
+
+    #print(f"Computing valence overlaps for {nk}×{nq}×{nb} combinations...")
+    #print("  Using optimization with pre-built KDTrees...")
     
     # Get all indices
-    kmq_indices = nnkp_kgrid.kmq_grid_table[:, :, 1]  # Shape: (nk, nq)
-    kmqmb_indices = nnkp_kgrid.kmqmb_grid_table[:, :, :, 1]  # Shape: (nk, nq, nb)
+    #kmq_indices = nnkp_kgrid.kmq_grid_table[:, :, 1]  # Shape: (nk, nq)
+    #kmqmb_indices = nnkp_kgrid.kmqmb_grid_table[:, :, :, 1]  # Shape: (nk, nq, nb)
     
     # Find unique k-point indices
-    all_kmq = kmq_indices.flatten()
-    all_kmqmb = kmqmb_indices.flatten()
-    unique_k_indices = np.unique(np.concatenate([all_kmq, all_kmqmb]))
+    #all_kmq = kmq_indices.flatten()
+    #all_kmqmb = kmqmb_indices.flatten()
+    #unique_k_indices = np.unique(np.concatenate([all_kmq, all_kmqmb]))
     
-    print(f"Loading {len(unique_k_indices)} unique wavefunctions and building KDTrees...")
     
     # Pre-load all wavefunctions AND build KDTrees
-    wfc_dict = {}
-    gvec_dict = {}
-    kdtree_dict = {}
+    #wfc_dict = {}
+    #gvec_dict = {}
+    #kdtree_dict = {}
     
-    for i, k_idx in enumerate(unique_k_indices):
-        if i % 25 == 0:
-            print(f"  Loading and building KDTree {i+1}/{len(unique_k_indices)}")
-        
-        wfc_dict[k_idx], gvec_dict[k_idx] = wfdb.get_BZ_wf(k_idx)
-        # Pre-build KDTree for this k-point
-        kdtree_dict[k_idx] = KDTree(gvec_dict[k_idx] - [0, 0, 0])
+    #for i, k_idx in enumerate(unique_k_indices):
+    #    if i % 25 == 0:
+    #        print(f"  Loading and building KDTree {i+1}/{len(unique_k_indices)}")
+    #    
+    #    wfc_dict[k_idx], gvec_dict[k_idx] = wfdb.get_BZ_wf(k_idx)
+    #    # Pre-build KDTree for this k-point
+    #    kdtree_dict[k_idx] = KDTree(gvec_dict[k_idx] - [0, 0, 0])
     
-    print("Computing overlaps with vectorization...")
+    print("Computing overlaps")
     
     # Initialize result
     Mkmqmb_kmq = np.zeros((nk, nq, nb, nbands, nbands), dtype=np.complex128)
@@ -173,33 +172,30 @@ def compute_overlap_kmqmb_kmq(wfdb, nnkp_kgrid, nnkp_qgrid, custom_bvectors=None
         for ik in range(k_start, k_end):
             for iq in range(nq):
                 # Get k-Q data
-                ikmq = kmq_indices[ik, iq]
-                wfc_kmq = wfc_dict[ikmq]
-                gvec_kmq = gvec_dict[ikmq]
-                ket_Gtree = kdtree_dict[ikmq]  # Pre-built KDTree
+                #ikmq = kmq_indices[ik, iq]
+                #wfc_kmq = wfc_dict[ikmq]
+                #gvec_kmq = gvec_dict[ikmq]
+                #ket_Gtree = kdtree_dict[ikmq]  # Pre-built KDTree
                 
                 # Get all k-Q-B data for this (k,q) pair
-                ikmqmb_array = kmqmb_indices[ik, iq, :]
+                #ikmqmb_array = kmqmb_indices[ik, iq, :]
                 
                 # Vectorized computation over all B-vectors
                 for ib in range(nb):
-                    ikmqmb = ikmqmb_array[ib]
-                    wfc_kmqmb = wfc_dict[ikmqmb]
-                    gvec_kmqmb = gvec_dict[ikmqmb]
+                    # ikmqmb = ikmqmb_array[ib]
+                    # wfc_kmqmb = wfc_dict[ikmqmb]
+                    # gvec_kmqmb = gvec_dict[ikmqmb]
                     
-                    # Compute overlap with pre-built KDTree (major speedup!)
-                    G0_bra = [0, 0, 0]
-                    G0_ket = [0, 0, 0]
-                    
-                    Mkmqmb_kmq[ik, iq, ib] = Mmn_kkp(G0_bra, wfc_kmqmb, gvec_kmqmb, 
-                                                      G0_ket, wfc_kmq, gvec_kmq, 
-                                                      ket_Gtree=ket_Gtree)
-    
+                    # # Compute overlap with pre-built KDTree (major speedup!)
+                    # G0_bra = [0, 0, 0]
+                    # G0_ket = [0, 0, 0]
+                    Bvecs = generate_2D_bvectors(nnkp_kgrid.nkx, nnkp_kgrid.nky)
+                    kmq = nnkp_kgrid.k[ik]-nnkp_qgrid.k[iq]
+                    kmqmb = nnkp_kgrid.k[ik]-nnkp_qgrid.k[iq] - Bvecs[ib] 
+                    Mkmqmb_kmq[ik, iq, ib] = wfdb.OverlapUkkp(kmqmb,kmq)
+
     print("valence overlap computation completed")
     return Mkmqmb_kmq
-
-# Alias for backward compatibility
-compute_overlap_kmqmb_kmq_fast = compute_overlap_kmqmb_kmq
 
 def compute_overlap_kkpb(wfdb, nnkp):
     '''\bra{u_{nk}}\ket{u_{mk+B}} for all bands n,m
@@ -227,6 +223,27 @@ def compute_overlap_kkpb(wfdb, nnkp):
         wfc_k2, gvec_k2 = wfdb.get_BZ_wf(int(k2))
             
         Mkpb[int(ik/nb),ib] = Mmn_kkp(G0_bra, wfc_k1, gvec_k1,G0_ket, wfc_k2, gvec_k2)
+    return Mkpb
+
+def compute_Mkpb(wfdb, nnkp):    
+    '''\bra{u_{nk}}\ket{u_{mk+B}} for all bands n,m
+    Make sure the wfdb used contains only the bse bands.
+    '''
+    nk = wfdb.nkBZ
+    nb = nnkp.nnkpts
+    nbands = wfdb.nbands
+    k_bra = nnkp.data[:,0]-1
+    k_ket = nnkp.data[:,1]-1
+    Gs_ket = nnkp.data[:,2:]
+
+    Mkpb = np.zeros(shape=(nk,nb,nbands,nbands),dtype=np.complex128)
+
+    for ik, k1 in enumerate(k_bra):        
+        k2 = int(k_ket[ik])
+        ib = ik% nb
+        G0_ket = Gs_ket[ik]
+        Mkpb[int(ik/nb),ib] = wfdb.OverlapUkkp(nnkp.k[int(k1)],nnkp.k[k2]+np.array(G0_ket))
+
     return Mkpb
 
 
@@ -304,8 +321,10 @@ def compute_Mssp(h2p,wfdb,nnkp_kgrid,nnkp_qgrid,trange=1):
                                 term2 = eigvec_qpb_tp[v_offset + ivp, icp + c_offset, ikpb]
                                 
                                 # term3: ⟨u_{ck} | u_{c'k+B}⟩ = δ_{cc'} = 1 (orthogonality assumption)
-                                term3 = 1.0
-                                
+                                if (icp==ic): 
+                                    term3 = 1.0
+                                else: 
+                                    term3 = 0.0
                                 # term4: ⟨u_{v'k-Q-B} | u_{vk-Q}⟩ from precomputed matrix
                                 term4 = h2p.Mkmqmb_kmq[ik, iq, ib, v_offset + ivp, v_offset + iv]
                                 
@@ -762,9 +781,11 @@ def Mmn_kkp(G0_bra, wfc_bra, gvec_bra, G0_ket, wfc_ket, gvec_ket, ket_Gtree=None
     return inprod
 
 
-def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=True):
+def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=True, 
+                          energy_array=None, degeneracy_tol=1e-6):
     """
     CORRECTED version of compute_flux_2D that fixes large Chern number issues.
+    Now supports non-Abelian case with degeneracies.
     
     Key fixes:
     1. Better numerical stability for small matrix elements
@@ -772,6 +793,7 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
     3. Phase unwrapping to prevent discontinuities
     4. Proper validation of matrix elements
     5. Better error handling and warnings
+    6. Non-Abelian case: handles degeneracies using determinants
     
     Parameters
     ----------
@@ -783,13 +805,19 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
         List of exciton state indices to compute flux for
     periodic_boundary : bool
         Whether to use periodic boundary conditions
+    energy_array : ndarray, optional
+        Energy array E_S(Q) with shape (nstates, nq). If provided, enables
+        non-Abelian calculation with degeneracy handling.
+    degeneracy_tol : float
+        Tolerance for determining energy degeneracies (default: 1e-6)
         
     Returns
     -------
     flux : ndarray
-        Flux array with shape (nstates, nqx, nqy)
+        Flux array with shape (nstates, nqx, nqy) for Abelian case, or
+        (n_degenerate_subspaces, nqx, nqy) for non-Abelian case
     chern_numbers : ndarray
-        Chern numbers for each exciton state
+        Chern numbers for each exciton state or degenerate subspace
     """
     
     if exciton_states is None:
@@ -797,6 +825,23 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
         exciton_states = list(range(nstates))
     else:
         nstates = len(exciton_states)
+    
+    # Determine if we're in the non-Abelian case
+    non_abelian = energy_array is not None
+    
+    if non_abelian:
+        print("Non-Abelian calculation: analyzing degeneracies...")
+        # Validate energy array dimensions
+        if energy_array.shape != (Mssp.shape[0], Mssp.shape[2]):
+            raise ValueError(f"energy_array shape {energy_array.shape} doesn't match "
+                           f"expected ({Mssp.shape[0]}, {Mssp.shape[2]})")
+        
+        # Find degenerate subspaces for each Q-point
+        degenerate_subspaces = find_degenerate_subspaces(energy_array, exciton_states, degeneracy_tol)
+        print(f"Found {len(degenerate_subspaces)} degenerate subspaces")
+    else:
+        print("Abelian calculation: treating states independently...")
+        degenerate_subspaces = None
     
     # Get B vectors from qgrid - support both old and new B-vector systems
     nq_total, nb_total = Mssp.shape[2], Mssp.shape[3]
@@ -877,7 +922,13 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
         print(f"Inferred grid dimensions: {nqx} × {nqy}")
     
     # Initialize flux array
-    flux = np.zeros((nstates, nqx, nqy), dtype=np.float64)
+    if non_abelian:
+        # For non-Abelian case, we compute flux for each degenerate subspace
+        n_subspaces = len(degenerate_subspaces)
+        flux = np.zeros((n_subspaces, nqx, nqy), dtype=np.float64)
+    else:
+        # For Abelian case, compute flux for each state independently
+        flux = np.zeros((nstates, nqx, nqy), dtype=np.float64)
     
     # Helper function for neighbor indices
     def get_neighbor_indices(iq, direction, nqx, nqy):
@@ -914,32 +965,286 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
                 continue
             
             valid_plaquettes += 1
+            
+            # Compute flux for this plaquette
+            if non_abelian:
+                # Non-Abelian case: compute flux for each degenerate subspace
+                flux_values = compute_nonabelian_flux_plaquette(
+                    Mssp, degenerate_subspaces, iq, iq_x, iq_y, iq_xy, 
+                    b_x_idx, b_y_idx, ix, iy
+                )
+                for i_subspace, flux_val in enumerate(flux_values):
+                    if flux_val is not None:
+                        flux[i_subspace, ix, iy] = flux_val
+                    else:
+                        problematic_plaquettes += 1
+            else:
+                # Abelian case: original computation for each state
+                for istate, state_idx in enumerate(exciton_states):
+                    # Get overlap matrix elements
+                    M_q_qx = Mssp[state_idx, state_idx, iq, b_x_idx]
+                    M_qx_qxy = Mssp[state_idx, state_idx, iq_x, b_y_idx]
+                    M_qy_qxy = Mssp[state_idx, state_idx, iq_y, b_x_idx]
+                    M_q_qy = Mssp[state_idx, state_idx, iq, b_y_idx]
+                    
+                    # CRITICAL: Check for numerical stability
+                    min_threshold = 1e-8  # Stricter threshold
+                    
+                    matrix_elements = [M_q_qx, M_qx_qxy, M_qy_qxy, M_q_qy]
+                    magnitudes = [np.abs(M) for M in matrix_elements]
+                    
+                    if any(mag < min_threshold for mag in magnitudes):
+                        # Skip problematic plaquettes
+                        flux[istate, ix, iy] = 0.0
+                        problematic_plaquettes += 1
+                        continue
+                    
+                    # Check for unreasonably large matrix elements
+                    if any(mag > 10.0 for mag in magnitudes):
+                        print(f"WARNING: Large matrix element detected at plaquette ({ix},{iy})")
+                        print(f"  Magnitudes: {magnitudes}")
+                        flux[istate, ix, iy] = 0.0
+                        problematic_plaquettes += 1
+                        continue
+                    
+                    # Compute normalized U matrices
+                    U_x_q = M_q_qx / magnitudes[0]
+                    U_y_qx = M_qx_qxy / magnitudes[1]
+                    U_x_qy_inv = np.conj(M_qy_qxy / magnitudes[2])
+                    U_y_q_inv = np.conj(M_q_qy / magnitudes[3])
+                    
+                    # Compute plaquette product
+                    plaquette_product = U_x_q * U_y_qx * U_x_qy_inv * U_y_q_inv
+                    
+                    # Additional stability check
+                    if np.abs(plaquette_product) < 1e-12:
+                        flux[istate, ix, iy] = 0.0
+                        continue
+                    
+                    # Compute flux with phase unwrapping
+                    flux_val = np.angle(plaquette_product)
+                    
+                    # CRITICAL: Limit flux values to reasonable range
+                    # This prevents accumulation of large phase jumps
+                    if abs(flux_val) > np.pi:
+                        print(f"WARNING: Large flux value {flux_val:.6f} at ({ix},{iy})")
+                        # Wrap to [-π, π]
+                        while flux_val > np.pi:
+                            flux_val -= 2 * np.pi
+                        while flux_val < -np.pi:
+                            flux_val += 2 * np.pi
+                    
+                    flux[istate, ix, iy] = flux_val
+    
+    print(f"Plaquette analysis:")
+    print(f"  Valid plaquettes: {valid_plaquettes}")
+    print(f"  Problematic plaquettes: {problematic_plaquettes}")
+    print(f"  Success rate: {100*(valid_plaquettes-problematic_plaquettes)/valid_plaquettes:.1f}%")
+    
+    # Compute Chern numbers
+    if non_abelian:
+        chern_numbers = np.zeros(n_subspaces)
+        for i_subspace in range(n_subspaces):
+            total_flux = np.sum(flux[i_subspace])
+            chern_numbers[i_subspace] = total_flux / (2 * np.pi)
+            
+            subspace_info = degenerate_subspaces[i_subspace]
+            print(f"Degenerate subspace {i_subspace} (states {subspace_info['states']}):")
+            print(f"  Total flux: {total_flux:.6f}")
+            print(f"  Chern number: {chern_numbers[i_subspace]:.6f}")
+            
+            # Validate result
+            if abs(chern_numbers[i_subspace]) > 5:
+                print(f"  ❌ ERROR: Chern number too large! Check your setup.")
+            elif abs(chern_numbers[i_subspace]) > 2:
+                print(f"  ⚠️  WARNING: Large Chern number - verify this is correct.")
+            elif abs(chern_numbers[i_subspace]) > 0.1:
+                print(f"  ✓ Non-trivial Chern number detected.")
+            else:
+                print(f"  ✓ Small/trivial Chern number.")
+    else:
+        chern_numbers = np.zeros(nstates)
+        for istate in range(nstates):
+            total_flux = np.sum(flux[istate])
+            chern_numbers[istate] = total_flux / (2 * np.pi)
+            
+            print(f"State {exciton_states[istate]}:")
+            print(f"  Total flux: {total_flux:.6f}")
+            print(f"  Chern number: {chern_numbers[istate]:.6f}")
+            
+            # Validate result
+            if abs(chern_numbers[istate]) > 5:
+                print(f"  ❌ ERROR: Chern number too large! Check your setup.")
+            elif abs(chern_numbers[istate]) > 2:
+                print(f"  ⚠️  WARNING: Large Chern number - verify this is correct.")
+            elif abs(chern_numbers[istate]) > 0.1:
+                print(f"  ✓ Non-trivial Chern number detected.")
+            else:
+                print(f"  ✓ Small/trivial Chern number.")
+    
+    return flux, chern_numbers
+
+
+def find_degenerate_subspaces(energy_array, exciton_states, degeneracy_tol):
+    """
+    Find degenerate subspaces for each Q-point based on energy degeneracies.
+    
+    Parameters
+    ----------
+    energy_array : ndarray
+        Energy array E_S(Q) with shape (nstates, nq)
+    exciton_states : list
+        List of exciton state indices to consider
+    degeneracy_tol : float
+        Tolerance for determining energy degeneracies
+        
+    Returns
+    -------
+    degenerate_subspaces : list
+        List of dictionaries, each containing:
+        - 'states': list of state indices in this subspace
+        - 'q_points': list of Q-points where this degeneracy occurs
+        - 'representative_energy': representative energy for this subspace
+    """
+    nstates, nq = energy_array.shape
+    
+    # For each Q-point, find groups of degenerate states
+    q_degeneracies = []
+    for iq in range(nq):
+        energies_q = energy_array[exciton_states, iq]
+        
+        # Group states by energy degeneracy
+        degenerate_groups = []
+        used_states = set()
+        
+        for i, state_i in enumerate(exciton_states):
+            if state_i in used_states:
+                continue
                 
-            for istate, state_idx in enumerate(exciton_states):
-                # Get overlap matrix elements
+            # Find all states degenerate with state_i
+            degenerate_group = [state_i]
+            energy_i = energy_array[state_i, iq]
+            
+            for j, state_j in enumerate(exciton_states):
+                if j != i and state_j not in used_states:
+                    energy_j = energy_array[state_j, iq]
+                    if abs(energy_i - energy_j) < degeneracy_tol:
+                        degenerate_group.append(state_j)
+            
+            # Mark these states as used
+            for state in degenerate_group:
+                used_states.add(state)
+            
+            degenerate_groups.append({
+                'states': sorted(degenerate_group),
+                'energy': energy_i,
+                'q_point': iq
+            })
+        
+        q_degeneracies.append(degenerate_groups)
+    
+    # Now find consistent degenerate subspaces across all Q-points
+    # A subspace is consistent if the same set of states is degenerate at all Q-points
+    
+    # Start with the degeneracy pattern at Q=0
+    candidate_subspaces = []
+    for group in q_degeneracies[0]:
+        candidate_subspaces.append({
+            'states': group['states'],
+            'q_points': [0],
+            'representative_energy': group['energy']
+        })
+    
+    # Check consistency across all Q-points
+    consistent_subspaces = []
+    for candidate in candidate_subspaces:
+        states_set = set(candidate['states'])
+        is_consistent = True
+        q_points_with_degeneracy = [0]
+        
+        for iq in range(1, nq):
+            # Check if this exact set of states is degenerate at Q=iq
+            found_matching_group = False
+            for group in q_degeneracies[iq]:
+                if set(group['states']) == states_set:
+                    found_matching_group = True
+                    q_points_with_degeneracy.append(iq)
+                    break
+            
+            if not found_matching_group:
+                # This degeneracy doesn't persist at all Q-points
+                # We can still include it but note where it occurs
+                pass
+        
+        # Include this subspace (even if not consistent everywhere)
+        candidate['q_points'] = q_points_with_degeneracy
+        consistent_subspaces.append(candidate)
+    
+    # Remove duplicate subspaces and single-state "subspaces" if desired
+    final_subspaces = []
+    seen_state_sets = set()
+    
+    for subspace in consistent_subspaces:
+        states_tuple = tuple(sorted(subspace['states']))
+        if states_tuple not in seen_state_sets:
+            seen_state_sets.add(states_tuple)
+            final_subspaces.append(subspace)
+    
+    print(f"Degeneracy analysis:")
+    for i, subspace in enumerate(final_subspaces):
+        print(f"  Subspace {i}: states {subspace['states']}, "
+              f"degenerate at {len(subspace['q_points'])}/{nq} Q-points")
+    
+    return final_subspaces
+
+
+def compute_nonabelian_flux_plaquette(Mssp, degenerate_subspaces, iq, iq_x, iq_y, iq_xy, 
+                                     b_x_idx, b_y_idx, ix, iy):
+    """
+    Compute flux for a single plaquette in the non-Abelian case using determinants.
+    
+    For each degenerate subspace, we compute the determinant of the Wilson loop
+    around the plaquette instead of a simple product.
+    
+    Parameters
+    ----------
+    Mssp : ndarray
+        Overlap matrix with shape (nstates, nstates, nq, nb)
+    degenerate_subspaces : list
+        List of degenerate subspace information
+    iq, iq_x, iq_y, iq_xy : int
+        Q-point indices for the plaquette corners
+    b_x_idx, b_y_idx : int
+        B-vector indices for x and y directions
+    ix, iy : int
+        Plaquette coordinates (for error reporting)
+        
+    Returns
+    -------
+    flux_values : list
+        List of flux values for each degenerate subspace (None if problematic)
+    """
+    flux_values = []
+    min_threshold = 1e-8
+    
+    for i_subspace, subspace in enumerate(degenerate_subspaces):
+        states = subspace['states']
+        n_deg = len(states)
+        
+        try:
+            if n_deg == 1:
+                # Single state - use Abelian formula
+                state_idx = states[0]
                 M_q_qx = Mssp[state_idx, state_idx, iq, b_x_idx]
                 M_qx_qxy = Mssp[state_idx, state_idx, iq_x, b_y_idx]
                 M_qy_qxy = Mssp[state_idx, state_idx, iq_y, b_x_idx]
                 M_q_qy = Mssp[state_idx, state_idx, iq, b_y_idx]
                 
-                # CRITICAL: Check for numerical stability
-                min_threshold = 1e-8  # Stricter threshold
-                
                 matrix_elements = [M_q_qx, M_qx_qxy, M_qy_qxy, M_q_qy]
                 magnitudes = [np.abs(M) for M in matrix_elements]
                 
                 if any(mag < min_threshold for mag in magnitudes):
-                    # Skip problematic plaquettes
-                    flux[istate, ix, iy] = 0.0
-                    problematic_plaquettes += 1
-                    continue
-                
-                # Check for unreasonably large matrix elements
-                if any(mag > 10.0 for mag in magnitudes):
-                    print(f"WARNING: Large matrix element detected at plaquette ({ix},{iy})")
-                    print(f"  Magnitudes: {magnitudes}")
-                    flux[istate, ix, iy] = 0.0
-                    problematic_plaquettes += 1
+                    flux_values.append(None)
                     continue
                 
                 # Compute normalized U matrices
@@ -951,49 +1256,115 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
                 # Compute plaquette product
                 plaquette_product = U_x_q * U_y_qx * U_x_qy_inv * U_y_q_inv
                 
-                # Additional stability check
                 if np.abs(plaquette_product) < 1e-12:
-                    flux[istate, ix, iy] = 0.0
+                    flux_values.append(0.0)
                     continue
                 
-                # Compute flux with phase unwrapping
                 flux_val = np.angle(plaquette_product)
                 
-                # CRITICAL: Limit flux values to reasonable range
-                # This prevents accumulation of large phase jumps
-                if abs(flux_val) > np.pi:
-                    print(f"WARNING: Large flux value {flux_val:.6f} at ({ix},{iy})")
-                    # Wrap to [-π, π]
-                    while flux_val > np.pi:
-                        flux_val -= 2 * np.pi
-                    while flux_val < -np.pi:
-                        flux_val += 2 * np.pi
+                # Wrap to [-π, π]
+                while flux_val > np.pi:
+                    flux_val -= 2 * np.pi
+                while flux_val < -np.pi:
+                    flux_val += 2 * np.pi
                 
-                flux[istate, ix, iy] = flux_val
+                flux_values.append(flux_val)
+                
+            else:
+                # Multiple degenerate states - use determinant formula
+                # Extract overlap matrices for this subspace
+                U_x_q = np.zeros((n_deg, n_deg), dtype=complex)
+                U_y_qx = np.zeros((n_deg, n_deg), dtype=complex)
+                U_x_qy = np.zeros((n_deg, n_deg), dtype=complex)
+                U_y_q = np.zeros((n_deg, n_deg), dtype=complex)
+                
+                for i, state_i in enumerate(states):
+                    for j, state_j in enumerate(states):
+                        U_x_q[i, j] = Mssp[state_i, state_j, iq, b_x_idx]
+                        U_y_qx[i, j] = Mssp[state_i, state_j, iq_x, b_y_idx]
+                        U_x_qy[i, j] = Mssp[state_i, state_j, iq_y, b_x_idx]
+                        U_y_q[i, j] = Mssp[state_i, state_j, iq, b_y_idx]
+                
+                # Check for numerical stability
+                matrices = [U_x_q, U_y_qx, U_x_qy, U_y_q]
+                matrix_norms = [np.linalg.norm(M) for M in matrices]
+                
+                if any(norm < min_threshold for norm in matrix_norms):
+                    flux_values.append(None)
+                    continue
+                
+                # Normalize matrices for numerical stability
+                # For non-Abelian case, we need to normalize each matrix properly
+                # We can use SVD or simple normalization by the Frobenius norm
+                U_x_q = U_x_q / matrix_norms[0] * n_deg
+                U_y_qx = U_y_qx / matrix_norms[1] * n_deg
+                U_x_qy = U_x_qy / matrix_norms[2] * n_deg
+                U_y_q = U_y_q / matrix_norms[3] * n_deg
+                
+                # Compute Wilson loop: W = U_x(q) * U_y(q+x) * U_x†(q+y) * U_y†(q)
+                Wilson_loop = U_x_q @ U_y_qx @ np.conj(U_x_qy).T @ np.conj(U_y_q).T
+                
+                # Compute determinant
+                det_W = np.linalg.det(Wilson_loop)
+                
+                if np.abs(det_W) < 1e-12:
+                    flux_values.append(0.0)
+                    continue
+                
+                # Flux is the argument of the determinant
+                flux_val = np.angle(det_W)
+                
+                # Wrap to [-π, π]
+                while flux_val > np.pi:
+                    flux_val -= 2 * np.pi
+                while flux_val < -np.pi:
+                    flux_val += 2 * np.pi
+                
+                flux_values.append(flux_val)
+                
+        except (np.linalg.LinAlgError, ValueError) as e:
+            print(f"WARNING: Linear algebra error in subspace {i_subspace} at plaquette ({ix},{iy}): {e}")
+            flux_values.append(None)
+        except Exception as e:
+            print(f"WARNING: Unexpected error in subspace {i_subspace} at plaquette ({ix},{iy}): {e}")
+            flux_values.append(None)
     
-    print(f"Plaquette analysis:")
-    print(f"  Valid plaquettes: {valid_plaquettes}")
-    print(f"  Problematic plaquettes: {problematic_plaquettes}")
-    print(f"  Success rate: {100*(valid_plaquettes-problematic_plaquettes)/valid_plaquettes:.1f}%")
+    return flux_values
+
+
+def generate_2D_bvectors(nqx, nqy):
+    """
+    Generate proper B-vectors for 2D rectangular grids.
     
-    # Compute Chern numbers
-    chern_numbers = np.zeros(nstates)
-    for istate in range(nstates):
-        total_flux = np.sum(flux[istate])
-        chern_numbers[istate] = total_flux / (2 * np.pi)
+    For a 2D grid, the minimal set of B-vectors should connect each point
+    to its nearest neighbors in a consistent way for Chern number calculation.
+    
+    Parameters
+    ----------
+    nqx, nqy : int
+        Grid dimensions in x and y directions
         
-        print(f"State {exciton_states[istate]}:")
-        print(f"  Total flux: {total_flux:.6f}")
-        print(f"  Chern number: {chern_numbers[istate]:.6f}")
-        
-        # Validate result
-        if abs(chern_numbers[istate]) > 5:
-            print(f"  ❌ ERROR: Chern number too large! Check your setup.")
-        elif abs(chern_numbers[istate]) > 2:
-            print(f"  ⚠️  WARNING: Large Chern number - verify this is correct.")
-        elif abs(chern_numbers[istate]) > 0.1:
-            print(f"  ✓ Non-trivial Chern number detected.")
-        else:
-            print(f"  ✓ Small/trivial Chern number.")
+    Returns
+    -------
+    bvectors : ndarray
+        B-vectors in reciprocal lattice coordinates, shape (nb, 3)
+    """
+    # For 2D rectangular grids, we need B-vectors that connect to nearest neighbors
+    # Standard choice: right, up, and their combinations for proper flux calculation
     
-    return flux, chern_numbers
+    # Basic nearest neighbor vectors in fractional coordinates
+    bvectors = []
+    
+    # Primary directions (essential for 2D Chern calculation)
+    bvectors.append([1.0/nqx, 0.0, 0.0])      # +x direction
+    bvectors.append([0.0, 1.0/nqy, 0.0])      # +y direction
+    bvectors.append([-1.0/nqx, 0.0, 0.0])     # -x direction  
+    bvectors.append([0.0, -1.0/nqy, 0.0])     # -y direction
+    
+    # Diagonal directions (for completeness and numerical stability)
+    bvectors.append([1.0/nqx, 1.0/nqy, 0.0])   # +x+y diagonal
+    bvectors.append([1.0/nqx, -1.0/nqy, 0.0])  # +x-y diagonal
+    bvectors.append([-1.0/nqx, 1.0/nqy, 0.0])  # -x+y diagonal
+    bvectors.append([-1.0/nqx, -1.0/nqy, 0.0]) # -x-y diagonal
+    
+    return np.array(bvectors)
