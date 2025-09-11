@@ -163,7 +163,10 @@ def compute_overlap_kmqmb_kmq(wfdb, nnkp_kgrid, nnkp_qgrid, custom_bvectors=None
     
     # Process in optimized batches
     batch_size = min(10, nk)  # Smaller batches for memory efficiency
-    
+
+    Bvecs = generate_2D_bvectors(nnkp_kgrid.nkx, nnkp_kgrid.nky)
+    nnkp_kgrid.b_list_uniform = Bvecs
+
     for k_start in range(0, nk, batch_size):
         k_end = min(k_start + batch_size, nk)
         
@@ -189,7 +192,6 @@ def compute_overlap_kmqmb_kmq(wfdb, nnkp_kgrid, nnkp_qgrid, custom_bvectors=None
                     # # Compute overlap with pre-built KDTree (major speedup!)
                     # G0_bra = [0, 0, 0]
                     # G0_ket = [0, 0, 0]
-                    Bvecs = generate_2D_bvectors(nnkp_kgrid.nkx, nnkp_kgrid.nky)
                     kmq = nnkp_kgrid.k[ik]-nnkp_qgrid.k[iq]
                     kmqmb = nnkp_kgrid.k[ik]-nnkp_qgrid.k[iq] - Bvecs[ib] 
                     Mkmqmb_kmq[ik, iq, ib] = wfdb.OverlapUkkp(kmqmb,kmq)
@@ -245,6 +247,25 @@ def compute_Mkpb(wfdb, nnkp):
         Mkpb[int(ik/nb),ib] = wfdb.OverlapUkkp(nnkp.k[int(k1)],nnkp.k[k2]+np.array(G0_ket))
 
     return Mkpb
+
+# def compute_Mkpb(wfdb, lat_k, nkx, nky):    
+#     '''\bra{u_{nk}}\ket{u_{mk+B}} for all bands n,m
+#     Make sure the wfdb used contains only the bse bands.
+#     '''
+#     nk = wfdb.nkBZ
+#     nbands = wfdb.nbands
+#     k_bra = lat_k.red_kpoints
+#     Bvecs = generate_2D_bvectors(nnkp.nkx, nnkp.nky)
+#     nb = Bvecs.shape[0]
+    
+#     Mkpb = np.zeros(shape=(nk,nb,nbands,nbands),dtype=np.complex128)
+
+#     for ik, k1 in enumerate(k_bra):        
+#         for ib in range(nb):
+#             k2 = k1+Bvecs[ib]
+#             Mkpb[int(ik),ib] = wfdb.OverlapUkkp(k1,k2)
+
+#     return Mkpb
 
 
 def compute_Mssp(h2p,wfdb,nnkp_kgrid,nnkp_qgrid,trange=1):
@@ -782,7 +803,7 @@ def Mmn_kkp(G0_bra, wfc_bra, gvec_bra, G0_ket, wfc_ket, gvec_ket, ket_Gtree=None
 
 
 def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=True, 
-                          energy_array=None, degeneracy_tol=1e-6):
+                          energy_array=None, degeneracy_tol=1e-6, wannier=False):
     """
     CORRECTED version of compute_flux_2D that fixes large Chern number issues.
     Now supports non-Abelian case with degeneracies.
@@ -845,7 +866,9 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
     
     # Get B vectors from qgrid - support both old and new B-vector systems
     nq_total, nb_total = Mssp.shape[2], Mssp.shape[3]
-    
+    if(wannier == False):
+        Bvecs = generate_2D_bvectors(qgrid.nkx, qgrid.nky)
+        qgrid.b_list_uniform = Bvecs
     if hasattr(qgrid, 'b_list_uniform') and qgrid.b_list_uniform is not None:
         # New uniform B-vector system
         b_vectors_first = qgrid.b_list_uniform
@@ -969,6 +992,7 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
             # Compute flux for this plaquette
             if non_abelian:
                 # Non-Abelian case: compute flux for each degenerate subspace
+                print(iq, iq_x, iq_y, iq_xy, b_x_idx, b_y_idx, ix, iy)
                 flux_values = compute_nonabelian_flux_plaquette(
                     Mssp, degenerate_subspaces, iq, iq_x, iq_y, iq_xy, 
                     b_x_idx, b_y_idx, ix, iy
@@ -1197,21 +1221,21 @@ def find_degenerate_subspaces(energy_array, exciton_states, degeneracy_tol):
     
     return final_subspaces
 
-
 def compute_nonabelian_flux_plaquette(Mssp, degenerate_subspaces, iq, iq_x, iq_y, iq_xy, 
                                      b_x_idx, b_y_idx, ix, iy):
     """
-    Compute flux for a single plaquette in the non-Abelian case using determinants.
-    
-    For each degenerate subspace, we compute the determinant of the Wilson loop
-    around the plaquette instead of a simple product.
-    
+    Compute flux for a single plaquette in the (possibly non-Abelian) case.
+
+    For each degenerate subspace, compute the Wilson loop around the plaquette.
+    If the subspace has dimension > 1, use the determinant of the Wilson loop.
+    If dimension = 1, this reduces to the Abelian case.
+
     Parameters
     ----------
     Mssp : ndarray
         Overlap matrix with shape (nstates, nstates, nq, nb)
     degenerate_subspaces : list
-        List of degenerate subspace information
+        List of dicts with 'states' defining each degenerate subspace
     iq, iq_x, iq_y, iq_xy : int
         Q-point indices for the plaquette corners
     b_x_idx, b_y_idx : int
@@ -1224,111 +1248,64 @@ def compute_nonabelian_flux_plaquette(Mssp, degenerate_subspaces, iq, iq_x, iq_y
     flux_values : list
         List of flux values for each degenerate subspace (None if problematic)
     """
+
+    def unitarize(M):
+        """
+        Project a matrix onto the closest unitary via SVD.
+        Handles scalar (1x1) case separately.
+        """
+        if M.shape == (1, 1):  # scalar case
+            val = M[0, 0]
+            if np.abs(val) == 0:
+                return None
+            return np.array([[val / np.abs(val)]])  # normalize to unit modulus
+        # multi-dimensional case
+        U, _, Vh = np.linalg.svd(M, full_matrices=False)
+        return U @ Vh
+
     flux_values = []
-    min_threshold = 1e-8
-    
+
     for i_subspace, subspace in enumerate(degenerate_subspaces):
         states = subspace['states']
         n_deg = len(states)
-        
+
         try:
-            if n_deg == 1:
-                # Single state - use Abelian formula
-                state_idx = states[0]
-                M_q_qx = Mssp[state_idx, state_idx, iq, b_x_idx]
-                M_qx_qxy = Mssp[state_idx, state_idx, iq_x, b_y_idx]
-                M_qy_qxy = Mssp[state_idx, state_idx, iq_y, b_x_idx]
-                M_q_qy = Mssp[state_idx, state_idx, iq, b_y_idx]
-                
-                matrix_elements = [M_q_qx, M_qx_qxy, M_qy_qxy, M_q_qy]
-                magnitudes = [np.abs(M) for M in matrix_elements]
-                
-                if any(mag < min_threshold for mag in magnitudes):
-                    flux_values.append(None)
-                    continue
-                
-                # Compute normalized U matrices
-                U_x_q = M_q_qx / magnitudes[0]
-                U_y_qx = M_qx_qxy / magnitudes[1]
-                U_x_qy_inv = np.conj(M_qy_qxy / magnitudes[2])
-                U_y_q_inv = np.conj(M_q_qy / magnitudes[3])
-                
-                # Compute plaquette product
-                plaquette_product = U_x_q * U_y_qx * U_x_qy_inv * U_y_q_inv
-                
-                if np.abs(plaquette_product) < 1e-12:
-                    flux_values.append(0.0)
-                    continue
-                
-                flux_val = np.angle(plaquette_product)
-                
-                # Wrap to [-π, π]
-                while flux_val > np.pi:
-                    flux_val -= 2 * np.pi
-                while flux_val < -np.pi:
-                    flux_val += 2 * np.pi
-                
-                flux_values.append(flux_val)
-                
-            else:
-                # Multiple degenerate states - use determinant formula
-                # Extract overlap matrices for this subspace
-                U_x_q = np.zeros((n_deg, n_deg), dtype=complex)
-                U_y_qx = np.zeros((n_deg, n_deg), dtype=complex)
-                U_x_qy = np.zeros((n_deg, n_deg), dtype=complex)
-                U_y_q = np.zeros((n_deg, n_deg), dtype=complex)
-                
-                for i, state_i in enumerate(states):
-                    for j, state_j in enumerate(states):
-                        U_x_q[i, j] = Mssp[state_i, state_j, iq, b_x_idx]
-                        U_y_qx[i, j] = Mssp[state_i, state_j, iq_x, b_y_idx]
-                        U_x_qy[i, j] = Mssp[state_i, state_j, iq_y, b_x_idx]
-                        U_y_q[i, j] = Mssp[state_i, state_j, iq, b_y_idx]
-                
-                # Check for numerical stability
-                matrices = [U_x_q, U_y_qx, U_x_qy, U_y_q]
-                matrix_norms = [np.linalg.norm(M) for M in matrices]
-                
-                if any(norm < min_threshold for norm in matrix_norms):
-                    flux_values.append(None)
-                    continue
-                
-                # Normalize matrices for numerical stability
-                # For non-Abelian case, we need to normalize each matrix properly
-                # We can use SVD or simple normalization by the Frobenius norm
-                U_x_q = U_x_q / matrix_norms[0] * n_deg
-                U_y_qx = U_y_qx / matrix_norms[1] * n_deg
-                U_x_qy = U_x_qy / matrix_norms[2] * n_deg
-                U_y_q = U_y_q / matrix_norms[3] * n_deg
-                
-                # Compute Wilson loop: W = U_x(q) * U_y(q+x) * U_x†(q+y) * U_y†(q)
-                Wilson_loop = U_x_q @ U_y_qx @ np.conj(U_x_qy).T @ np.conj(U_y_q).T
-                
-                # Compute determinant
-                det_W = np.linalg.det(Wilson_loop)
-                
-                if np.abs(det_W) < 1e-12:
-                    flux_values.append(0.0)
-                    continue
-                
-                # Flux is the argument of the determinant
-                flux_val = np.angle(det_W)
-                
-                # Wrap to [-π, π]
-                while flux_val > np.pi:
-                    flux_val -= 2 * np.pi
-                while flux_val < -np.pi:
-                    flux_val += 2 * np.pi
-                
-                flux_values.append(flux_val)
-                
+            # Build overlap matrices for this subspace
+            sub_states = np.ix_(states, states)
+            U_x_q  = Mssp[sub_states + (iq,  b_x_idx)]
+            U_y_qx = Mssp[sub_states + (iq_x, b_y_idx)]
+            U_x_qy = Mssp[sub_states + (iq_y, b_x_idx)]
+            U_y_q  = Mssp[sub_states + (iq,  b_y_idx)]
+
+            # Project each onto the unitary group
+            U_x_q  = unitarize(U_x_q)
+            U_y_qx = unitarize(U_y_qx)
+            U_x_qy = unitarize(U_x_qy)
+            U_y_q  = unitarize(U_y_q)
+
+            if any(M is None for M in [U_x_q, U_y_qx, U_x_qy, U_y_q]):
+                flux_values.append(None)
+                continue
+
+            # Compute Wilson loop
+            Wilson_loop = U_x_q @ U_y_qx @ U_x_qy.conj().T @ U_y_q.conj().T
+
+            # Flux from determinant
+            det_W = np.linalg.det(Wilson_loop)
+            if np.abs(det_W) < 1e-12:
+                flux_values.append(0.0)
+                continue
+
+            flux_val = np.angle(det_W)
+            flux_values.append(flux_val)
+
         except (np.linalg.LinAlgError, ValueError) as e:
             print(f"WARNING: Linear algebra error in subspace {i_subspace} at plaquette ({ix},{iy}): {e}")
             flux_values.append(None)
         except Exception as e:
             print(f"WARNING: Unexpected error in subspace {i_subspace} at plaquette ({ix},{iy}): {e}")
             flux_values.append(None)
-    
+
     return flux_values
 
 
@@ -1368,3 +1345,18 @@ def generate_2D_bvectors(nqx, nqy):
     bvectors.append([-1.0/nqx, -1.0/nqy, 0.0]) # -x-y diagonal
     
     return np.array(bvectors)
+
+def unitarize(M):
+    """
+    Project a matrix onto the closest unitary via SVD.
+    Works for scalars (1x1) and matrices.
+    """
+    if M.shape == (1, 1):  # scalar case
+        val = M[0, 0]
+        if np.abs(val) == 0:
+            return None
+        return np.array([[val / np.abs(val)]])  # normalize to unit modulus
+    
+    # multi-dimensional case
+    U, _, Vh = np.linalg.svd(M, full_matrices=False)
+    return U @ Vh

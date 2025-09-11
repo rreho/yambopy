@@ -31,6 +31,7 @@ class YamboLatticeDB(object):
         self.time_rev             = time_rev
         self.mag_syms             = mag_syms
         self.ibz_nkpoints         = len(iku_kpoints)
+        self.expanded             = False
 
     @classmethod
     def from_db(cls,filename='ns.db1',Expand=True,atol=1e-6):
@@ -262,7 +263,7 @@ class YamboLatticeDB(object):
         Take a list of qpoints and symmetry operations and return the full brillouin zone
         with the corresponding index in the irreducible brillouin zone
         """
-
+        self.expanded=True
         weights, kpoints_indexes, symmetry_indexes, kpoints_full_or_red = expand_kpoints(self.car_kpoints,self.sym_car,self.rlat,atol=atol)
 
         if weights is None:
