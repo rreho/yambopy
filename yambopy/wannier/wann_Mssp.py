@@ -866,9 +866,17 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
     
     # Get B vectors from qgrid - support both old and new B-vector systems
     nq_total, nb_total = Mssp.shape[2], Mssp.shape[3]
-    if(wannier == False):
+    
+    # Always use uniform B-vectors for consistency across all cases
+    if hasattr(qgrid, 'nkx') and hasattr(qgrid, 'nky'):
         Bvecs = generate_2D_bvectors(qgrid.nkx, qgrid.nky)
         qgrid.b_list_uniform = Bvecs
+        # Force uniform B-vectors even if legacy ones exist
+        print(f"Forcing uniform B-vectors for consistency (wannier={wannier})")
+        print(f"Generated uniform B-vectors with shape {Bvecs.shape}")
+    else:
+        print(f"Cannot generate uniform B-vectors: nkx={getattr(qgrid, 'nkx', 'missing')}, nky={getattr(qgrid, 'nky', 'missing')}")
+    
     if hasattr(qgrid, 'b_list_uniform') and qgrid.b_list_uniform is not None:
         # New uniform B-vector system
         b_vectors_first = qgrid.b_list_uniform
@@ -992,7 +1000,6 @@ def compute_flux_2D_fixed(Mssp, qgrid, exciton_states=None, periodic_boundary=Tr
             # Compute flux for this plaquette
             if non_abelian:
                 # Non-Abelian case: compute flux for each degenerate subspace
-                print(iq, iq_x, iq_y, iq_xy, b_x_idx, b_y_idx, ix, iy)
                 flux_values = compute_nonabelian_flux_plaquette(
                     Mssp, degenerate_subspaces, iq, iq_x, iq_y, iq_xy, 
                     b_x_idx, b_y_idx, ix, iy
