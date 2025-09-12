@@ -645,7 +645,7 @@ class YamboWFDB:
         G0_bra = kpt_bra-k_rk_bra
         #
         G0 = G0_ket-G0_bra
-        return wfc_inner_product(k_rk_bra, w_rk_bra, g_rk_bra, k_rk_ket, w_rk_ket, g_rk_ket)
+        return wfc_inner_product(G0, w_rk_bra, g_rk_bra, np.array([0,0,0]), w_rk_ket, g_rk_ket)
 
 @func_profile
 def wfc_inner_product(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gtree=None):
@@ -694,14 +694,13 @@ def wfc_inner_product(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gt
     dd, ii = ket_Gtree.query(gbra_shift, k=1)
     #
     wfc_bra_tmp = np.zeros(wfc_ket.shape,dtype=wfc_ket.dtype)
-    # Get only the indices that are present
-    bra_idx = ii[dd < 1e-6]
-    #
+
     # Add the phase factor for the G-shift
     phase = np.exp(2j * np.pi * (G0 @ gvec_bra.T))
-        
-    wfc_bra_tmp[:,:,:,bra_idx] = wfc_bra[...,dd<1e-6].conj()
-    wfc_bra_tmp[:, :, :, bra_idx] = wfc_bra[..., bra_idx].conj() * phase[bra_idx]
+    # Get only the indices that are present
+    mask = dd < 1e-6
+    bra_idx_in_ket = ii[mask]   # integer indices for ket G-vectors
+    wfc_bra_tmp[:, :, :, bra_idx_in_ket] = wfc_bra[..., mask].conj() * phase[mask]
 
     # return the dot product
     inprod = np.zeros((nspin, nbnd, nbnd),dtype=wfc_bra.dtype)
