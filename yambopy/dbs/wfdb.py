@@ -647,7 +647,6 @@ class YamboWFDB:
         G0 = G0_ket-G0_bra
         return wfc_inner_product(G0, w_rk_bra, g_rk_bra, np.array([0,0,0]), w_rk_ket, g_rk_ket)
 
-@func_profile
 def wfc_inner_product(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gtree=None):
     """
     Computes the inner product between two wavefunctions in reciprocal space. <k_bra | k_ket>
@@ -694,21 +693,16 @@ def wfc_inner_product(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gt
     dd, ii = ket_Gtree.query(gbra_shift, k=1)
     #
     wfc_bra_tmp = np.zeros(wfc_ket.shape,dtype=wfc_ket.dtype)
-
-    # Add the phase factor for the G-shift
-    phase = np.exp(2j * np.pi * (G0 @ gvec_bra.T))
     # Get only the indices that are present
-    mask = dd < 1e-6
-    bra_idx_in_ket = ii[mask]   # integer indices for ket G-vectors
-    wfc_bra_tmp[:, :, :, bra_idx_in_ket] = wfc_bra[..., mask].conj() * phase[mask]
-
+    bra_idx = ii[dd < 1e-6]
+    #
+    wfc_bra_tmp[:,:,:,bra_idx] = wfc_bra[...,dd<1e-6].conj()
     # return the dot product
     inprod = np.zeros((nspin, nbnd, nbnd),dtype=wfc_bra.dtype)
     for ispin in range(nspin):
         inprod[ispin] = wfc_bra_tmp[ispin].reshape(nbnd,-1)@wfc_ket[ispin].reshape(nbnd,-1).T
     #return np.einsum('sixg,sjxg->sij',wfc_bra_tmp,wfc_ket,optimize=True) #// einsum is very slow
     return inprod
-
 
 def su2_mat(symm_mat,time_rev1):
     """
