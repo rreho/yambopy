@@ -24,7 +24,8 @@ except ImportError as e:
     from scipy.spatial import KDTree
 from yambopy.kpoints import build_ktree, find_kpt
 from yambopy.tools.function_profiler import func_profile
-
+from yambopy.dbs.gsphere import remap_with_box, build_union_gsphere, change_gsphere
+ 
 class YamboWFDB:
     """
     A class to load and manipulate wavefunctions from Yambo (ns.wf).
@@ -647,6 +648,62 @@ class YamboWFDB:
         G0 = G0_ket-G0_bra
         return wfc_inner_product(G0, w_rk_bra, g_rk_bra, np.array([0,0,0]), w_rk_ket, g_rk_ket)
 
+
+    def Overlap_k_kplusb(self, kpt, bvec, use_box=True, box_grid=None):
+        """
+        Overlap <u_{n,k} | u_{m,k+b}>, allowing b outside the first BZ (non-zero G-vectors).
+        Uses robust box-based remapping when use_box=True.
+
+        Returns
+        -------
+        (nspin, nbands, nbands) complex array
+        """
+        kpt = np.array(kpt, dtype=float)
+        bvec = np.array(bvec, dtype=float)
+        k_bra = kpt
+        k_ket = kpt + bvec
+
+        # Ensure full-BZ wavefunctions are available
+        if getattr(self, 'wf_bz', None) is None:
+            self.expand_fullBZ()
+
+        # Locate indices in full BZ tree (periodic KDTree)
+        ik_bra = find_kpt(self.ktree, k_bra)
+        ik_ket = find_kpt(self.ktree, k_ket)
+
+        # Load wavefunctions and G-sets
+        wf1, G1 = self.get_BZ_wf(ik_bra)
+        k1 = self.get_BZ_kpt(ik_bra)
+        wf2, G2 = self.get_BZ_wf(ik_ket)
+        k2 = self.get_BZ_kpt(ik_ket)
+
+        # Determine Gshift s.t. k_ket = k2 + Gshift
+        Gshift = np.rint(k_ket - k2).astype(int)
+
+        # Use union G-target
+        Gunion, _, _ = build_union_gsphere(G1, G2)
+        grid = self.fft_box if box_grid is None else np.asarray(box_grid, dtype=int)
+
+        nspin, nbnd, nspinor = wf1.shape[:3]
+        ov = np.zeros((nspin, nbnd, nbnd), dtype=wf1.dtype)
+        for ispin in range(nspin):
+            c1 = wf1[ispin]  # (nbnd, nspinor, ng1)
+            c2 = wf2[ispin]  # (nbnd, nspinor, ng2)
+            if use_box:
+                c1a = remap_with_box(G1, c1, Gunion, grid=grid)
+                c2a = remap_with_box(G2, c2, Gunion, grid=grid, Gshift=Gshift)
+            else:
+                # label-based path
+                c1a = change_gsphere(G1, c1, Gunion)
+                c2a = change_gsphere(G2 - Gshift[None, :], c2, Gunion)
+            # Flatten spinor+G
+            nbnd1, nspinor1, ngu = c1a.shape
+            nbnd2, nspinor2, ngu2 = c2a.shape
+            assert nbnd1 == nbnd2 and nspinor1 == nspinor2 and ngu == ngu2
+            c1f = c1a.reshape(nbnd1, nspinor1 * ngu)
+            c2f = c2a.reshape(nbnd2, nspinor2 * ngu)
+            ov[ispin] = c1f.conj() @ c2f.T
+        return ov
 def wfc_inner_product(k_bra, wfc_bra, gvec_bra, k_ket, wfc_ket, gvec_ket, ket_Gtree=None):
     """
     Computes the inner product between two wavefunctions in reciprocal space. <k_bra | k_ket>
