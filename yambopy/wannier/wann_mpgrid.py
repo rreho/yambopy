@@ -165,7 +165,9 @@ class tb_Monkhorst_Pack(KPointGenerator):
         self.red_kpoints = self.k
         self.car_kpoints = k_points.reshape(-1,3)
         self.nkpoints = len(self.k)
-        self.k_tree = cKDTree(self.k)        
+        self.k_tree = cKDTree(self.k)
+        # Expose grid dims for downstream logic
+        self.nkx, self.nky, self.nkz = NGX, NGY, NGZ        
 
     def get_kq_tables(self,qmpgrid, sign="+"):
         kplusq_table = np.zeros((self.nkpoints,qmpgrid.nkpoints),dtype=int)
@@ -216,6 +218,56 @@ class tb_Monkhorst_Pack(KPointGenerator):
         self.kmq_grid_table = kmq_grid_table        
         
         return kmq_grid, kmq_grid_table
+
+    def get_kmqmb_grid(self, qmpgrid, kmpgrid=None, custom_bvectors=None):
+        """
+        Compute k-Q-B grid similarly to NNKP_Grids.get_kmqmb_grid for uniform rectangular grids.
+        B-vectors are generated uniformly using grid dimensions.
+        """
+        nkpoints = self.nkpoints
+        nqpoints = qmpgrid.nkpoints
+        # Determine B-vectors to use (uniform 2D set)
+        if custom_bvectors is not None:
+            Bvecs_uniform = custom_bvectors
+        else:
+            # 2D uniform nearest-neighbor + diagonals
+            nqx, nqy = getattr(self, 'nkx', None), getattr(self, 'nky', None)
+            if nqx is None or nqy is None:
+                raise ValueError("nkx/nky not set on tb_Monkhorst_Pack; call generate() first")
+            Bvecs_uniform = np.array([
+                [ 1.0/nqx,  0.0,      0.0],
+                [ 0.0,      1.0/nqy, 0.0],
+                [-1.0/nqx,  0.0,      0.0],
+                [ 0.0,     -1.0/nqy, 0.0],
+                [ 1.0/nqx,  1.0/nqy, 0.0],
+                [ 1.0/nqx, -1.0/nqy, 0.0],
+                [-1.0/nqx,  1.0/nqy, 0.0],
+                [-1.0/nqx, -1.0/nqy, 0.0],
+            ])
+        nb = len(Bvecs_uniform)
+        # Broadcast for k-Q-B
+        k_grid = self.k[:, None, None, :]
+        q_grid = qmpgrid.k[None, :, None, :]
+        b_grid = Bvecs_uniform[None, None, :, :]
+        kmqmb = k_grid - q_grid - b_grid
+        # Fold into BZ and map to nearest grid k
+        kmqmb_folded, Gvec = self.fold_into_bz_Gs(
+            kmqmb.reshape(-1, 3), bz_range=(0.0, 1.0), include_upper_bound=False
+        )
+        kmqmb_folded = kmqmb_folded.reshape(nkpoints, nqpoints, nb, 3)
+        Gvec = Gvec.reshape(nkpoints, nqpoints, nb, 3)
+        closest_indices = self.find_closest_kpoint(kmqmb_folded.reshape(-1, 3)).reshape(nkpoints, nqpoints, nb)
+        kmqmb_grid_table = np.stack([
+            np.arange(nkpoints)[:, None, None].repeat(nqpoints, axis=1).repeat(nb, axis=2),
+            closest_indices,
+            Gvec[..., 0].astype(int),
+            Gvec[..., 1].astype(int),
+            Gvec[..., 2].astype(int)
+        ], axis=-1).astype(int)
+        self.kmqmb_grid = kmqmb_folded
+        self.kmqmb_grid_table = kmqmb_grid_table
+        self.b_list_uniform = Bvecs_uniform
+        return kmqmb_folded, kmqmb_grid_table
 
     def get_kmqpdq_grid(self,qmpgrid):
 
