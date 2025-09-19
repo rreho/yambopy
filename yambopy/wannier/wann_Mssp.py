@@ -194,7 +194,11 @@ def compute_overlap_kmqmb_kmq(wfdb, nnkp_kgrid, nnkp_qgrid, custom_bvectors=None
                     # G0_ket = [0, 0, 0]
                     kmq = nnkp_kgrid.k[ik]-nnkp_qgrid.k[iq]
                     kmqmb = nnkp_kgrid.k[ik]-nnkp_qgrid.k[iq] - Bvecs[ib] 
-                    Mkmqmb_kmq[ik, iq, ib] = wfdb.OverlapUkkp(kmqmb,kmq)
+                    ov = wfdb.OverlapUkkp(kmqmb, kmq)
+                    # OverlapUkkp may return (nspin, nb, nb). Squeeze spin if present.
+                    if ov.ndim == 3 and ov.shape[0] == 1:
+                        ov = ov[0]
+                    Mkmqmb_kmq[ik, iq, ib] = ov
 
     print("valence overlap computation completed")
     return Mkmqmb_kmq
@@ -865,7 +869,7 @@ def find_best_bvector_index(b_vectors_k, direction, tol=1e-6):
 
 
 def compute_flux_2D_fixed(Mssp, qgrid, nnkp, exciton_states=None, periodic_boundary=True, 
-                          energy_array=None, degeneracy_tol=1e-6):
+                          energy_array=None, degeneracy_tol=1e-6, orientation='xy'):
     """
     Simplified and robust flux computation using wannier90 B-vectors.
     
@@ -1001,7 +1005,7 @@ def compute_flux_2D_fixed(Mssp, qgrid, nnkp, exciton_states=None, periodic_bound
             # Compute flux for this plaquette using non-Abelian approach
             flux_values = compute_nonabelian_flux_plaquette_wannier(
                 Mssp, degenerate_subspaces, iq, iq_x, iq_y, iq_xy, 
-                b_vectors_all, tol, ix, iy
+                b_vectors_all, tol, ix, iy, orientation=orientation
             )
             
             for i_subspace, flux_val in enumerate(flux_values):
@@ -1299,7 +1303,7 @@ def apply_parallel_gauge(U_x_q, U_y_qx, U_x_qy, U_y_q, max_iterations=5, toleran
 
 
 def compute_nonabelian_flux_plaquette_wannier(Mssp, degenerate_subspaces, iq, iq_x, iq_y, iq_xy, 
-                                             b_vectors_all, tol, ix, iy):
+                                             b_vectors_all, tol, ix, iy, orientation='xy'):
     """
     Compute flux for a single plaquette in the non-Abelian case using varying B-vectors from wannier90.
     
@@ -1370,8 +1374,16 @@ def compute_nonabelian_flux_plaquette_wannier(Mssp, degenerate_subspaces, iq, iq
             flux_values.append(None)
             continue
 
-        # Compute Wilson loop (now more numerically stable)
-        Wilson_loop = U_x_q @ U_y_qx @ U_x_qy.conj().T @ U_y_q.conj().T
+        # Compute Wilson loop with configurable orientation
+        if orientation == 'xy':
+            # Counter-clockwise: +x @ +y @ (-x) @ (-y)
+            Wilson_loop = U_x_q @ U_y_qx @ U_x_qy.conj().T @ U_y_q.conj().T
+        elif orientation == 'yx':
+            # Alternate orientation: +y @ +x @ (-y) @ (-x)
+            # Uses U_y at q, U_x at qy, reverse-y at qx, reverse-x at q
+            Wilson_loop = U_y_q @ U_x_qy @ U_y_qx.conj().T @ U_x_q.conj().T
+        else:
+            raise ValueError("orientation must be 'xy' or 'yx'")
 
         # Compute determinant with improved numerical stability
         sign, logabs = np.linalg.slogdet(Wilson_loop)
