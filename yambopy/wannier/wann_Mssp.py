@@ -252,28 +252,46 @@ def compute_overlap_kkpb(wfdb, nnkp):
 
 #     return Mkpb
 
-def compute_Mkpb(wfdb, nnkp, lat_k=None, symm = False):    
+def compute_Mkpb(wfdb, nnkp, lat_k=None, symm=False, custom_bvectors=None):    
     '''\bra{u_{nk}}\ket{u_{mk+B}} for all bands n,m
     Make sure the wfdb used contains only the bse bands.
-    symm - False read info from wannier90 .nnkp file. However, if you want to exploit symmetries you must use symm = True
+    symm - False reads info from wannier90 .nnkp file. However, if you want to exploit symmetries you must use symm=True
     and provide lat_k from a symm database.
+
+    custom_bvectors: optional ndarray of shape (nb, 3). If provided with symm=True,
+    uses the same set of B-vectors for every k-point (uniform 2D choice), ensuring
+    identical B-vector conventions across datasets.
     '''
     if symm:
         nk = wfdb.nkBZ
         nbands = wfdb.nbands
-        #if(lat_k.expanded == False) : lat_k.expand_kpoints()
+        # if(lat_k.expanded == False) : lat_k.expand_kpoints()
         k_bra = lat_k.red_kpoints
-        nb = nnkp.nnkpts
-        
-        # Properly reshape b_grid to (nk, nb, 3) to handle varying B-vectors
-        Bvecs = nnkp.b_grid.reshape(nk, nb, 3)
-        
-        print(f"Using varying B-vectors from wannier90: reshaped from {nnkp.b_grid.shape} to {Bvecs.shape}")
 
-        Mkpb = np.zeros(shape=(nk,nb,nbands,nbands),dtype=np.complex128)
-        for ik, k1 in enumerate(k_bra):        
+        if custom_bvectors is not None:
+            cb = np.asarray(custom_bvectors, dtype=float)
+            if cb.ndim == 2 and cb.shape[1] == 3:
+                # Use a uniform set of B-vectors for all k-points
+                nb = int(cb.shape[0])
+                Bvecs = np.tile(cb[None, :, :], (nk, 1, 1))
+                print(f"Using UNIFORM custom B-vectors: (nb={nb}) broadcast to {Bvecs.shape}")
+            elif cb.ndim == 3 and cb.shape[0] == nk and cb.shape[2] == 3:
+                # Use per-k custom B-vectors
+                nb = int(cb.shape[1])
+                Bvecs = cb
+                print(f"Using per-k custom B-vectors: shape {Bvecs.shape}")
+            else:
+                raise ValueError("custom_bvectors must be of shape (nb,3) or (nk,nb,3)")
+        else:
+            nb = nnkp.nnkpts
+            # Properly reshape b_grid to (nk, nb, 3) to handle varying B-vectors
+            Bvecs = nnkp.b_grid.reshape(nk, nb, 3)
+            print(f"Using varying B-vectors from wannier90: reshaped from {nnkp.b_grid.shape} to {Bvecs.shape}")
+
+        Mkpb = np.zeros(shape=(nk, nb, nbands, nbands), dtype=np.complex128)
+        for ik, k1 in enumerate(k_bra):
             for ib in range(nb):
-                # Use the actual B-vector for this specific (ik, ib) pair
+                # Use the selected B-vector for this specific (ik, ib) pair
                 k2 = k1 + Bvecs[ik, ib]
                 Mkpb[int(ik), ib] = wfdb.OverlapUkkp(k1, k2)
 
@@ -282,17 +300,17 @@ def compute_Mkpb(wfdb, nnkp, lat_k=None, symm = False):
         nk = wfdb.nkBZ
         nb = nnkp.nnkpts
         nbands = wfdb.nbands
-        k_bra = nnkp.data[:,0]-1
-        k_ket = nnkp.data[:,1]-1
-        Gs_ket = nnkp.data[:,2:]
+        k_bra = nnkp.data[:, 0] - 1
+        k_ket = nnkp.data[:, 1] - 1
+        Gs_ket = nnkp.data[:, 2:]
 
-        Mkpb = np.zeros(shape=(nk,nb,nbands,nbands),dtype=np.complex128)
+        Mkpb = np.zeros(shape=(nk, nb, nbands, nbands), dtype=np.complex128)
 
-        for ik, k1 in enumerate(k_bra):        
+        for ik, k1 in enumerate(k_bra):
             k2 = int(k_ket[ik])
-            ib = ik% nb
+            ib = ik % nb
             G0_ket = Gs_ket[ik]
-            Mkpb[int(ik/nb),ib] = wfdb.OverlapUkkp(nnkp.k[int(k1)],nnkp.k[k2]+np.array(G0_ket))
+            Mkpb[int(ik / nb), ib] = wfdb.OverlapUkkp(nnkp.k[int(k1)], nnkp.k[k2] + np.array(G0_ket))
 
         return Mkpb
 
@@ -467,229 +485,19 @@ def compute_Mssp_fast(h2p, nnkp_kgrid, nnkp_qgrid, trange=1):
     h2p.Mssp = Mssp
     return Mssp
 
-def compute_flux_2D(Mssp, qgrid, exciton_states=None, periodic_boundary=True):
-    """
-    Compute the flux F(Q) over a 2D Brillouin Zone using the plaquette method.
-    
-    The flux is computed as:
-    F(Q) = arg[U_x(Q) * U_y(Q+Δx) * U_x(Q+Δy)^(-1) * U_y(Q)^(-1)]
-    
-    where U_x(Q) = M(Q, Q+Δx) / |M(Q, Q+Δx)| and U_y(Q) = M(Q, Q+Δy) / |M(Q, Q+Δy)|
-    
-    Parameters
-    ----------
-    Mssp : ndarray
-        Overlap matrix with shape (nstates, nstates, nq, nb) where:
-        - nstates: number of exciton states
-        - nq: number of Q points  
-        - nb: number of B vectors (Wannier90 neighbors)
-    qgrid : object
-        Q-point grid object containing the 2D grid information and b_list
-        qgrid.b_list should have shape (nq, nb, 3) with B vectors in reduced coordinates
-    exciton_states : list or None
-        List of exciton state indices to compute flux for. If None, uses all states.
-    periodic_boundary : bool
-        Whether to use periodic boundary conditions for the grid
-        
-    Returns
-    -------
-    flux : ndarray
-        Flux array with shape (nstates, nqx, nqy) for 2D grid
-    chern_numbers : ndarray
-        Chern numbers for each exciton state, shape (nstates,)
-    """
-    
-    if exciton_states is None:
-        nstates = Mssp.shape[0]
-        exciton_states = list(range(nstates))
-    else:
-        nstates = len(exciton_states)
-    
-    # Get B vectors from qgrid
-    if not hasattr(qgrid, 'b_list') or qgrid.b_list is None:
-        raise ValueError("qgrid must have b_list attribute with B vectors")
-    
-    b_list = qgrid.b_list  # Shape: (nq, nb, 3)
-    nq_total, nb_total = Mssp.shape[2], Mssp.shape[3]
-    
-    if b_list.shape[0] != nq_total:
-        raise ValueError(f"b_list has {b_list.shape[0]} k-points but Mssp has {nq_total}")
-    if b_list.shape[1] != nb_total:
-        raise ValueError(f"b_list has {b_list.shape[1]} B vectors but Mssp has {nb_total}")
-    
-    # Find indices for x and y direction B vectors by examining the first k-point
-    # For 2D materials, we look for B vectors that are primarily in x and y directions
-    b_vectors_first = b_list[0]  # B vectors for first k-point
-    b_x_idx = None
-    b_y_idx = None
-    
-    # Tolerance for identifying x and y directions
-    tol = 1e-6
-    
-    for ib, b_vec in enumerate(b_vectors_first):
-        # Check if this is primarily an x-direction vector (b_y ≈ 0, b_z ≈ 0)
-        if abs(b_vec[1]) < tol and abs(b_vec[2]) < tol and abs(b_vec[0]) > tol:
-            if b_x_idx is None or abs(b_vec[0]) < abs(b_vectors_first[b_x_idx][0]):
-                b_x_idx = ib
-        # Check if this is primarily a y-direction vector (b_x ≈ 0, b_z ≈ 0)  
-        elif abs(b_vec[0]) < tol and abs(b_vec[2]) < tol and abs(b_vec[1]) > tol:
-            if b_y_idx is None or abs(b_vec[1]) < abs(b_vectors_first[b_y_idx][1]):
-                b_y_idx = ib
-    
-    if b_x_idx is None or b_y_idx is None:
-        print("Warning: Could not identify x and y direction B vectors automatically.")
-        print("Available B vectors for first k-point:")
-        for ib, b_vec in enumerate(b_vectors_first):
-            print(f"  B[{ib}] = {b_vec}")
-        # Use first two B vectors as fallback
-        b_x_idx = 0 if nb_total > 0 else None
-        b_y_idx = 1 if nb_total > 1 else None
-        
-    if b_x_idx is None or b_y_idx is None:
-        raise ValueError("Cannot identify appropriate B vectors for x and y directions")
-        
-    print(f"Using B vector {b_x_idx} for x-direction: {b_vectors_first[b_x_idx]}")
-    print(f"Using B vector {b_y_idx} for y-direction: {b_vectors_first[b_y_idx]}")
-    
-    # Validate that B vectors are consistent across k-points (optional check)
-    # This is important for irregular grids or boundary effects
-    inconsistent_count = 0
-    for iq in range(min(10, nq_total)):  # Check first 10 k-points as sample
-        b_vec_x_current = b_list[iq, b_x_idx]
-        b_vec_y_current = b_list[iq, b_y_idx]
-        
-        # Check if the direction is still correct
-        x_is_x = abs(b_vec_x_current[1]) < tol and abs(b_vec_x_current[2]) < tol and abs(b_vec_x_current[0]) > tol
-        y_is_y = abs(b_vec_y_current[0]) < tol and abs(b_vec_y_current[2]) < tol and abs(b_vec_y_current[1]) > tol
-        
-        if not (x_is_x and y_is_y):
-            inconsistent_count += 1
-    
-    if inconsistent_count > 0:
-        print(f"Warning: Found {inconsistent_count} k-points with inconsistent B vector directions.")
-        print("This might indicate an irregular grid or boundary effects.")
-        print("Results should be interpreted carefully.")
-    
-    # Get 2D grid dimensions
-    if hasattr(qgrid, 'nqx') and hasattr(qgrid, 'nqy') and qgrid.nqx is not None and qgrid.nqy is not None:
-        nqx, nqy = qgrid.nqx, qgrid.nqy
-    else:
-        # Try to infer from total number of q points (assuming square grid)
-        nq_total = Mssp.shape[2]
-        nqx = nqy = int(np.sqrt(nq_total))
-        if nqx * nqy != nq_total:
-            # Try to factorize for non-square grids
-            found = False
-            for test_nqx in range(1, int(np.sqrt(nq_total)) + 1):
-                if nq_total % test_nqx == 0:
-                    nqx = test_nqx
-                    nqy = nq_total // test_nqx
-                    found = True
-                    break
-            if not found:
-                raise ValueError(f"Cannot infer 2D grid dimensions from {nq_total} q-points. "
-                               f"Please set grid dimensions manually using qgrid.set_grid_dimensions(nqx, nqy)")
-        
-        print(f"Inferred grid dimensions from Mssp shape: nqx={nqx}, nqy={nqy}")
-    
-    # Initialize flux array
-    flux = np.zeros((nstates, nqx, nqy), dtype=np.float64)
-    
-    # Find the indices for x and y direction shifts in the Q grid
-    def get_neighbor_indices(iq, direction, nqx, nqy):
-        """Get neighbor indices for x and y directions
-        
-        Grid storage: qx is slow index, qy is fast index
-        iq = ix * nqy + iy where ix is qx index, iy is qy index
-        """
-        iy = iq % nqy  # qy index (fast index)
-        ix = iq // nqy  # qx index (slow index)
-        
-        if direction == 'x':
-            ix_new = (ix + 1) % nqx if periodic_boundary else ix + 1
-            if not periodic_boundary and ix_new >= nqx:
-                return None
-            return ix_new * nqy + iy
-        elif direction == 'y':
-            iy_new = (iy + 1) % nqy if periodic_boundary else iy + 1
-            if not periodic_boundary and iy_new >= nqy:
-                return None
-            return ix * nqy + iy_new
-        else:
-            raise ValueError("Direction must be 'x' or 'y'")
-    
-    # Compute flux for each plaquette
-    # ix is qx index (slow), iy is qy index (fast)
-    for ix in range(nqx - (0 if periodic_boundary else 1)):
-        for iy in range(nqy - (0 if periodic_boundary else 1)):
-            iq = ix * nqy + iy
-            
-            # Get the four corner points of the plaquette
-            iq_x = get_neighbor_indices(iq, 'x', nqx, nqy)  # Q + Δx
-            iq_y = get_neighbor_indices(iq, 'y', nqx, nqy)  # Q + Δy
-            iq_xy = get_neighbor_indices(iq_x, 'y', nqx, nqy) if iq_x is not None else None  # Q + Δx + Δy
-            
-            if iq_x is None or iq_y is None or iq_xy is None:
-                continue
-                
-            for istate, state_idx in enumerate(exciton_states):
-                # Get overlap matrix elements using the identified B vector indices
-                # M(Q, Q+Δx) corresponds to Mssp[state, state, Q, b_x_idx]
-                # M(Q, Q+Δy) corresponds to Mssp[state, state, Q, b_y_idx]
-                
-                M_q_qx = Mssp[state_idx, state_idx, iq, b_x_idx]      # M(Q, Q+Δx)
-                M_qx_qxy = Mssp[state_idx, state_idx, iq_x, b_y_idx]  # M(Q+Δx, Q+Δx+Δy)
-                M_qy_qxy = Mssp[state_idx, state_idx, iq_y, b_x_idx]  # M(Q+Δy, Q+Δx+Δy)
-                M_q_qy = Mssp[state_idx, state_idx, iq, b_y_idx]      # M(Q, Q+Δy)
-                
-                # Compute U matrices (normalized overlaps)
-                U_x_q = M_q_qx / np.abs(M_q_qx) if np.abs(M_q_qx) > 1e-12 else 0
-                U_y_qx = M_qx_qxy / np.abs(M_qx_qxy) if np.abs(M_qx_qxy) > 1e-12 else 0
-                U_x_qy_inv = np.conj(M_qy_qxy / np.abs(M_qy_qxy)) if np.abs(M_qy_qxy) > 1e-12 else 0
-                U_y_q_inv = np.conj(M_q_qy / np.abs(M_q_qy)) if np.abs(M_q_qy) > 1e-12 else 0
-                
-                # Compute the plaquette product
-                plaquette_product = U_x_q * U_y_qx * U_x_qy_inv * U_y_q_inv
-                
-                # Compute flux as the argument of the plaquette product
-                flux[istate, ix, iy] = np.angle(plaquette_product)
-    
-    # Compute Chern numbers
-    chern_numbers = np.zeros(nstates)
-    for istate in range(nstates):
-        chern_numbers[istate] = np.sum(flux[istate]) / (2 * np.pi)
-    
-    return flux, chern_numbers
 
 
-def compute_chern_number_2D(h2p, nnkp_qgrid, exciton_states=None, trange=1, b_vectors=None):
+
+def compute_chern_number_2D(h2p, nnkp_qgrid, exciton_states=None, trange=1, b_vectors=None,
+                             energy_array=None, degeneracy_tol=1e-6, orientation='xy'):
     """
-    Compute Chern numbers for exciton states using the plaquette method.
-    
-    This function first computes the overlap matrix Mssp if not already computed,
-    then calculates the flux and Chern numbers.
-    
-    Parameters
-    ----------
-    h2p : H2P object
-        The two-particle Hamiltonian object containing exciton information
-    nnkp_qgrid : object
-        Q-point grid object for the calculation
-    exciton_states : list or None
-        List of exciton state indices to compute Chern numbers for
-    trange : int
-        Number of exciton states to consider
-    b_vectors : ndarray or None
-        B vectors from Wannier90. If None, will try to get from nnkp_qgrid.
-        
-    Returns
-    -------
-    chern_numbers : ndarray
-        Chern numbers for each exciton state
-    flux : ndarray
-        Flux array for visualization and analysis
+    Compute Chern numbers using the robust non-Abelian plaquette method.
+
+    Notes:
+    - Uses compute_flux_2D_fixed under the hood.
+    - Provide energy_array (nstates, nq) to detect degeneracies; otherwise treats states independently.
+    - exciton_states can restrict the considered states.
     """
-    
     # Compute Mssp if not already computed
     if not hasattr(h2p, 'Mssp') or h2p.Mssp is None:
         print("Computing Mssp overlap matrix...")
@@ -697,17 +505,18 @@ def compute_chern_number_2D(h2p, nnkp_qgrid, exciton_states=None, trange=1, b_ve
     else:
         Mssp = h2p.Mssp
         print("Using existing Mssp overlap matrix...")
-    
-    # Compute flux and Chern numbers
-    print("Computing flux and Chern numbers...")
-    flux, chern_numbers = compute_flux_2D(Mssp, nnkp_qgrid, b_vectors=b_vectors, exciton_states=exciton_states)
-    
-    # Store results in h2p object
+
+    # Default energy array: None (caller should pass if degeneracy grouping needed)
+    print("Computing flux and Chern numbers (non-Abelian, varying B-vectors)...")
+    flux, chern_numbers = compute_flux_2D_fixed(
+        Mssp, nnkp_qgrid, nnkp_qgrid, exciton_states=exciton_states,
+        periodic_boundary=True, energy_array=energy_array,
+        degeneracy_tol=degeneracy_tol, orientation=orientation
+    )
+
     h2p.flux = flux
     h2p.chern_numbers = chern_numbers
-    
     print(f"Computed Chern numbers: {chern_numbers}")
-    
     return chern_numbers, flux
 
 
@@ -1005,7 +814,7 @@ def compute_flux_2D_fixed(Mssp, qgrid, nnkp, exciton_states=None, periodic_bound
             # Compute flux for this plaquette using non-Abelian approach
             flux_values = compute_nonabelian_flux_plaquette_wannier(
                 Mssp, degenerate_subspaces, iq, iq_x, iq_y, iq_xy, 
-                b_vectors_all, tol, ix, iy, orientation=orientation
+                b_vectors_all, tol, ix, iy, nqx, nqy, orientation=orientation
             )
             
             for i_subspace, flux_val in enumerate(flux_values):
@@ -1303,7 +1112,7 @@ def apply_parallel_gauge(U_x_q, U_y_qx, U_x_qy, U_y_q, max_iterations=5, toleran
 
 
 def compute_nonabelian_flux_plaquette_wannier(Mssp, degenerate_subspaces, iq, iq_x, iq_y, iq_xy, 
-                                             b_vectors_all, tol, ix, iy, orientation='xy'):
+                                             b_vectors_all, tol, ix, iy, nqx, nqy, orientation='xy'):
     """
     Compute flux for a single plaquette in the non-Abelian case using varying B-vectors from wannier90.
     
@@ -1323,7 +1132,8 @@ def compute_nonabelian_flux_plaquette_wannier(Mssp, degenerate_subspaces, iq, iq
         Tolerance for B-vector identification
     ix, iy : int
         Plaquette coordinates (for error reporting)
-        
+    nqx, nqy : int
+        Grid dimensions        
     Returns
     -------
     flux_values : list
@@ -1340,17 +1150,44 @@ def compute_nonabelian_flux_plaquette_wannier(Mssp, degenerate_subspaces, iq, iq
             # nearly rank-deficient -> warn and skip
             return None
         return U @ Vh
-    # Find appropriate B-vector indices for each k-point in the plaquette
-    b_x_idx_q = find_best_bvector_index(b_vectors_all[iq], 'x', tol)
-    b_y_idx_q = find_best_bvector_index(b_vectors_all[iq], 'y', tol)
-    b_x_idx_qx = find_best_bvector_index(b_vectors_all[iq_x], 'x', tol)
-    b_y_idx_qx = find_best_bvector_index(b_vectors_all[iq_x], 'y', tol)
-    b_x_idx_qy = find_best_bvector_index(b_vectors_all[iq_y], 'x', tol)
-    b_y_idx_qy = find_best_bvector_index(b_vectors_all[iq_y], 'y', tol)
+    def wrap_reduced(k):
+        r = k.copy()
+        r[:2] = r[:2] % 1.0
+        r[2] = 0.0
+        return r
 
-    # Check if we found valid B-vector indices
-    if any(idx is None for idx in [b_x_idx_q, b_y_idx_q, b_x_idx_qx, b_y_idx_qx, b_x_idx_qy, b_y_idx_qy]):
-        print(f"WARNING: Could not find appropriate B-vectors for non-Abelian plaquette ({ix},{iy})")
+    def dest_index_for_b(iq_loc, b_vec):
+        # compute destination grid index starting from iq_loc and step b_vec (reduced coords)
+        iy0 = iq_loc % nqy
+        ix0 = iq_loc // nqy
+        k_red = np.array([ix0 / nqx, iy0 / nqy, 0.0], dtype=float)
+        k_red_ket = wrap_reduced(k_red + b_vec)
+        ix2 = int(round((k_red_ket[0] % 1.0) * nqx)) % nqx
+        iy2 = int(round((k_red_ket[1] % 1.0) * nqy)) % nqy
+        return ix2 * nqy + iy2
+
+    def find_b_index_mapping_to(iq_from, iq_to):
+        # choose ib such that step maps to required neighbor index
+        b_list = b_vectors_all[iq_from]
+        candidates = []
+        for ib, b_vec in enumerate(b_list):
+            if dest_index_for_b(iq_from, b_vec) == iq_to:
+                # prefer smallest |b| just in case of duplicates
+                candidates.append((ib, np.linalg.norm(b_vec[:2])))
+        if not candidates:
+            return None
+        # choose with smallest norm
+        candidates.sort(key=lambda x: x[1])
+        return candidates[0][0]
+
+    # Resolve B-vector indices by matching the intended neighbor indices exactly
+    b_x_idx_q  = find_b_index_mapping_to(iq,   iq_x)
+    b_y_idx_q  = find_b_index_mapping_to(iq,   iq_y)
+    b_x_idx_qy = find_b_index_mapping_to(iq_y, iq_xy)
+    b_y_idx_qx = find_b_index_mapping_to(iq_x, iq_xy)
+
+    if any(idx is None for idx in [b_x_idx_q, b_y_idx_q, b_x_idx_qy, b_y_idx_qx]):
+        print(f"WARNING: Could not map B-vectors to neighbors for plaquette ({ix},{iy})")    
         return [None] * len(degenerate_subspaces)
 
     flux_values = []
@@ -1408,8 +1245,8 @@ def compute_nonabelian_flux_plaquette_wannier(Mssp, degenerate_subspaces, iq, iq
             flux_val = np.angle(Wilson_loop[0, 0])
         else:
             # For NxN case, use the phase of the determinant
-            flux_val = np.angle(sign) + logabs * 0  # logabs is real, so this is just np.angle(sign)
-            
+            flux_val = np.angle(sign)            
+
         flux_values.append(flux_val)
 
     return flux_values
