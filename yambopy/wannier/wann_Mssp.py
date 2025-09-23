@@ -854,6 +854,9 @@ def compute_flux_2D_fixed(Mssp, qgrid, nnkp, exciton_states=None, periodic_bound
     return flux, chern_numbers
 
 
+# Backward-compatibility alias for older imports
+compute_flux_2D = compute_flux_2D_fixed
+
 import numpy as np
 
 def find_degenerate_subspaces(energy_array, exciton_states, degeneracy_tol,

@@ -560,6 +560,80 @@ class TBMODEL(tbmodels.Model):
                         Mmn[n,m,ik, ikp] = np.vdot(self.eigvec[ik,:,n],self.eigvec[ikp,:,m])
         self.Mmn = Mmn
 
+    # ------------------------------------------------------------------
+    # Helpers for BSE Wannier transformation
+    # ------------------------------------------------------------------
+    def get_U_val_cond(self):
+        """
+        Return U_val and U_cond matrices from diagonalized TB model.
+        Shapes:
+          - U_val: (Nk, Nw, Nv) with columns = valence bands
+          - U_cond: (Nk, Nw, Nc) with columns = conduction bands
+        Requires solve_ham_from_hr (or solve_ham) followed by _build_Umn.
+        """
+        if not hasattr(self, 'Uknm'):
+            self._build_Umn()
+        if not hasattr(self, 'nv') or not hasattr(self, 'nc'):
+            raise ValueError("nv/nc not set. Make sure _reshape_eigvec was called (solve_ham_from_hr does).")
+        # Uknm has shape (Nk, Nb_bands, Nw)
+        U_val = self.Uknm[:, :self.nv, :].transpose(0, 2, 1).copy()     # (Nk, Nw, Nv)
+        U_cond = self.Uknm[:, self.nv:self.nv+self.nc, :].transpose(0, 2, 1).copy()  # (Nk, Nw, Nc)
+        return U_val, U_cond
+
+    def get_k_minus_q_indices(self, qmpgrid, iq: int, sign: str = "+"):
+        """
+        Build mapping array k -> k−q for a given q-index iq using the current mpgrid.
+        qmpgrid: a KPointGenerator over q-points compatible with the mpgrid.
+        Returns: ndarray (Nk,) of indices in mpgrid.k such that mpgrid.k[ik] − qmpgrid.k[iq] ≈ mpgrid.k[k_minus_q[ik]] (folded in BZ).
+        """
+        if not hasattr(self, 'mpgrid'):
+            raise ValueError("mpgrid not set. Call TBMODEL.set_mpgrid(...) first.")
+        # Compute kmq table (ik, iq, 5) with closest indices in [:, :, 1]
+        _kmq_grid, kmq_table = self.mpgrid.get_kmq_grid(qmpgrid, sign=sign)
+        if iq < 0 or iq >= qmpgrid.nkpoints:
+            raise IndexError("iq out of range for provided q grid")
+        k_minus_q = kmq_table[:, iq, 1].astype(int)
+        return k_minus_q
+
+    def get_aligned_U_for_q(self, qmpgrid, iq: int):
+        """
+        Return (k_minus_q_indices, U_val_aligned, U_cond) for the BSE convention v(k−q), c(k).
+        U_val_aligned is U_val reordered along k to match k−q mapping.
+        """
+        U_val, U_cond = self.get_U_val_cond()
+        k_minus_q = self.get_k_minus_q_indices(qmpgrid, iq, sign="+")
+        U_val_aligned = U_val[k_minus_q]
+        return k_minus_q, U_val_aligned, U_cond
+
+    def delta_R_from_tbmodel(self, tol: float = 1e-8, R_cut: float = None, ensure_zero: bool = True):
+        """
+        Build ΔR_h and ΔR_e lists from the TB real-space Hamiltonian shells.
+        - Uses self.hr.hop (R-vectors, reduced) and self.hr.HR_mn to prune by amplitude.
+        - Optionally applies a Cartesian radius cutoff if lattice is available.
+        Returns: (delta_R_h_list, delta_R_e_list), both integer arrays of shape (NR, 3).
+        """
+        if not hasattr(self, 'hr'):
+            raise ValueError("hr not found on TBMODEL. Ensure solve_ham_from_hr (or equivalent) was called.")
+        import numpy as np  # local import to avoid polluting module namespace
+        R_all = np.asarray(self.hr.hop, dtype=float)
+        HR = np.asarray(self.hr.HR_mn)
+        if HR.ndim != 3 or R_all.ndim != 2 or R_all.shape[1] != 3:
+            raise ValueError("Unexpected hr shapes: hop should be (NR,3), HR_mn should be (NR,Nw,Nw)")
+        amp = np.max(np.abs(HR), axis=(1, 2))  # (NR,)
+        keep = amp > float(tol)
+        R_keep = R_all[keep]
+        # Ensure Γ shell present
+        if ensure_zero and (R_keep.size == 0 or not np.any(np.all(np.isclose(R_keep, 0.0), axis=1))):
+            R_keep = np.vstack([R_keep, [0.0, 0.0, 0.0]]) if R_keep.size else np.array([[0.0, 0.0, 0.0]])
+        # Optional radius cutoff (Cartesian) via helper
+        try:
+            from yambopy.wannier.wann_bse_wannier import build_delta_R_list
+        except Exception as e:
+            raise ImportError(f"Cannot import build_delta_R_list: {e}")
+        lattice = getattr(getattr(self, 'latdb', None), 'lat', None)
+        Rh_list, Re_list = build_delta_R_list(R_keep, R_cut=R_cut, lattice=lattice)
+        return Rh_list.astype(int), Re_list.astype(int)
+
     def write_overlap(self,seedname='wannier90',):
         if (self.Mmn is None):
             self._get_overlap()

@@ -23,5 +23,5 @@ from .wann_lifetimes import *
 from .wann_ode import *
 from .wann_realtime import *
 from .wann_pp import *
-from .wann_Mssp import compute_flux_2D, compute_chern_number_2D, plot_flux_and_chern
+from .wann_Mssp import compute_flux_2D_fixed, compute_chern_number_2D, plot_flux_and_chern
 from .tests_functions import add

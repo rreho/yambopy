@@ -9,6 +9,8 @@ from itertools import product
 from yambopy import YamboLatticeDB
 from yambopy.tools.string import marquee
 from yambopy.units import I
+from yambopy.lattice import car_red
+from yambopy.wannier.wann_bse_wannier import BSEWannierTransformer
 
 class YamboBSEKernelDB(object):
     """ Read the BSE Kernel database from yambo.
@@ -186,7 +188,70 @@ class YamboBSEKernelDB(object):
         # Among those, find subset of indices where both appear together
         t_vc = [t for t in t_v if (t in t_c and t in t_k) ]
 
-        return t_vc[0]       
+        return t_vc[0]
+
+    # ------------------------------------------------------------------
+    # Export kernel to band basis tensor with explicit (k,k',v,c,v',c')
+    # ------------------------------------------------------------------
+    def as_band_kernel_6d(self, excitons):
+        '''
+        Build K(k,k',v,c,v',c') matching the convention |ck, v(k−q)>. Uses excitons.table.
+        Returns (K6d, val_bands, cond_bands) where val_bands/cond_bands are sorted unique indices.
+        '''
+        table = excitons.table
+        nk = self.lattice.nkpoints
+        ker = self.kernel
+        self.consistency_BSE_BSK(excitons)
+        # Unique band sets (Yambo bands are 1-based)
+        val_bands = np.array(sorted(np.unique(table[:,1]).tolist()), dtype=int)
+        cond_bands = np.array(sorted(np.unique(table[:,2]).tolist()), dtype=int)
+        Nv = len(val_bands); Nc = len(cond_bands)
+        vmap = {b:i for i,b in enumerate(val_bands)}
+        cmap = {b:i for i,b in enumerate(cond_bands)}
+        K6 = np.zeros((nk, nk, Nv, Nc, Nv, Nc), dtype=np.complex128)
+        Nt = ker.shape[0]
+        # Fill via double loop over transitions
+        for t1 in range(Nt):
+            k1 = int(table[t1,0]) - 1
+            v1 = vmap[int(table[t1,1])]
+            c1 = cmap[int(table[t1,2])]
+            for t2 in range(Nt):
+                k2 = int(table[t2,0]) - 1
+                v2 = vmap[int(table[t2,1])]
+                c2 = cmap[int(table[t2,2])]
+                K6[k1, k2, v1, c1, v2, c2] = ker[t1, t2]
+        return K6, val_bands, cond_bands
+
+    # ------------------------------------------------------------------
+    # Build Wannier transformer from TB model and this kernel
+    # ------------------------------------------------------------------
+    def to_wannier_transformer(self, tbmodel, qmpgrid, iq, excitons, *, delta_R_h_list=None, delta_R_e_list=None, prune_tol=0.0, norm_factor=None):
+        '''
+        Construct BSEWannierTransformer using TBMODEL U matrices aligned to v(k−q), c(k),
+        and the band kernel assembled from this database.
+        '''
+        # Kernel in (Nk,Nk,Nv,Nc,Nv,Nc)
+        K6, val_bands, cond_bands = self.as_band_kernel_6d(excitons)
+        # k-points (reduced) from Yambo lattice
+        kpts_red = self.lattice.red_kpoints
+        # q (reduced) from provided q-mesh
+        qvec = qmpgrid.k[iq]
+        # U matrices aligned: val at k−q, cond at k; plus k−q mapping
+        k_minus_q, U_val_aligned, U_cond = tbmodel.get_aligned_U_for_q(qmpgrid, iq)
+        # Instantiate transformer
+        tr = BSEWannierTransformer(
+            kpoints=kpts_red,
+            qvec=qvec,
+            U_val=U_val_aligned,
+            U_cond=U_cond,
+            K_band=K6,
+            k_plus_q_indices=k_minus_q,
+            delta_R_h_list=delta_R_h_list,
+            delta_R_e_list=delta_R_e_list,
+            prune_tol=prune_tol,
+            norm_factor=norm_factor,
+        )
+        return tr
 
     def __str__(self):
         return self.get_string()
