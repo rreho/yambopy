@@ -595,15 +595,14 @@ class TBMODEL(tbmodels.Model):
         k_minus_q = kmq_table[:, iq, 1].astype(int)
         return k_minus_q
 
-    def get_aligned_U_for_q(self, qmpgrid, iq: int):
+    def get_U_for_q(self, qmpgrid, iq: int):
         """
-        Return (k_minus_q_indices, U_val_aligned, U_cond) for the BSE convention v(k−q), c(k).
-        U_val_aligned is U_val reordered along k to match k−q mapping.
+        Return (k_minus_q_indices, U_val, U_cond) for v(k), c(k).
+        In BSE convention we will need U[k-q].
         """
         U_val, U_cond = self.get_U_val_cond()
         k_minus_q = self.get_k_minus_q_indices(qmpgrid, iq, sign="+")
-        U_val_aligned = U_val[k_minus_q]
-        return k_minus_q, U_val_aligned, U_cond
+        return k_minus_q, U_val, U_cond
 
     def delta_R_from_tbmodel(self, tol: float = 1e-8, R_cut: float = None, ensure_zero: bool = True):
         """
@@ -627,11 +626,11 @@ class TBMODEL(tbmodels.Model):
             R_keep = np.vstack([R_keep, [0.0, 0.0, 0.0]]) if R_keep.size else np.array([[0.0, 0.0, 0.0]])
         # Optional radius cutoff (Cartesian) via helper
         try:
-            from yambopy.wannier.wann_bse_wannier import build_delta_R_list
+            from yambopy.wannier.wann_bse_wannier import build_delta_R_lists
         except Exception as e:
             raise ImportError(f"Cannot import build_delta_R_list: {e}")
-        lattice = getattr(getattr(self, 'latdb', None), 'lat', None)
-        Rh_list, Re_list = build_delta_R_list(R_keep, R_cut=R_cut, lattice=lattice)
+        lattice = self.latdb.lat
+        Rh_list, Re_list = build_delta_R_lists(R_keep, R_cut=R_cut, lattice=lattice)
         return Rh_list.astype(int), Re_list.astype(int)
 
     def write_overlap(self,seedname='wannier90',):

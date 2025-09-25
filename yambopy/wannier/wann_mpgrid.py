@@ -91,10 +91,13 @@ class symmetrized_mp_grid(KPointGenerator):
         return kmq_grid, kmq_grid_table
       
     def get_kpq_grid(self, qmpgrid):
-
+        # if not isinstance(qmpgrid, NNKP_Grids):
+        #     raise TypeError('Argument must be an instance of NNKP_Grids')
+        #here I need to use the k-q grid and then apply -b/2
+        # Prepare dimensions
         nkpoints = self.nkpoints
         nqpoints = qmpgrid.nkpoints
-        
+     
         # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
         k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
         q_grid = np.expand_dims(qmpgrid.k, axis=0)  # Shape (1, nqpoints, 3)
@@ -102,7 +105,6 @@ class symmetrized_mp_grid(KPointGenerator):
 
         # Fold into the Brillouin Zone and get G-vectors
         kpq_folded, Gvec = self.fold_into_bz_Gs(kq_add.reshape(-1, 3),bz_range=(-0.5,0.5))  # Flatten for batch processing
-
         kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
         Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
 
@@ -113,17 +115,16 @@ class symmetrized_mp_grid(KPointGenerator):
         kpq_grid_table = np.stack(
             [
                 np.arange(nkpoints)[:, None].repeat(nqpoints, axis=1),  # ik
-                closest_indices,  # idxkp
+                closest_indices,  # idkmq
                 Gvec[..., 0].astype(int),  # Gx
                 Gvec[..., 1].astype(int),  # Gy
                 Gvec[..., 2].astype(int)   # Gz
             ],
             axis=-1
         ).astype(int)  # Shape (nkpoints, nqpoints, 5)
-
         self.kpq_grid = kpq_grid
-        self.kpq_grid_table = kpq_grid_table
-
+        self.kpq_grid_table = kpq_grid_table        
+        
         return kpq_grid, kpq_grid_table
 
 

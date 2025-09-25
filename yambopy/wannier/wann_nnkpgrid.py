@@ -19,8 +19,12 @@ class NNKP_Grids(KPointGenerator):
         """Generate k-grid from NNKP file."""
         self.k = self.nnkp_grid.k
         self.red_kpoints = self.nnkp_grid.k
+        # Canonicalize to half-open [-0.5, 0.5) for deterministic k±q matching
+        self.k = ((self.k + 0.5) % 1.0) - 0.5
+        self.red_kpoints = self.k
         self.nkpoints = len(self.k)
         self.weights = 1/self.nkpoints
+        # Build tree on canonicalized k
         self.k_tree = cKDTree(self.k)
         
         # Try to infer grid dimensions (assume 2D for most cases)
@@ -237,43 +241,55 @@ class NNKP_Grids(KPointGenerator):
         
         return kmqmb_folded, kmqmb_grid_table
 
-    def get_kpq_grid(self, qmpgrid):
+    def get_kpq_grid(self, qmpgrid, sign='-'):
+        """
+        Compute k+Q grid for all k and Q combinations.
+        
+        Parameters
+        ----------
+        qmpgrid : NNKP_Grids
+            Q-point grid
+        """
+        kpq_grid = self.k[:,None,:] + qmpgrid.k[None,:,:]
 
         nkpoints = self.nkpoints
         nqpoints = qmpgrid.nkpoints
-        
-        # Broadcast k and q grids to shape (nkpoints, nqpoints, 3)
-        k_grid = np.expand_dims(self.k, axis=1)  # Shape (nkpoints, 1, 3)
-        q_grid = np.expand_dims(qmpgrid.k, axis=0)  # Shape (1, nqpoints, 3)
-        kq_add = k_grid + q_grid  # Shape (nkpoints, nqpoints, 3)
+        n_images=1
+        shifts = np.array(np.meshgrid(
+            *[np.arange(-n_images, n_images + 1)] * 3)).T.reshape(-1, 3)
 
-        # Fold into the Brillouin Zone and get G-vectors
-        kpq_folded, Gvec = self.fold_into_bz_Gs(
-            kq_add.reshape(-1, 3), 
-            bz_range=(0.0, 1.0), 
-            include_upper_bound=False
-        )  # Flatten for batch processing
-        kpq_folded = kpq_folded.reshape(nkpoints, nqpoints, 3)
-        Gvec = Gvec.reshape(nkpoints, nqpoints, 3)
+        n_shifts = len(shifts)
 
-        # Find closest k-points for all points
-        closest_indices = self.find_closest_kpoint(kpq_folded.reshape(-1, 3)).reshape(nkpoints, nqpoints)
-        # Populate the grids
-        kpq_grid = kpq_folded  # Shape (nkpoints, nqpoints, nnkpts, 3)
+        # Create all periodic images of the k-points
+        images = (qmpgrid.k[:, None, :] + shifts[None, :, :]).reshape(-1, 3)
+        # Track which original index each image comes from
+        origin_indices = np.repeat(np.arange(nkpoints), n_shifts)
+        tree = cKDTree(images)
+
+        dist, idx = tree.query(kpq_grid)
+        # matched_images = images[idx]
+        matched_indices = origin_indices[idx]
+        kpq_grid = qmpgrid.k[matched_indices]
+
+        Gvec = np.zeros(shape=(nkpoints, nqpoints, 3))        # temporarily
+
+        # # Find closest k-points for all points
+        # # Populate the grids
+        # kmq_grid = kmq_folded  # Shape (nkpoints, nqpoints, nnkpts, 3)
         kpq_grid_table = np.stack(
             [
                 np.arange(nkpoints)[:, None].repeat(nqpoints, axis=1),  # ik
-                closest_indices,  # idxkp
+                matched_indices,  # idkmq
                 Gvec[..., 0].astype(int),  # Gx
                 Gvec[..., 1].astype(int),  # Gy
                 Gvec[..., 2].astype(int)   # Gz
             ],
             axis=-1
         ).astype(int)  # Shape (nkpoints, nqpoints, 5)
-
-        self.kpq_grid = kpq_grid
-        self.kpq_grid_table = kpq_grid_table
-
+        # self.kmq_grid = kmq_grid
+        self.kpq_grid_table = kpq_grid_table   
+        self.kpq_grid = kpq_grid     
+        
         return kpq_grid, kpq_grid_table
     
     def find_closest_kpoint(self, points):

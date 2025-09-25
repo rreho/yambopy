@@ -232,24 +232,99 @@ class YamboBSEKernelDB(object):
         '''
         # Kernel in (Nk,Nk,Nv,Nc,Nv,Nc)
         K6, val_bands, cond_bands = self.as_band_kernel_6d(excitons)
-        # k-points (reduced) from Yambo lattice
-        kpts_red = self.lattice.red_kpoints
+        # k-points (reduced) from Yambo lattice (reference ordering for kernel indices)
+        kpts_red = np.asarray(self.lattice.red_kpoints, dtype=float)
+        Nk = int(kpts_red.shape[0])
         # q (reduced) from provided q-mesh
-        qvec = qmpgrid.k[iq]
-        # U matrices aligned: val at k−q, cond at k; plus k−q mapping
-        k_minus_q, U_val_aligned, U_cond = tbmodel.get_aligned_U_for_q(qmpgrid, iq)
-        # Instantiate transformer
+        qvec = np.asarray(qmpgrid.k[iq], dtype=float)
+
+        # U matrices aligned: val at k−q, cond at k; plus k−q mapping (in TB grid order)
+        k_minus_q, U_val, U_cond = tbmodel.get_U_for_q(qmpgrid, iq)
+
+        # Sanity checks on shapes
+        assert U_val.shape[0] == tbmodel.nk, "TB U_val_aligned first axis must be nk of TB grid"
+        assert U_cond.shape[0] == tbmodel.nk, "TB U_cond first axis must be nk of TB grid"
+        assert K6.shape[0] == Nk and K6.shape[1] == Nk, "Kernel Nk must match lattice Nk"
+
+        # # Build permutation between Yambo lattice k-order and TB mpgrid k-order
+        # def _permute_from_to(src, dst, decimals=8):
+        #     # Return P such that dst[P[i]] == src[i] (mod 1) after rounding
+        #     src_mod = np.mod(np.asarray(src, float), 1.0)
+        #     dst_mod = np.mod(np.asarray(dst, float), 1.0)
+        #     key = lambda x: tuple(np.round(x, decimals=decimals))
+        #     lut = {key(dst_mod[j]): j for j in range(dst_mod.shape[0])}
+        #     P = np.empty(src_mod.shape[0], dtype=int)
+        #     for i in range(src_mod.shape[0]):
+        #         k = key(src_mod[i])
+        #         if k not in lut:
+        #             raise ValueError(
+        #                 "Yambo↔TB k-grid mismatch: could not find a TB k matching lattice k[{}] under rounding.".format(i)
+        #             )
+        #         P[i] = lut[k]
+        #     return P
+
+        # try:
+        #     P_y2tb = _permute_from_to(kpts_red, tbmodel.mpgrid.k, decimals=8)
+        # except Exception as e:
+        #     # Provide brief diagnostics on the worst offending point
+        #     k_mod = np.mod(kpts_red, 1.0)
+        #     tb_mod = np.mod(tbmodel.mpgrid.k, 1.0)
+        #     # fallback nearest (not used for mapping, only for message)
+        #     from numpy.linalg import norm
+        #     diffs = np.min([norm(k_mod[:, None, :] - (tb_mod[None, :, :] + shift), axis=2)
+        #                     for shift in (np.array([0, 0, 0])[None, None, :],)], axis=0)
+        #     worst = int(np.argmax(np.min(diffs, axis=1)))
+        #     raise ValueError(f"k-grid mismatch between lattice and TB grids. Example k[{worst}]={k_mod[worst]} not found in TB grid. Original error: {e}")
+
+        # # Inverse permutation TB->Y
+        # invP = np.empty_like(P_y2tb)
+        # invP[P_y2tb] = np.arange(Nk)
+
+        # # Reorder TB-provided data into Yambo lattice order expected by K6
+        # U_val_aligned = U_val_aligned_tb[P_y2tb]
+        # U_cond = U_cond_tb[P_y2tb]
+        # # Remap k−q indices from TB order to Yambo order: for Y-index i, map TB j=P[i] -> TB j_mq -> Y invP[j_mq]
+        # k_minus_q = invP[k_minus_q_tb[P_y2tb]]
+
+        # # Diagnostics removed for simplicity as per user preference.
+
+        # # Build k+q and (k,k')->q tables using TB mpgrid and provided qmpgrid, then map to Y-order
+        # # kpq_table_tb: shape (nk, nq, 5) with indices [ik_tb, iq, 1] = idx of k+q in TB order
+        kpq_grid_tb, kpq_table_tb = tbmodel.mpgrid.get_kpq_grid(qmpgrid)
+        k_plus_q = kpq_table_tb[:,iq,1]
+        if kpq_table_tb.shape[0] != tbmodel.nk or kpq_table_tb.shape[1] != qmpgrid.nkpoints:
+            raise ValueError("kpq table shape mismatch with TB or q grids")
+        if qmpgrid.nkpoints != Nk:
+            # We assume q-grid equals k-grid size for our partial FT; enforce here
+            raise ValueError("q-grid size must equal k-grid size (Nk)")
+        # Map kpq table to Y-order: k_plus_q_y[i, iq] = ikp_y
+        #k_plus_q_y = np.empty((Nk, Nk), dtype=int)
+        # for i_y in range(Nk):
+        #     i_tb = P_y2tb[i_y]
+        #     for iq in range(Nk):
+        #         ikp_tb = int(kpq_table_tb[i_tb, iq, 1])
+        #         k_plus_q_y[i_y, iq] = int(invP[ikp_tb])
+        # Invert to get pair_to_iq_y: for each (i, iq) -> ikp; set (i, ikp) -> iq
+        # pair_to_iq_y = np.empty((Nk, Nk), dtype=int)
+        # for i in range(Nk):
+        #     for iq in range(Nk):
+        #         ikp = k_plus_q_y[i, iq]
+        #         pair_to_iq_y[i, ikp] = iq
+
+        # Instantiate transformer with data in lattice order
         tr = BSEWannierTransformer(
             kpoints=kpts_red,
             qvec=qvec,
-            U_val=U_val_aligned,
+            U_val=U_val,
             U_cond=U_cond,
             K_band=K6,
-            k_plus_q_indices=k_minus_q,
+            k_plus_q_indices=k_plus_q,
+            k_minus_q_indices=k_minus_q,
+            #pair_to_iq=pair_to_iq_y,
+            k_plus_q=kpq_grid_tb,
             delta_R_h_list=delta_R_h_list,
             delta_R_e_list=delta_R_e_list,
-            prune_tol=prune_tol,
-            norm_factor=norm_factor,
+            norm_factor_bra=norm_factor,
         )
         return tr
 
