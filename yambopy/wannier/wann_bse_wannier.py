@@ -277,6 +277,3 @@ class BSEWannierFT:
             dv = max(dv, float(np.linalg.norm(V.conj().T @ V - Iv, 2)))
             dc = max(dc, float(np.linalg.norm(C.conj().T @ C - Ic, 2)))
         return dv, dc
-
-# Backward-compat alias for older imports
-BSEWannierTransformer = BSEWannierFT

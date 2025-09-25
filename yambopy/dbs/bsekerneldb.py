@@ -10,7 +10,7 @@ from yambopy import YamboLatticeDB
 from yambopy.tools.string import marquee
 from yambopy.units import I
 from yambopy.lattice import car_red
-from yambopy.wannier.wann_bse_wannier import BSEWannierTransformer
+from yambopy.wannier.wann_bse_wannier import BSEWannierFT
 
 class YamboBSEKernelDB(object):
     """ Read the BSE Kernel database from yambo.
@@ -227,7 +227,7 @@ class YamboBSEKernelDB(object):
     # ------------------------------------------------------------------
     def to_wannier_transformer(self, tbmodel, qmpgrid, iq, excitons, *, delta_R_h_list=None, delta_R_e_list=None, prune_tol=0.0, norm_factor=None):
         '''
-        Construct BSEWannierTransformer using TBMODEL U matrices aligned to v(k−q), c(k),
+        Construct BSEWannierFT using TBMODEL U matrices aligned to v(k−q), c(k),
         and the band kernel assembled from this database.
         '''
         # Kernel in (Nk,Nk,Nv,Nc,Nv,Nc)
@@ -312,7 +312,7 @@ class YamboBSEKernelDB(object):
         #         pair_to_iq_y[i, ikp] = iq
 
         # Instantiate transformer with data in lattice order
-        tr = BSEWannierTransformer(
+        tr = BSEWannierFT(
             kpoints=kpts_red,
             qvec=qvec,
             U_val=U_val,

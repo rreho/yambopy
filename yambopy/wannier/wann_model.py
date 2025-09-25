@@ -14,6 +14,7 @@ from yambopy.wannier.wann_asegrid import ase_Monkhorst_Pack
 from yambopy.wannier.wann_Gfuncs import GreensFunctions
 from yambopy.wannier.wann_utils import HA2EV, fermi_dirac, fermi_dirac_T, sort_eig
 from yambopy.wannier.wann_dipoles import TB_dipoles
+
 import matplotlib.pyplot as plt
 import scipy
 class TBMODEL(tbmodels.Model):
@@ -606,32 +607,146 @@ class TBMODEL(tbmodels.Model):
 
     def delta_R_from_tbmodel(self, tol: float = 1e-8, R_cut: float = None, ensure_zero: bool = True):
         """
-        Build ΔR_h and ΔR_e lists from the TB real-space Hamiltonian shells.
-        - Uses self.hr.hop (R-vectors, reduced) and self.hr.HR_mn to prune by amplitude.
-        - Optionally applies a Cartesian radius cutoff if lattice is available.
-        Returns: (delta_R_h_list, delta_R_e_list), both integer arrays of shape (NR, 3).
+        Build ΔR_h and ΔR_e lists directly from the TB real-space Hamiltonian (self.hr).
+        - Start from self.hr.hop (NR,3) reduced lattice vectors and self.hr.HR_mn (NR,Nw,Nw).
+        - Prune R by maximum hopping amplitude > tol.
+        - Optionally apply a Cartesian radius cutoff R_cut (in Angstrom) if self.latdb.lat is available.
+        - Deduplicate, sort, round to integers, and optionally ensure Γ is present.
+
+        Returns
+        -------
+        (delta_R_h_list, delta_R_e_list): two identical integer arrays of shape (NR,3)
         """
+        # Basic availability checks
         if not hasattr(self, 'hr'):
-            raise ValueError("hr not found on TBMODEL. Ensure solve_ham_from_hr (or equivalent) was called.")
-        import numpy as np  # local import to avoid polluting module namespace
+            raise ValueError("TBMODEL.hr not set. Call solve_ham_from_hr(...) before building shells from TB.")
+
+        # Gather R vectors and hopping amplitudes
         R_all = np.asarray(self.hr.hop, dtype=float)
         HR = np.asarray(self.hr.HR_mn)
-        if HR.ndim != 3 or R_all.ndim != 2 or R_all.shape[1] != 3:
-            raise ValueError("Unexpected hr shapes: hop should be (NR,3), HR_mn should be (NR,Nw,Nw)")
+        if R_all.ndim != 2 or R_all.shape[1] != 3:
+            raise ValueError("hr.hop must have shape (NR,3) with reduced lattice vectors")
+        if HR.ndim != 3 or HR.shape[0] != R_all.shape[0]:
+            raise ValueError("hr.HR_mn must have shape (NR,Nw,Nw) matching hr.hop first dimension")
+
+        # Prune by amplitude threshold
         amp = np.max(np.abs(HR), axis=(1, 2))  # (NR,)
         keep = amp > float(tol)
         R_keep = R_all[keep]
-        # Ensure Γ shell present
-        if ensure_zero and (R_keep.size == 0 or not np.any(np.all(np.isclose(R_keep, 0.0), axis=1))):
-            R_keep = np.vstack([R_keep, [0.0, 0.0, 0.0]]) if R_keep.size else np.array([[0.0, 0.0, 0.0]])
-        # Optional radius cutoff (Cartesian) via helper
-        try:
-            from yambopy.wannier.wann_bse_wannier import build_delta_R_lists
-        except Exception as e:
-            raise ImportError(f"Cannot import build_delta_R_list: {e}")
-        lattice = self.latdb.lat
-        Rh_list, Re_list = build_delta_R_lists(R_keep, R_cut=R_cut, lattice=lattice)
-        return Rh_list.astype(int), Re_list.astype(int)
+
+        # Optional Cartesian radius cutoff if lattice is available
+        if R_cut is not None:
+            try:
+                lat = self.latdb.lat  # real-space lattice vectors (3,3)
+            except Exception as exc:
+                raise ValueError("R_cut provided but lattice (self.latdb.lat) is not available") from exc
+            from yambopy.lattice import red_car
+            R_cart = red_car(R_keep, lat)  # (NR_kept,3) in cartesian
+            mask = np.linalg.norm(R_cart, axis=1) <= float(R_cut)
+            R_keep = R_keep[mask]
+
+        # Round to nearest integers (Wannier90 hr.hop should already be integers)
+        R_int = np.rint(R_keep).astype(int)
+
+        # Deduplicate rows and sort for determinism
+        if R_int.size:
+            uniq = sorted({(int(r[0]), int(r[1]), int(r[2])) for r in R_int.tolist()})
+            R_int = np.array(uniq, dtype=int)
+        else:
+            R_int = np.zeros((0, 3), dtype=int)
+
+        # Optionally ensure Γ is present
+        if ensure_zero and not np.any(np.all(R_int == 0, axis=1)):
+            R_int = np.vstack([R_int, [0, 0, 0]])
+
+        # Return same set for hole and electron shells for TB-derived truncation
+        return R_int.copy(), R_int.copy()
+
+    # ------------------------------------------------------------------
+    # Shell builders for BSE Wannier transforms (S_h, S_e)
+    # ------------------------------------------------------------------
+    def _infer_grid_shape_from_k(self, decimals: int = 10) -> tuple:
+        """Infer (nkx, nky, nkz) from the current k-grid if not explicitly available."""
+        if hasattr(self.mpgrid, 'nkx') and hasattr(self.mpgrid, 'nky') and hasattr(self.mpgrid, 'nkz'):
+            return int(self.mpgrid.nkx), int(self.mpgrid.nky), int(self.mpgrid.nkz)
+        k = np.mod(np.asarray(self.mpgrid.k, float), 1.0)
+        r = np.round(k, decimals=decimals)
+        xs = np.unique(r[:, 0])
+        ys = np.unique(r[:, 1])
+        zs = np.unique(r[:, 2])
+        return len(xs), len(ys), len(zs)
+
+    @staticmethod
+    def _dual_indices(n: int, centered: bool) -> np.ndarray:
+        """Return integer indices that span the discrete dual for size n.
+        - centered=False: 0..n-1
+        - centered=True:  -(n//2)..(n - n//2 - 1)
+        """
+        if centered:
+            return np.arange(-(n // 2), n - (n // 2), dtype=int)
+        return np.arange(n, dtype=int)
+
+    def build_dual_shells_from_mpgrid(self, centered: bool = False) -> np.ndarray:
+        """Build the full dual set of integer triplets for the current uniform k-grid.
+        This is the natural exact-inverse shell set.
+        Returns: array of shape (Nk, 3) with integer entries.
+        """
+        nkx, nky, nkz = self._infer_grid_shape_from_k()
+        ix = self._dual_indices(nkx, centered)
+        iy = self._dual_indices(nky, centered)
+        iz = self._dual_indices(nkz, centered)
+        grid = np.array([[x, y, z] for x in ix for y in iy for z in iz], dtype=int)
+        return grid
+
+    @staticmethod
+    def _ensure_gamma(vecs: np.ndarray) -> np.ndarray:
+        if vecs.size == 0:
+            return np.array([[0, 0, 0]], dtype=int)
+        has_zero = np.any(np.all(vecs == 0, axis=1))
+        return vecs if has_zero else np.vstack([vecs, [0, 0, 0]]).astype(int)
+
+    @staticmethod
+    def _symmetrize_shell(vecs: np.ndarray) -> np.ndarray:
+        """Ensure that if R is present, -R is also present. Deduplicate and sort."""
+        tup = {tuple(v) for v in vecs.tolist()}
+        tup |= {tuple((-np.array(v)).tolist()) for v in tup}
+        out = np.array(sorted(list(tup)), dtype=int)
+        return out
+
+    def build_shells_for_bse(self,
+                             mode: str = "dual",
+                             tol: float = 1e-8,
+                             centered: bool = False,
+                             symmetric: bool = True) -> tuple:
+        """Construct (S_h, S_e) displacement sets.
+        - mode="dual": use the full dual of the k-grid for both shells (exact inverse on discrete grid).
+        - mode="tb": derive shells from real-space TB Hamiltonian displacements (hr.hop) pruned by tol.
+        Options:
+        - centered: use centered dual indices for dual mode.
+        - symmetric: ensure shells are symmetric under R -> -R.
+        Returns: (Sh_list, Se_list) as integer arrays of shape (NR, 3).
+        """
+        if mode not in {"dual", "tb"}:
+            raise ValueError("mode must be 'dual' or 'tb'")
+
+        if mode == "dual":
+            shell = self.build_dual_shells_from_mpgrid(centered=centered)
+            if symmetric:
+                shell = self._symmetrize_shell(shell)
+            shell = self._ensure_gamma(shell)
+            return shell.copy(), shell.copy()
+
+        # mode == 'tb'
+        Rh_list, Re_list = self.delta_R_from_tbmodel(tol=tol, R_cut=None, ensure_zero=True)
+        # Convert to integers robustly (hr.hop should be integer in reduced coords; round just in case)
+        Rh = np.rint(Rh_list).astype(int)
+        Re = np.rint(Re_list).astype(int)
+        if symmetric:
+            Rh = self._symmetrize_shell(Rh)
+            Re = self._symmetrize_shell(Re)
+        Rh = self._ensure_gamma(Rh)
+        Re = self._ensure_gamma(Re)
+        return Rh, Re
 
     def write_overlap(self,seedname='wannier90',):
         if (self.Mmn is None):
