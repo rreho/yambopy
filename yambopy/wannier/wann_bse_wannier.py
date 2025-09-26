@@ -1,6 +1,9 @@
 import numpy as np
 from typing import Optional, Tuple
 
+# Robust k-point lookup utilities with periodic KDTree
+from yambopy.kpoints import build_ktree, find_kpt, make_kpositive
+
 """
 BSE kernel Fourier transforms between Bloch and Wannier representations
 =====================================================================
@@ -71,26 +74,33 @@ def _index_of(points: np.ndarray, target: np.ndarray, lut: dict, decimals: int =
 
 
 def build_k_minus_vector_indices(kpoints: np.ndarray, vec: np.ndarray, *, decimals: int = 10) -> np.ndarray:
-    """For each k, return index of k−vec on the same reduced grid.
+    """For each k, return index of k−vec on the same reduced grid using periodic KDTree lookup.
     vec may be Q or q. Shape (Nk,)."""
     Nk = kpoints.shape[0]
-    lut, _ = _grid_hash(kpoints, decimals=decimals)
+    # Build periodic KDTree for robust lookup
+    tree = build_ktree(np.asarray(kpoints, float))
     out = np.empty(Nk, dtype=int)
+    # Map decimals to tolerance ~ half-ulp at given rounding precision
+    # Use a reasonably loose tolerance to account for non-canonical k ranges and float noise
+    tol = max(1e-5, 0.5 * 10.0**(-decimals))
     for ik in range(Nk):
-        out[ik] = _index_of(kpoints, kpoints[ik] - vec, lut, decimals)
+        target = make_kpositive(np.asarray(kpoints[ik] - vec, float))
+        out[ik] = int(find_kpt(tree, target, tol=tol))
     return out
 
 
 def build_k_plus_q_table(kpoints: np.ndarray, *, decimals: int = 10) -> np.ndarray:
-    """Return table (Nk, Nk) with table[ik, iq] = index of kpoints[ik] + kpoints[iq] modulo 1."""
+    """Return table (Nk, Nk) with table[ik, iq] = index of kpoints[ik] + kpoints[iq] modulo 1 using periodic KDTree lookup."""
     Nk = kpoints.shape[0]
-    lut, _ = _grid_hash(kpoints, decimals=decimals)
+    tree = build_ktree(np.asarray(kpoints, float))
     tab = np.empty((Nk, Nk), dtype=int)
+    tol = max(1e-5, 0.5 * 10.0**(-decimals))
     for ik in range(Nk):
-        k = kpoints[ik]
+        k = np.asarray(kpoints[ik], float)
         for iq in range(Nk):
-            q = kpoints[iq]
-            tab[ik, iq] = _index_of(kpoints, k + q, lut, decimals)
+            q = np.asarray(kpoints[iq], float)
+            target = make_kpositive(k + q)
+            tab[ik, iq] = int(find_kpt(tree, target, tol=tol))
     return tab
 
 
@@ -149,6 +159,79 @@ class BSEWannierFT:
             tens = np.einsum('mv,nc->mnvc', Uvk, Uck, optimize=True)
             self.L[ik] = tens.reshape(self.Nm, self.Nt)
         self.LH = np.conjugate(self.L).transpose(0, 2, 1)  # (Nk, Nt, Nm)
+
+    @staticmethod
+    def W_to_wtilde_at_q_arbitrary(W: np.ndarray, R0_list: np.ndarray, q_list: np.ndarray) -> np.ndarray:
+        """Fourier-transform W(Sh,Se,R0) to Wtilde(Sh,Se,q) for an arbitrary list of q-vectors.
+        Inputs:
+          - W: (NRh,NRe,N0,Nm,Nm)
+          - R0_list: (N0,D) integer reduced lattice vectors
+          - q_list: (Nq,D) reduced q points (not necessarily on the original grid)
+        Returns:
+          - Wtilde: (NRh,NRe,Nq,Nm,Nm)
+        """
+        R0 = np.asarray(R0_list, int)
+        q = np.asarray(q_list, float)
+        assert W.ndim == 5 and W.shape[2] == R0.shape[0]
+        # phase ph(q,a) = exp(+i2π q·R0_a)
+        ph = np.exp(+2j * np.pi * (q @ R0.T))  # (Nq, N0)
+        # einsum over R0 index 'a'
+        Wtilde = np.einsum('rsanm, qa -> rsqnm', W, ph, optimize=True)
+        return Wtilde
+
+    @staticmethod
+    def reconstruct_bloch_for_offgrid_q(
+        *,
+        Wtilde_q: np.ndarray,             # (NRh,NRe,Nm,Nm) for a single q
+        kpoints: np.ndarray,              # (Nk,D)
+        Sh_list: np.ndarray,              # (NRh,D)
+        Se_list: np.ndarray,              # (NRe,D)
+        q_vec: np.ndarray,                # (D,)
+        Uv_k_minus_q: np.ndarray,         # (Nk,NWh,Nv)
+        Uc_k: np.ndarray,                 # (Nk,NWe,Nc)
+        Uv_k: np.ndarray,                 # (Nk,NWh,Nv)
+        Uc_k_plus_q: np.ndarray,          # (Nk,NWe,Nc)
+    ) -> np.ndarray:
+        """Reconstruct K(k,k+q) for an off-grid q using provided U matrices.
+        Returns K_per_k of shape (Nk, Nv, Nc, Nv, Nc).
+        """
+        k = np.asarray(kpoints, float)
+        Sh = np.asarray(Sh_list, int)
+        Se = np.asarray(Se_list, int)
+        Nk = k.shape[0]
+        NRh = Sh.shape[0]
+        NRe = Se.shape[0]
+        NWh, Nv = Uv_k_minus_q.shape[1], Uv_k_minus_q.shape[2]
+        NWe, Nc = Uc_k.shape[1], Uc_k.shape[2]
+        Nm = NWh * NWe
+        assert Wtilde_q.shape == (NRh, NRe, Nm, Nm)
+
+        # Phases exp(+i2π[(k−q)·Sh + k·Se]) per k
+        ph_h = np.exp(+2j * np.pi * ((k - q_vec) @ Sh.T))  # (Nk,NRh)
+        ph_e = np.exp(+2j * np.pi * (k @ Se.T))            # (Nk,NRe)
+
+        # Output container in transition basis then reshape
+        Ktc_per_k = np.zeros((Nk, Nv * Nc, Nv * Nc), dtype=complex)
+
+        # Precompute normalization factor Nk/(NRh*NRe)
+        norm = Nk / float(NRh * NRe)
+
+        for ik in range(Nk):
+            # Sum over shells to get Wk block in Wannier-transition basis (Nm,Nm)
+            phases = (ph_h[ik][:, None] * ph_e[ik][None, :])  # (NRh,NRe)
+            Wk_block = norm * np.einsum('rs, rsnm -> nm', phases, Wtilde_q, optimize=True)
+
+            # Build L(k) and L(k+q)
+            tens_k = np.einsum('mv,nc->mnvc', Uv_k_minus_q[ik], Uc_k[ik], optimize=True)
+            Lk = tens_k.reshape(Nm, Nv * Nc)
+            tens_kp = np.einsum('mv,nc->mnvc', Uv_k[ik], Uc_k_plus_q[ik], optimize=True)
+            Lkp = tens_kp.reshape(Nm, Nv * Nc)
+
+            # Project back: K_tc = L^† Wk L'
+            Ktc_per_k[ik] = Lk.conj().T @ Wk_block @ Lkp
+
+        # Reshape to (Nk,Nv,Nc,Nv,Nc)
+        return Ktc_per_k.reshape(Nk, Nv, Nc, Nv, Nc)
 
     # -------------- Forward: Bloch -> Wtilde(Sh,Se,q) --------------
     def bloch_to_wtilde(self, K: np.ndarray) -> np.ndarray:
@@ -277,3 +360,51 @@ class BSEWannierFT:
             dv = max(dv, float(np.linalg.norm(V.conj().T @ V - Iv, 2)))
             dc = max(dc, float(np.linalg.norm(C.conj().T @ C - Ic, 2)))
         return dv, dc
+
+
+def kernel_realspace_roundtrip(
+    K_band: np.ndarray,
+    *,
+    kpoints: np.ndarray,
+    Q: np.ndarray,
+    U_val: np.ndarray,
+    U_cond: np.ndarray,
+    Sh_list: np.ndarray,
+    Se_list: np.ndarray,
+    R0_list: Optional[np.ndarray] = None,
+    centered: bool = False,
+    decimals: int = 10,
+):
+    """Compute real-space kernel W(Sh,Se,R0) from band kernel K and reconstruct K.
+
+    Returns (W, K_back, R0_used).
+    If R0_list is None, build the full dual grid indices inferred from kpoints.
+    """
+    def _infer_grid_shape_from_k(kpts: np.ndarray, decimals: int = 10):
+        k = np.mod(np.asarray(kpts, float), 1.0)
+        r = np.round(k, decimals=decimals)
+        xs = np.unique(r[:, 0]); ys = np.unique(r[:, 1]); zs = np.unique(r[:, 2])
+        return len(xs), len(ys), len(zs)
+
+    def _dual_indices(n: int, centered: bool) -> np.ndarray:
+        return np.arange(-(n // 2), n - (n // 2), dtype=int) if centered else np.arange(n, dtype=int)
+
+    def _build_dual_from_k(kpts: np.ndarray, centered: bool, decimals: int = 10) -> np.ndarray:
+        nkx, nky, nkz = _infer_grid_shape_from_k(kpts, decimals)
+        ix = _dual_indices(nkx, centered); iy = _dual_indices(nky, centered); iz = _dual_indices(nkz, centered)
+        grid = np.array([[x, y, z] for x in ix for y in iy for z in iz], dtype=int)
+        return grid
+
+    kpoints = np.asarray(kpoints, float)
+    Q = np.asarray(Q, float)
+
+    if R0_list is None:
+        R0_list = _build_dual_from_k(kpoints, centered=centered, decimals=decimals)
+
+    # Build transformer and do the round-trip
+    ft = BSEWannierFT(kpoints=kpoints, Q=Q, U_val=U_val, U_cond=U_cond, Sh_list=Sh_list, Se_list=Se_list, decimals=decimals)
+    Wtilde = ft.bloch_to_wtilde(K_band)
+    W = ft.wtilde_to_W(Wtilde, R0_list)
+    Wtilde_back = ft.W_to_wtilde(W, R0_list)
+    K_back = ft.wtilde_to_bloch(Wtilde_back)
+    return W, K_back, R0_list

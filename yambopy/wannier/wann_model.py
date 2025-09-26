@@ -605,6 +605,65 @@ class TBMODEL(tbmodels.Model):
         k_minus_q = self.get_k_minus_q_indices(qmpgrid, iq, sign="+")
         return k_minus_q, U_val, U_cond
 
+    # ------------------------------
+    # Off-grid U(k) utilities
+    # ------------------------------
+    @staticmethod
+    def _mod1(arr: np.ndarray) -> np.ndarray:
+        return np.mod(arr, 1.0)
+
+    def get_U_val_cond_at_kpoints(self, kpts: np.ndarray):
+        """
+        Compute (U_val(k), U_cond(k)) at arbitrary reduced k-points via HR interpolation.
+        Shapes:
+          - U_val: (Nk, Nw, Nv)
+          - U_cond: (Nk, Nw, Nc)
+        Uses the nv/nc partition determined at solve time.
+        """
+        if not hasattr(self, 'hr') or not hasattr(self, 'latdb'):
+            raise ValueError("Model must be solved from HR with latdb set before calling this method.")
+        if not hasattr(self, 'nv') or not hasattr(self, 'nc'):
+            raise ValueError("nv/nc not set. Solve the model first to determine band partition.")
+        kpts = np.asarray(kpts, float)
+        if kpts.ndim != 2 or kpts.shape[1] != 3:
+            raise ValueError("kpts must have shape (Nk,3) in reduced coords")
+        # Fold to [0,1)
+        k_fold = self._mod1(kpts)
+        evals, evecs = self.get_eigenval_and_vec(k_fold, from_hr=True)
+        Nk = k_fold.shape[0]
+        Nw = self.nb
+        U_val = np.zeros((Nk, Nw, self.nv), dtype=np.complex128)
+        U_cond = np.zeros((Nk, Nw, self.nc), dtype=np.complex128)
+        # Columns of evecs are eigenvectors (Nw,)
+        for ik in range(Nk):
+            U_val[ik] = evecs[ik, :, :self.nv]
+            U_cond[ik] = evecs[ik, :, self.nv:self.nv + self.nc]
+        return U_val, U_cond
+
+    def get_U_for_offgrid_q(self, q_vec: np.ndarray, k_ref: np.ndarray = None):
+        """
+        For an arbitrary reduced q_vec, return U matrices at k, k−q, and k+q evaluated via HR.
+        If k_ref is None, use the model's MP grid as reference k.
+        Returns a dict with keys: 'k', 'k_minus_q', 'k_plus_q', and values (U_val, U_cond).
+        """
+        q = np.asarray(q_vec, float)
+        if q.shape != (3,):
+            raise ValueError("q_vec must have shape (3,)")
+        k0 = self.mpgrid.k if k_ref is None else np.asarray(k_ref, float)
+        if k0.ndim != 2 or k0.shape[1] != 3:
+            raise ValueError("k_ref must have shape (Nk,3)")
+        k = self._mod1(k0)
+        k_minus_q = self._mod1(k - q)
+        k_plus_q = self._mod1(k + q)
+        Uv_k, Uc_k = self.get_U_val_cond_at_kpoints(k)
+        Uv_k_minus_q, Uc_dummy = self.get_U_val_cond_at_kpoints(k_minus_q)
+        Uv_dummy, Uc_k_plus_q = self.get_U_val_cond_at_kpoints(k_plus_q)
+        return {
+            'k': (Uv_k, Uc_k),
+            'k_minus_q': (Uv_k_minus_q, Uc_dummy),
+            'k_plus_q': (Uv_dummy, Uc_k_plus_q),
+        }
+
     def delta_R_from_tbmodel(self, tol: float = 1e-8, R_cut: float = None, ensure_zero: bool = True):
         """
         Build ΔR_h and ΔR_e lists directly from the TB real-space Hamiltonian (self.hr).
