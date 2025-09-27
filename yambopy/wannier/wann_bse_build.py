@@ -2,7 +2,7 @@ import numpy as np
 from typing import Tuple, Optional
 
 from .wann_bse_wannier import build_k_minus_vector_indices
-
+from yambopy.units import ha2ev
 
 def _align_tb_to_kpoints(tb_k: np.ndarray, kpoints: np.ndarray, decimals: int = 6) -> np.ndarray:
     """
@@ -26,7 +26,7 @@ def build_bse_resonant_hamiltonian(
     Q_vec: np.ndarray,                  # (3,) reduced Q (e.g., Gamma for Coulomb)
     f_kn: Optional[np.ndarray] = None,  # (Nk, Nb) occupations; if None and TB path used: T=0 (val=1, cond=0)
     decimals: int = 6,
-    kernel_scale: float = 1.0,          # unit/sign factor for kernel (e.g., -HA2EV)
+    kernel_scale: float = ha2ev,          # unit/sign factor for kernel (e.g., -HA2EV)
     include_antiresonant: bool = False, # if True, build 2Nt x 2Nt with antiresonant block
     include_coupling: bool = False,     # if True, include resonant–antiresonant coupling block B
     non_hermitian_blocks: bool = True,  # if True, use [[A, B], [-B*, -A*]]; else [[A, B],[B*, A*]]
