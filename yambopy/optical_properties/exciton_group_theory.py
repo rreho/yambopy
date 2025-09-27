@@ -48,16 +48,18 @@ class ExcitonGroupTheory(BaseOpticalProperties):
     def read(self, bands_range=None, **kwargs):
         """Read databases and setup symmetry."""
         self.read_common_databases(bands_range=bands_range, **kwargs)
-        self.lelph_db = read_lelph_database(self.LELPH_dir, kwargs.get('lelph_db'))
-        self.qpts = self.lelph_db.qpoints
-        
+        try:
+            self.lelph_db = read_lelph_database(self.LELPH_dir, kwargs.get('lelph_db'))
+        except Exception as e:
+            print(f"Could not read lelph_db: {e}")
+        self.qpts = self.wfdb.kBZ
         self._setup_kpoint_mapping()
         self._setup_symmetry()
         
         if hasattr(self.wfdb, 'ktree'):
             self.kpt_tree = self.wfdb.ktree
         else:
-            self._build_kpoint_tree(self.lelph_db.kpoints)
+            self._build_kpoint_tree()
 
     def _setup_symmetry(self):
         """Setup crystal symmetry using spglib - little group will be determined per Q-point."""
@@ -538,7 +540,7 @@ class ExcitonGroupTheory(BaseOpticalProperties):
             wfc_tmp = rotate_exc_wf(
                 BS_wfcs,
                 self.sym_red[isym],
-                self.lelph_db.kpoints,
+                self.wfdb.kBZ,
                 self.qpts[iQ - 1],
                 self.spglib_Dmats[isym],
                 False,

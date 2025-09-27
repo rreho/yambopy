@@ -139,7 +139,7 @@ class BaseOpticalProperties(ABC):
                     wfdb.Dmat()
                 self.wfdb = wfdb
             else:
-                self.wfdb = YamboWFDB(path=self.path,save='SAVE', filename='ns.wf', latdb=self.ydb, 
+                self.wfdb = YamboWFDB(path=self.path,save=self.SAVE_dir, filename='ns.wf', latdb=self.ydb, 
                                     bands_range=bands_range)
         except Exception as e:
             raise IOError(f'Cannot read ns.wf file: {e}')
