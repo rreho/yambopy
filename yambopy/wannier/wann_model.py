@@ -532,6 +532,10 @@ class TBMODEL(tbmodels.Model):
                         t_index += 1
         self.ntransitions = ntransitions
         self.T_table = T_table
+        # Provide a local-index version with conduction index in [0..Nc-1]
+        self.T_table_local = np.column_stack([T_table[:, 0],
+                                              T_table[:, 1],
+                                              T_table[:, 2] - self.nv]).astype(int)
 
     @classmethod
     def _get_occupations(cls, nk, nb, eigv, fermie):
