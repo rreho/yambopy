@@ -1,20 +1,18 @@
-import numpy as np
 from yambopy.wannier.wann_asegrid import ase_Monkhorst_Pack
 from yambopy.wannier.wann_utils import *
 from yambopy.wannier.wann_dipoles import TB_dipoles
 from yambopy.wannier.wann_occupations import TB_occupations
-from yambopy.dbs.bsekerneldb import *
 from yambopy.dbs.electronsdb import *
 from yambopy.dbs.latticedb import *
 from yambopy.dbs.excitondb import *
 from yambopy.wannier.wann_io import AMN
 from yambopy.units import *
-from scipy.linalg.lapack import zheev
 from time import time
 import scipy
 import gc
 
 def process_file(args):
+    from yambopy.dbs.bsekerneldb import YamboBSEKernelDB
     idx, exc_db_file, data_dict = args
     # Unpacking data necessary for processing
     latdb, kernel_path, kpoints_indexes, HA2EV, BSE_table, kplusq_table, kminusq_table_yambo, eigv, f_kn = data_dict.values()
@@ -128,10 +126,10 @@ class H2P():
         if electronsdb_path:
             self.electronsdb_path = electronsdb_path
             self.latdb = YamboLatticeDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
-            if self.latdb.ibz_nkpoints != self.nk:
-                self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
-            else:
-                self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=False)
+            # if self.latdb.ibz_nkpoints != self.nk:
+            self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=True)
+            # else:
+            #     self.electronsdb = YamboElectronsDB.from_db_file(folder=f'{electronsdb_path}', Expand=False)
 
         else:
             self.electronsdb_path = None    # required when initializing ExcitonBands in pp
@@ -253,6 +251,7 @@ class H2P():
             return H2P
 
         else:
+            from yambopy.dbs.bsekerneldb import YamboBSEKernelDB
             # Expanded k-points and symmetry are prepared for operations that might need them
             full_kpoints, kpoints_indexes, symmetry_indexes = self.electronsdb.iku_kpoints, self.electronsdb.kpoints_indexes, self.electronsdb.symmetry_indexes
             self.nq_double = len(full_kpoints)
