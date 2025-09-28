@@ -1,6 +1,13 @@
 import numpy as np
 from typing import Optional, Tuple
 
+# Progress bar (fallback to no-op if tqdm not available)
+try:
+    from tqdm.auto import tqdm as _tqdm
+except Exception:  # pragma: no cover
+    def _tqdm(x, **kwargs):
+        return x
+
 # Robust k-point lookup utilities with periodic KDTree
 from yambopy.kpoints import build_ktree, find_kpt, make_kpositive
 
@@ -117,7 +124,11 @@ class BSEWannierFT:
         k_minus_Q: Optional[np.ndarray] = None,   # (Nk,)
         k_plus_q: Optional[np.ndarray] = None,    # (Nk, Nk)
         decimals: int = 10,
+        precompute_L: bool = False,
+        mem_dtype=np.complex64,
     ) -> None:
+        
+        # Basic shapes and inputs
         self.k = np.ascontiguousarray(kpoints, float)
         self.Nk, self.dim = self.k.shape
         self.Q = np.asarray(Q, float)
@@ -133,6 +144,8 @@ class BSEWannierFT:
         self.NRh = self.Sh.shape[0]
         self.NRe = self.Se.shape[0]
         self.decimals = int(decimals)
+        self.mem_dtype = mem_dtype
+        self.precompute_L = bool(precompute_L)
 
         # k−Q map and k+q table
         self.kmQ = (
@@ -145,20 +158,33 @@ class BSEWannierFT:
         )
 
         # Precompute phase factors: ph_h(ik,irh) = e^{-i2π (k−Q)·Sh}, ph_e(ik,ire) = e^{-i2π k·Se}
-        self.ph_h = np.exp(-2j * np.pi * ( (self.k - self.Q) @ self.Sh.T ))  # (Nk, NRh)
-        self.ph_e = np.exp(-2j * np.pi * ( self.k @ self.Se.T ))             # (Nk, NRe)
+        # Use lower-precision dtype to reduce RAM pressure.
+        self.ph_h = np.exp(-2j * np.pi * ((self.k - self.Q) @ self.Sh.T)).astype(self.mem_dtype, copy=False)  # (Nk, NRh)
+        self.ph_e = np.exp(-2j * np.pi * (self.k @ self.Se.T)).astype(self.mem_dtype, copy=False)             # (Nk, NRe)
 
-        # Precompute L(k) and its conjugate transpose for reuse
-        # L(k)_{(mu,nu),(v,c)} = Uv(k−Q)_{mu,v} * Uc(k)_{nu,c}
-        self.L = np.empty((self.Nk, self.Nm, self.Nt), dtype=complex)
-        for ik in range(self.Nk):
-            Uvk = self.Uv[self.kmQ[ik]]   # (NWh, Nv) at k−Q
-            Uck = self.Uc[ik]             # (NWe, Nc) at k
-            # Outer product on Wannier rows, band cols; then reshape to (Nm, Nt)
-            # einsum: (mu,v),(nu,c) -> (mu,nu,v,c)
-            tens = np.einsum('mv,nc->mnvc', Uvk, Uck, optimize=True)
-            self.L[ik] = tens.reshape(self.Nm, self.Nt)
-        self.LH = np.conjugate(self.L).transpose(0, 2, 1)  # (Nk, Nt, Nm)
+        # L buffers (optionally large). In low-memory mode, build on-the-fly.
+        if self.precompute_L:
+            self.L = np.empty((self.Nk, self.Nm, self.Nt), dtype=self.mem_dtype)
+            for ik in _tqdm(range(self.Nk), desc="precompute L", leave=False):
+                Uvk = self.Uv[self.kmQ[ik]]   # (NWh, Nv) at k−Q
+                Uck = self.Uc[ik]             # (NWe, Nc) at k
+                tens = np.einsum('mv,nc->mnvc', Uvk, Uck, optimize=True)
+                self.L[ik] = tens.reshape(self.Nm, self.Nt).astype(self.mem_dtype, copy=False)
+            self.LH = np.conjugate(self.L).transpose(0, 2, 1)  # (Nk, Nt, Nm)
+        else:
+            self.L = None
+            self.LH = None
+
+    def _build_L_at(self, ik: int) -> Tuple[np.ndarray, np.ndarray]:
+        """Return (L, LH) for k-index ik without caching huge arrays when precompute_L=False."""
+        if self.precompute_L:
+            return self.L[ik], self.LH[ik]
+        Uvk = self.Uv[self.kmQ[ik]]  # (NWh,Nv)
+        Uck = self.Uc[ik]            # (NWe,Nc)
+        tens = np.einsum('mv,nc->mnvc', Uvk, Uck, optimize=True)
+        L = tens.reshape(self.Nm, self.Nt).astype(self.mem_dtype, copy=False)
+        LH = L.conj().T
+        return L, LH
 
     @staticmethod
     def W_to_wtilde_at_q_arbitrary(W: np.ndarray, R0_list: np.ndarray, q_list: np.ndarray) -> np.ndarray:
@@ -235,7 +261,7 @@ class BSEWannierFT:
 
     # -------------- Forward: Bloch -> Wtilde(Sh,Se,q) --------------
     def bloch_to_wtilde(self, K: np.ndarray) -> np.ndarray:
-        """Compute Wtilde(Sh,Se,q) from K(k,k',Q).
+        """Compute Wtilde(Sh,Se,q) from K(k,k',Q) with streaming to minimize RAM.
 
         Inputs:
         - K: (Nk, Nk, Nv, Nc, Nv, Nc) or (Nk, Nk, Nt, Nt)
@@ -247,32 +273,29 @@ class BSEWannierFT:
             K = K.reshape(self.Nk, self.Nk, self.Nt, self.Nt)
         assert K.shape == (self.Nk, self.Nk, self.Nt, self.Nt)
 
-        # Build M(k, q) = L(k)^\dagger K(k, k+q) L(k+q)
-        # For each iq (interpreted as a q index), collect k' = k+q via kpq.
-        M = np.zeros((self.Nk, self.Nk, self.Nm, self.Nm), dtype=complex)
-        for iq in range(self.Nk):
-            for ik in range(self.Nk):
-                ikp = self.kpq[ik, iq]  # k' = k+q
-                # L(Nm,Nt) @ K(ik,ikp) (Nt,Nt) @ L(ikp)^† (Nt,Nm) -> (Nm,Nm)
-                M[ik, iq] = self.L[ik] @ K[ik, ikp] @ self.LH[ikp]
+        # Phase tensor P(ik, irh, ire) = ph_h(ik,irh) * ph_e(ik,ire)
+        P = (self.ph_h[:, :, None] * self.ph_e[:, None, :]).astype(self.mem_dtype, copy=False)  # (Nk, NRh, NRe)
 
-        # Wtilde(Sh,Se,q) = sum_k e^{-i2π[(k−Q)·Sh + k·Se]} M(k,q)
-        # ph_h: (Nk,NRh), ph_e: (Nk,NRe)
-        # Contract over k with outer product of phases per (Sh,Se)
-        Wtilde = np.zeros((self.NRh, self.NRe, self.Nk, self.Nm, self.Nm), dtype=complex)
-        # Compute phase tensor P(ik, irh, ire) = ph_h(ik,irh) * ph_e(ik,ire)
-        P = self.ph_h[:, :, None] * self.ph_e[:, None, :]  # (Nk, NRh, NRe)
-        # Sum over k: Wtilde[irh,ire,iq] = (1/Nk) sum_k P[k,irh,ire] * M[k,iq]
-        for iq in range(self.Nk):
-            # weighted sum over k for each (Sh,Se)
-            coeff = P.transpose(1, 2, 0)  # (NRh,NRe,Nk)
-            # Accumulate with einsum over k: (NRh,NRe,Nk),(Nk,Nm,Nm)->(NRh,NRe,Nm,Nm)
-            Wtilde[:, :, iq] = (1.0 / self.Nk) * np.einsum('rsk,knm->rsnm', coeff, M[:, iq], optimize=True)
+        # Allocate output; compute one iq-slab at a time to avoid storing M(k,iq,...) for all k
+        Wtilde = np.zeros((self.NRh, self.NRe, self.Nk, self.Nm, self.Nm), dtype=self.mem_dtype)
+
+        for iq in _tqdm(range(self.Nk), desc="Bloch->Wtilde (per q)", leave=False):
+            # Accumulator for this q: (NRh,NRe,Nm,Nm)
+            acc = np.zeros((self.NRh, self.NRe, self.Nm, self.Nm), dtype=self.mem_dtype)
+            for ik in range(self.Nk):
+                ikp = self.kpq[ik, iq]
+                Lk, _LHk = self._build_L_at(ik)
+                Lkp, LHkp = self._build_L_at(ikp)
+                # M_block = L(k) K(ik,ikp) L(ikp)^†  -> (Nm,Nm)
+                M_block = (Lk @ K[ik, ikp] @ LHkp).astype(self.mem_dtype, copy=False)
+                # Weighted add over k phases for this (iq): acc += P[ik] (NRh,NRe) x M_block (Nm,Nm)
+                acc += np.einsum('rs, nm -> rsnm', P[ik], M_block, optimize=True)
+            Wtilde[:, :, iq] = (1.0 / self.Nk) * acc
         return Wtilde
 
     # -------------- Inverse: Wtilde -> Bloch --------------
     def wtilde_to_bloch(self, Wtilde: np.ndarray) -> np.ndarray:
-        """Compute Bloch kernel K(k,k',Q) from Wtilde(Sh,Se,q).
+        """Compute Bloch kernel K(k,k',Q) from Wtilde(Sh,Se,q) using streaming to limit RAM.
 
         Input:
         - Wtilde: (NRh, NRe, Nk, Nm, Nm)
@@ -283,29 +306,26 @@ class BSEWannierFT:
         assert Wtilde.shape[:3] == (self.NRh, self.NRe, self.Nk)
         assert Wtilde.shape[3:] == (self.Nm, self.Nm)
 
-        # 𝓦(k,k',Q) = ∑_{Sh,Se} e^{+i2π[(k−Q)·Sh + k·Se]} Wtilde(Sh,Se,q=k'−k)
-        # In general, the double sum over (Sh,Se) introduces a factor (NRh·NRe) when it collapses deltas.
-        # To make inversion exact whenever the shells span the dual sets used in the forward, we scale by Nk/(NRh·NRe),
-        # since the forward used 1/Nk.
-        Wk = np.zeros((self.Nk, self.Nk, self.Nm, self.Nm), dtype=complex)
-        # Precompute bra phase per (k,Sh,Se): P = exp(-i2π[(k−Q)·Sh + k·Se])
-        P = self.ph_h[:, :, None] * self.ph_e[:, None, :]  # (Nk, NRh, NRe)
-        for ik in range(self.Nk):
-            # For each k, 𝓦(k, k+q) uses q-index iq
+        # Precompute phase tensor P = exp(-i2π[(k−Q)·Sh + k·Se])
+        P = (self.ph_h[:, :, None] * self.ph_e[:, None, :]).astype(self.mem_dtype, copy=False)  # (Nk, NRh, NRe)
+
+        # Output tensor in transition basis
+        Ktc = np.zeros((self.Nk, self.Nk, self.Nt, self.Nt), dtype=self.mem_dtype)
+        scale = self.Nk / float(self.NRh * self.NRe)
+
+        # Stream over k and q to avoid holding W(k,k') for all pairs
+        for ik in _tqdm(range(self.Nk), desc="Wtilde->Bloch (per k)", leave=False):
             phases = np.conjugate(P[ik])  # (NRh,NRe) -> exp(+i2π[(k−Q)·Sh + k·Se])
+            Lk, LHk = self._build_L_at(ik)
             for iq in range(self.Nk):
                 ikp = self.kpq[ik, iq]
-                Wk[ik, ikp] = np.einsum('rs,rsnm->nm', phases, Wtilde[:, :, iq], optimize=True)
-        # Apply normalization to invert the forward's 1/Nk and compensate for shell cardinalities
-        Wk *= (self.Nk / float(self.NRh * self.NRe))
+                # 𝓦_block(k,k') = sum_{Sh,Se} phases * Wtilde(Sh,Se,iq)
+                W_block = np.einsum('rs,rsnm->nm', phases, Wtilde[:, :, iq], optimize=True)
+                W_block = (scale * W_block).astype(self.mem_dtype, copy=False)
+                # Project: Ktc[ik,ikp] = L(k)^† 𝓦_block L(k')
+                Lkp, _ = self._build_L_at(ikp)
+                Ktc[ik, ikp] = LHk @ W_block @ Lkp
 
-        # K(k,k',Q) = L(k)^\dagger 𝓦(k,k',Q) L(k')
-        Ktc = np.zeros((self.Nk, self.Nk, self.Nt, self.Nt), dtype=complex)
-        for ik in range(self.Nk):
-            for ikp in range(self.Nk):
-                # K = L^† W L with shapes: L^†(Nt,Nm), W(Nm,Nm), L(Nm,Nt)
-                Ktc[ik, ikp] = self.L[ik].T.conj() @ Wk[ik, ikp] @ self.L[ikp]
-        # reshape to 6D (k,k',v,c,v',c')
         K6 = Ktc.reshape(self.Nk, self.Nk, self.Nv, self.Nc, self.Nv, self.Nc)
         return K6
 
@@ -346,6 +366,58 @@ class BSEWannierFT:
         # NOTE: einsum subscripts cannot use digits; use 'a' for N0 index
         Wtilde = np.einsum('rsanm, qa -> rsqnm', W, ph, optimize=True)
         return Wtilde
+
+    # -------------- HDF5-backed streaming I/O --------------
+    def bloch_to_wtilde_hdf5(self, K: np.ndarray, h5_path: str, dataset: str = "Wtilde", overwrite: bool = True) -> None:
+        """Stream Bloch->Wtilde to disk, writing per-q slabs to HDF5 to limit RAM.
+        Dataset shape: (NRh, NRe, Nk, Nm, Nm), complex.
+        """
+        if K.ndim == 6:
+            K = K.reshape(self.Nk, self.Nk, self.Nt, self.Nt)
+        assert K.shape == (self.Nk, self.Nk, self.Nt, self.Nt)
+
+        # Lazy import to avoid hard dependency
+        import h5py  # type: ignore
+        mode = 'w' if overwrite else 'a'
+        with h5py.File(h5_path, mode) as h5:
+            if dataset in h5 and overwrite:
+                del h5[dataset]
+            dset = h5.create_dataset(dataset, shape=(self.NRh, self.NRe, self.Nk, self.Nm, self.Nm), dtype=np.complex64)
+
+            P = (self.ph_h[:, :, None] * self.ph_e[:, None, :]).astype(self.mem_dtype, copy=False)  # (Nk,NRh,NRe)
+            for iq in _tqdm(range(self.Nk), desc="Bloch->Wtilde[h5] (per q)", leave=False):
+                acc = np.zeros((self.NRh, self.NRe, self.Nm, self.Nm), dtype=self.mem_dtype)
+                for ik in range(self.Nk):
+                    ikp = self.kpq[ik, iq]
+                    Lk, _ = self._build_L_at(ik)
+                    _, LHkp = self._build_L_at(ikp)
+                    M_block = (Lk @ K[ik, ikp] @ LHkp).astype(self.mem_dtype, copy=False)
+                    acc += np.einsum('rs, nm -> rsnm', P[ik], M_block, optimize=True)
+                dset[:, :, iq, :, :] = (1.0 / self.Nk) * acc
+
+    def wtilde_hdf5_to_bloch(self, h5_path: str, dataset: str = "Wtilde") -> np.ndarray:
+        """Stream Wtilde (stored per-q in HDF5) back to Bloch K(k,k',Q) with low RAM.
+        Returns K6 tensor with shape (Nk,Nk,Nv,Nc,Nv,Nc).
+        """
+        import h5py  # type: ignore
+        with h5py.File(h5_path, 'r') as h5:
+            W = h5[dataset]
+            # Output tensor in transition basis
+            Ktc = np.zeros((self.Nk, self.Nk, self.Nt, self.Nt), dtype=self.mem_dtype)
+            scale = self.Nk / float(self.NRh * self.NRe)
+
+            P = (self.ph_h[:, :, None] * self.ph_e[:, None, :]).astype(self.mem_dtype, copy=False)
+            for ik in _tqdm(range(self.Nk), desc="Wtilde[h5]->Bloch (per k)", leave=False):
+                phases = np.conjugate(P[ik])
+                Lk, LHk = self._build_L_at(ik)
+                for iq in range(self.Nk):
+                    ikp = self.kpq[ik, iq]
+                    W_block = np.einsum('rs,rsnm->nm', phases, W[:, :, iq, :, :], optimize=True)
+                    W_block = (scale * W_block).astype(self.mem_dtype, copy=False)
+                    Lkp, _ = self._build_L_at(ikp)
+                    Ktc[ik, ikp] = LHk @ W_block @ Lkp
+
+        return Ktc.reshape(self.Nk, self.Nk, self.Nv, self.Nc, self.Nv, self.Nc)
 
     # -------------- Diagnostics --------------
     def check_unitarity(self, tol: float = 1e-8) -> Tuple[float, float]:
