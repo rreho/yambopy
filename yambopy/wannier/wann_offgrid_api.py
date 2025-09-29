@@ -181,3 +181,68 @@ def evaluate_offgrid_K_from_state(state: Dict, q_vec, tbmodel, k_ref=None):
         Uc_k_plus_q=Uc_kpq,
     )
     return K_off, kpq
+
+
+def evaluate_offgrid_K6_all_pairs(state: Dict, *, Q_vec=None, k_ref=None):
+    """
+    Build the full 6D kernel K6(ik, ik', v, c, v', c') for all k–k' pairs using the stored
+    real-space kernel W(Sh,Se,R0) and U matrices from the state.
+
+    - If Q_vec is None, use Q = (0,0,0). Q enters only via L(k) = U_val(k−Q) ⊗ U_cond(k).
+    - k_ref (Nk,3) can be provided to override k-point order; U matrices are realigned accordingly.
+
+    Returns:
+      - K6: (Nk, Nk, Nv, Nc, Nv, Nc)
+    """
+    import numpy as _np
+    q_dtype = float
+
+    # Inputs from state
+    W = state['W']
+    R0_list = state['R0_list']
+    Sh_list = state['Sh_list']
+    Se_list = state['Se_list']
+    k_state = _np.asarray(state['kpoints'], q_dtype)
+    U_val_state = _np.asarray(state['U_val'], complex)
+    U_cond_state = _np.asarray(state['U_cond'], complex)
+    decimals = int(state.get('decimals', 10))
+
+    # Resolve kpoints (optionally override) and realign U if needed
+    kpoints = k_state if k_ref is None else _np.asarray(k_ref, q_dtype)
+    if k_ref is not None:
+        try:
+            from yambopy.kpoints import build_ktree, find_kpt, make_kpositive
+            tree = build_ktree(k_state)
+            Nk = kpoints.shape[0]
+            perm = _np.empty(Nk, dtype=int)
+            tol = max(1e-5, 0.5 * 10.0**(-decimals))
+            for i in range(Nk):
+                perm[i] = int(find_kpt(tree, make_kpositive(kpoints[i]), tol=tol))
+            U_val = U_val_state[perm]
+            U_cond = U_cond_state[perm]
+        except Exception:
+            # Fallback: assume identical order
+            U_val = U_val_state
+            U_cond = U_cond_state
+    else:
+        U_val = U_val_state
+        U_cond = U_cond_state
+
+    # Q vector (default Gamma)
+    Q = _np.zeros(3, q_dtype) if Q_vec is None else _np.asarray(Q_vec, q_dtype)
+
+    # 1) Evaluate Wtilde for all on-grid q = kpoints (covers all k' via k' = k + q)
+    Wtilde_all = BSEWannierFT.W_to_wtilde_at_q_arbitrary(W, R0_list, q_list=kpoints)
+
+    # 2) Use the inverse transform to assemble full K6 over all k,k'
+    ft = BSEWannierFT(
+        kpoints=kpoints,
+        Q=Q,
+        U_val=U_val,
+        U_cond=U_cond,
+        Sh_list=Sh_list,
+        Se_list=Se_list,
+        decimals=decimals,
+    )
+    K6 = ft.wtilde_to_bloch(Wtilde_all)  # (Nk,Nk,Nv,Nc,Nv,Nc)
+    return K6
