@@ -13,7 +13,7 @@ from concurrent.futures import ProcessPoolExecutor
 import tbmodels
 from itertools import islice
 from time import time
-import fortio, scipy.io
+import fortio, scipy.io, os
 
 # lambda function needed for reading Files
 readstr = lambda F: "".join(c.decode('ascii') for c in F.read_record('c')).strip()
@@ -379,3 +379,272 @@ class WIN():
 
         self.atomic_numbers = np.array([atomic_numbers[symbol] for  symbol in self.symbols])
         return self.red_atomic_positions, self.atomic_numbers
+
+
+# ========
+# Readers for Wannier90 u_dis.mat and u.mat
+# ========
+
+def read_umatrix(seedname_or_path):
+    """
+    Read a Wannier90 u.mat or u_dis.mat file using robust Fortran unformatted I/O.
+
+    Input can be a full path (ending in .mat) or a seedname without extension.
+    Returns a dict with:
+      - 'U': ndarray with shape (nk, nbnd, nwan)
+      - 'nk', 'nbnd', 'nwan'
+    The function autodetects file type and header order (nwan, nbnd, nk).
+    """
+    # Resolve path
+    if seedname_or_path.endswith('.mat'):
+        path = seedname_or_path
+    else:
+        # Try typical suffixes in priority order
+        if os.path.exists(seedname_or_path + '_u_dis.mat'):
+            path = seedname_or_path + '_u_dis.mat'
+        elif os.path.exists(seedname_or_path + '_u.mat'):
+            path = seedname_or_path + '_u.mat'
+        else:
+            raise FileNotFoundError(f"Could not find '{seedname_or_path}_u_dis.mat' or '{seedname_or_path}_u.mat'")
+
+    # First try Fortran unformatted format
+    try:
+        F = FortranFileR(path)
+
+        # Try to read an optional header string first
+        try:
+            header = readstr(F)
+        except Exception:
+            header = None
+
+        # Read dimensions; Wannier90 commonly writes (nwan, nbnd, nk)
+        try:
+            nwan, nbnd, nk = F.read_record('i4')
+        except Exception:
+            # Some builds may write (nbnd, nwan, nk) — try swapping first two
+            a, b, nk = F.read_record('i4')
+            if a <= b:
+                nwan, nbnd = a, b
+            else:
+                nwan, nbnd = b, a
+
+        # Read matrices per-k
+        U_list = []
+        for _ in range(nk):
+            rec = F.read_record('f8')
+            expected = 2 * nbnd * nwan
+            if rec.size != expected:
+                raise ValueError(f"Record size mismatch in {os.path.basename(path)}: got {rec.size}, expected {expected}")
+            tmp = rec.reshape((2, nbnd, nwan), order='F').transpose(1, 2, 0)
+            mat = tmp[:, :, 0] + 1j * tmp[:, :, 1]
+            U_list.append(mat)
+
+        U = np.array(U_list)  # (nk, nbnd, nwan)
+        return {
+            'U': U,
+            'nk': int(nk),
+            'nbnd': int(nbnd),
+            'nwan': int(nwan),
+            'header': header,
+            'path': path,
+        }
+    except Exception as e_fortran:
+        # Fallback: MATLAB .mat format
+        try:
+            md = scipy.io.loadmat(path, simplify_cells=True)
+            # Heuristics: pick the largest complex array with 3 dims
+            cand = []
+            for k, v in md.items():
+                if k.startswith('__'):
+                    continue
+                arr = np.array(v)
+                if np.iscomplexobj(arr) and arr.ndim == 3:
+                    cand.append((arr.size, k, arr))
+            if not cand:
+                raise ValueError(f"No complex 3D array found in MATLAB file {os.path.basename(path)}")
+            cand.sort(reverse=True)
+            U = cand[0][2]
+            # Try to infer (nk, nbnd, nwan) ordering
+            nk, d1, d2 = U.shape
+            # Guess nbnd >= nwan
+            nbnd, nwan = (d1, d2) if d1 >= d2 else (d2, d1)
+            if (nbnd, nwan) != (d1, d2):
+                # transpose last two axes if needed
+                U = U.transpose(0, 2, 1)
+            return {
+                'U': U,
+                'nk': int(U.shape[0]),
+                'nbnd': int(U.shape[1]),
+                'nwan': int(U.shape[2]),
+                'header': 'MATLAB',
+                'path': path,
+            }
+        except Exception as e_mat:
+            # Fallback: formatted text (ASCII) as written by some Wannier90 builds
+            try:
+                with open(path, 'r') as fh:
+                    header = fh.readline().rstrip('\n')
+                    dims_line = fh.readline().strip()
+                    parts = [int(x) for x in dims_line.split() if x.strip()]
+                    if len(parts) != 3:
+                        raise ValueError(f"Invalid dimensions line in {os.path.basename(path)}: '{dims_line}'")
+                    # Wannier90 ASCII format: num_kpts, num_wann, num_bands
+                    nk, nwan, nbnd = parts
+
+                    U_list = []
+                    kvecs = []
+                    for ik in range(nk):
+                        # Read until a non-empty line; expect k-vector here
+                        first_pair_line = None
+                        while True:
+                            line = fh.readline()
+                            if not line:
+                                raise ValueError(f"Unexpected EOF before k-point {ik} in {os.path.basename(path)}")
+                            if line.strip() == '':
+                                # Skip blank separators between blocks
+                                continue
+                            toks = line.strip().split()
+                            # Try parse as k-vector (3 floats)
+                            got_kvec = False
+                            if len(toks) >= 3:
+                                try:
+                                    kx, ky, kz = float(toks[0]), float(toks[1]), float(toks[2])
+                                    kvecs.append((kx, ky, kz))
+                                    got_kvec = True
+                                except Exception:
+                                    got_kvec = False
+                            if not got_kvec:
+                                # Treat this as the first pair line of the matrix block
+                                first_pair_line = line
+                                # K-vectors may be omitted; keep placeholder
+                                kvecs.append(None)
+                            # Exit header read loop
+                            break
+
+                        # Read nbnd*nwan complex pairs (column-major: rows first then columns)
+                        total = nbnd * nwan
+                        reals = np.empty(total, dtype=float)
+                        imags = np.empty(total, dtype=float)
+                        idx = 0
+
+                        # If we already read a line that belongs to the pairs block, use it first
+                        if first_pair_line is not None:
+                            vals = first_pair_line.replace('D', 'E').split()
+                            floats = []
+                            for v in vals:
+                                try:
+                                    floats.append(float(v))
+                                except Exception:
+                                    continue
+                                if len(floats) == 2:
+                                    break
+                            if len(floats) == 2:
+                                reals[idx], imags[idx] = floats[0], floats[1]
+                                idx += 1
+                            # else: if not parseable, just ignore and continue
+
+                        while idx < total:
+                            line = fh.readline()
+                            if not line:
+                                raise ValueError(f"Unexpected EOF in matrix data for k-point {ik}")
+                            vals = line.replace('D', 'E').split()
+                            # Tolerate lines with more than two tokens; take first two float-like
+                            floats = []
+                            for v in vals:
+                                try:
+                                    floats.append(float(v))
+                                except Exception:
+                                    continue
+                                if len(floats) == 2:
+                                    break
+                            if len(floats) != 2:
+                                # Skip empty/invalid lines
+                                continue
+                            reals[idx], imags[idx] = floats[0], floats[1]
+                            idx += 1
+
+                        flat = reals + 1j * imags
+                        # Column-major fill to (nbnd, nwan)
+                        mat = np.reshape(flat, (nbnd, nwan), order='F')
+                        U_list.append(mat)
+
+                U = np.array(U_list)
+                return {
+                    'U': U,
+                    'nk': int(nk),
+                    'nbnd': int(nbnd),
+                    'nwan': int(nwan),
+                    'header': header,
+                    'path': path,
+                    'kvecs': np.array(kvecs) if kvecs else None,
+                }
+            except Exception as e_txt:
+                raise RuntimeError(
+                    f"Failed to read {path}: Fortran error: {e_fortran}; MATLAB error: {e_mat}; Text error: {e_txt}"
+                )
+
+
+class WannierUMatrices:
+    """
+    Load and expose Wannier90 u_dis.mat and u.mat, and provide the combined
+    Bloch->Wannier rotation per k: U_bloch_to_wann[k] = U_dis[k] @ U[k].
+
+    Notes on shapes and conventions:
+    - U_dis[k]: (nbnd, nwan) maps Bloch bands -> disentangled subspace.
+    - U[k]:     (nwan, nwan) rotates within the disentangled subspace.
+    - Product:  (nbnd, nwan), so |psi_n^wann> = sum_m (U_dis @ U)_{m n} |psi_m>.
+    """
+
+    def __init__(self, seedname):
+        # Attempt to load both files; u_dis is optional for isolated manifolds
+        u_dis_path = seedname + '_u_dis.mat'
+        u_path = seedname + '_u.mat'
+
+        if os.path.exists(u_dis_path):
+            dis = read_umatrix(u_dis_path)
+            self.U_dis = dis['U']  # (nk, nbnd, nwan)
+            self.nk = dis['nk']
+            self.nbnd = dis['nbnd']
+            self.nwan = dis['nwan']
+        else:
+            self.U_dis = None
+            self.nk = None
+            self.nbnd = None
+            self.nwan = None
+
+        if os.path.exists(u_path):
+            u = read_umatrix(u_path)
+            self.U = u['U']  # (nk, nbnd_or_nwan, nwan)
+            # If U_dis absent, infer nk and nwan from U
+            if self.nk is None:
+                self.nk = u['nk']
+                self.nwan = u['nwan']
+                self.nbnd = u['nbnd']  # often nbnd == nwan for u.mat
+        else:
+            raise FileNotFoundError(f"Missing required file '{u_path}'")
+
+        # Basic consistency checks
+        if self.U_dis is not None:
+            assert self.U.shape[0] == self.U_dis.shape[0] == self.nk
+            assert self.U.shape[2] == self.U_dis.shape[2] == self.nwan
+            # U from u.mat may be stored as (nk, nwan, nwan). Ensure nbnd==nwan there
+            if self.U.shape[1] != self.nwan:
+                raise ValueError(f"Unexpected shape for u.mat: got {self.U.shape}, expected (*, {self.nwan}, {self.nwan})")
+        else:
+            # No U_dis: assume isolated manifold and U is (nk, nwan, nwan)
+            if self.U.shape[1] != self.U.shape[2]:
+                raise ValueError(f"u.mat without u_dis.mat should be square in subspace; got {self.U.shape}")
+            self.nk = self.U.shape[0]
+            self.nwan = self.U.shape[1]
+            self.nbnd = self.nwan
+
+    def U_bloch_to_wann(self):
+        """
+        Return the Bloch->Wannier rotation per k as an array of shape (nk, nbnd, nwan).
+        If u_dis is not present, the result reduces to U (embedded in nbnd==nwan).
+        """
+        if self.U_dis is None:
+            return self.U  # (nk, nwan, nwan)
+        # Matrix multiply per k: (nbnd, nwan) @ (nwan, nwan) -> (nbnd, nwan)
+        # Use einsum for clarity and performance
+        return np.einsum('kbn,knm->kbm', self.U_dis, self.U)

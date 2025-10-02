@@ -111,6 +111,22 @@ def build_k_plus_q_table(kpoints: np.ndarray, *, decimals: int = 10) -> np.ndarr
     return tab
 
 
+def split_U_bloch_to_wann(U_bw: np.ndarray, val_bands: np.ndarray, cond_bands: np.ndarray) -> tuple:
+    """
+    Convert a Bloch->Wannier matrix U_bw (nk, nbnd, nwan) into the shapes expected by this module:
+      - U_val: (nk, nwan, Nv) with columns for valence bands
+      - U_cond: (nk, nwan, Nc) with columns for conduction bands
+    Here U_bw[k][m, mu] maps Bloch band m at k to Wannier index mu.
+    """
+    U_bw = np.asarray(U_bw, complex)
+    idx_v = np.asarray(val_bands, int)
+    idx_c = np.asarray(cond_bands, int)
+    # Take rows (bands) then transpose to (nwan, Nv/Nc)
+    U_val = np.transpose(U_bw[:, idx_v, :], (0, 2, 1)).copy()
+    U_cond = np.transpose(U_bw[:, idx_c, :], (0, 2, 1)).copy()
+    return U_val, U_cond
+
+
 class BSEWannierFT:
     def __init__(
         self,
@@ -175,6 +191,40 @@ class BSEWannierFT:
             self.L = None
             self.LH = None
 
+    @classmethod
+    def from_U_bloch_to_wann(
+        cls,
+        *,
+        kpoints: np.ndarray,
+        Q: np.ndarray,
+        U_bloch_to_wann: np.ndarray,   # (Nk, Nbnd, Nw)
+        val_bands: np.ndarray,         # (Nv,)
+        cond_bands: np.ndarray,        # (Nc,)
+        Sh_list: np.ndarray,
+        Se_list: np.ndarray,
+        k_minus_Q: Optional[np.ndarray] = None,
+        k_plus_q: Optional[np.ndarray] = None,
+        decimals: int = 10,
+        precompute_L: bool = False,
+        mem_dtype=np.complex64,
+    ):
+        """Alternate constructor that accepts the combined Bloch->Wannier rotations.
+        It slices into valence/conduction subsets and transposes to match (Nw, Nv/Nc)."""
+        U_val, U_cond = split_U_bloch_to_wann(U_bloch_to_wann, val_bands, cond_bands)
+        return cls(
+            kpoints=kpoints,
+            Q=Q,
+            U_val=U_val,
+            U_cond=U_cond,
+            Sh_list=Sh_list,
+            Se_list=Se_list,
+            k_minus_Q=k_minus_Q,
+            k_plus_q=k_plus_q,
+            decimals=decimals,
+            precompute_L=precompute_L,
+            mem_dtype=mem_dtype,
+        )
+
     def _build_L_at(self, ik: int) -> Tuple[np.ndarray, np.ndarray]:
         """Return (L, LH) for k-index ik without caching huge arrays when precompute_L=False."""
         if self.precompute_L:
@@ -220,6 +270,7 @@ class BSEWannierFT:
     ) -> np.ndarray:
         """Reconstruct K(k,k+q) for an off-grid q using provided U matrices.
         Returns K_per_k of shape (Nk, Nv, Nc, Nv, Nc).
+        NOTE: This legacy routine uses phases with (k−q)·Sh; prefer reconstruct_bloch_for_qQ.
         """
         k = np.asarray(kpoints, float)
         Sh = np.asarray(Sh_list, int)
@@ -251,6 +302,61 @@ class BSEWannierFT:
             tens_k = np.einsum('mv,nc->mnvc', Uv_k_minus_q[ik], Uc_k[ik], optimize=True)
             Lk = tens_k.reshape(Nm, Nv * Nc)
             tens_kp = np.einsum('mv,nc->mnvc', Uv_k[ik], Uc_k_plus_q[ik], optimize=True)
+            Lkp = tens_kp.reshape(Nm, Nv * Nc)
+
+            # Project back: K_tc = L^† Wk L'
+            Ktc_per_k[ik] = Lk.conj().T @ Wk_block @ Lkp
+
+        # Reshape to (Nk,Nv,Nc,Nv,Nc)
+        return Ktc_per_k.reshape(Nk, Nv, Nc, Nv, Nc)
+
+    @staticmethod
+    def reconstruct_bloch_for_qQ(
+        *,
+        Wtilde_q: np.ndarray,             # (NRh,NRe,Nm,Nm) for a single q
+        kpoints: np.ndarray,              # (Nk,D)
+        Sh_list: np.ndarray,              # (NRh,D)
+        Se_list: np.ndarray,              # (NRe,D)
+        q_vec: np.ndarray,                # (D,)
+        Q_vec: np.ndarray,                # (D,)
+        Uv_k_minus_Q: np.ndarray,         # (Nk,NWh,Nv)
+        Uc_k: np.ndarray,                 # (Nk,NWe,Nc)
+        Uv_k_plus_q_minus_Q: np.ndarray,  # (Nk,NWh,Nv)
+        Uc_k_plus_q: np.ndarray,          # (Nk,NWe,Nc)
+    ) -> np.ndarray:
+        """Reconstruct K(k,k+q; Q) using the general formula with (k−Q) in hole sector.
+        Returns K_per_k of shape (Nk, Nv, Nc, Nv, Nc).
+        """
+        k = np.asarray(kpoints, float)
+        Sh = np.asarray(Sh_list, int)
+        Se = np.asarray(Se_list, int)
+        Nk = k.shape[0]
+        NRh = Sh.shape[0]
+        NRe = Se.shape[0]
+        NWh, Nv = Uv_k_minus_Q.shape[1], Uv_k_minus_Q.shape[2]
+        NWe, Nc = Uc_k.shape[1], Uc_k.shape[2]
+        Nm = NWh * NWe
+        assert Wtilde_q.shape == (NRh, NRe, Nm, Nm)
+
+        # Phases exp(+i2π[(k−Q)·Sh + k·Se]) per k
+        ph_h = np.exp(+2j * np.pi * ((k - Q_vec) @ Sh.T))  # (Nk,NRh)
+        ph_e = np.exp(+2j * np.pi * (k @ Se.T))            # (Nk,NRe)
+
+        # Output container in transition basis then reshape
+        Ktc_per_k = np.zeros((Nk, Nv * Nc, Nv * Nc), dtype=complex)
+
+        # Precompute normalization factor Nk/(NRh*NRe)
+        norm = Nk / float(NRh * NRe)
+
+        for ik in range(Nk):
+            # Sum over shells to get Wk block in Wannier-transition basis (Nm,Nm)
+            phases = (ph_h[ik][:, None] * ph_e[ik][None, :])  # (NRh,NRe)
+            Wk_block = norm * np.einsum('rs, rsnm -> nm', phases, Wtilde_q, optimize=True)
+
+            # Build L(k) and L(k+q) with Uv evaluated at k−Q and k+q−Q
+            tens_k = np.einsum('mv,nc->mnvc', Uv_k_minus_Q[ik], Uc_k[ik], optimize=True)
+            Lk = tens_k.reshape(Nm, Nv * Nc)
+            tens_kp = np.einsum('mv,nc->mnvc', Uv_k_plus_q_minus_Q[ik], Uc_k_plus_q[ik], optimize=True)
             Lkp = tens_kp.reshape(Nm, Nv * Nc)
 
             # Project back: K_tc = L^† Wk L'
