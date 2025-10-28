@@ -85,7 +85,7 @@ class KPointGenerator():
         distance, closest_indices = self.k_tree.query(points, k=1)
 
         # Return the appropriate type
-        return closest_indices if points.shape[0] > 1 else int(closest_indices[0])
+        return closest_indices if points.shape[0] > 1 else np.array([int(closest_indices[0])])
 
 
     def get_kq_tables(self,qmpgrid, sign = '+'):

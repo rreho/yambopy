@@ -161,7 +161,6 @@ class CoulombPotentials:
         # Compute modk for all kpt1 and kpt2 pairs
         modk = scipy.linalg.norm(kpt1_broadcasted - kpt2_broadcasted, axis=-1)
         
-        vbz = 1.0 / (self.rec_vol)
 
         epar = self.ediel[1]
         et = self.ediel[1]
@@ -184,7 +183,8 @@ class CoulombPotentials:
 		# aux3 = r0*modk*dexp(-modk*w)
 		# ew = (aux1/aux2)+aux3
 		# v2drk = (vbz*cic)*dexp(-modk*w)*(1.0/ew)*(1.0/modk)
-
+        vc = np.linalg.norm(np.cross(self.rlat[0],self.rlat[1]))
+        vbz = 1.0 / (np.prod(self.ngrid) * vc)
         safe_modk = np.where(modk < self.tolr, np.inf, modk)
         v2drk = (vbz * self.alpha) * np.exp(-modk * w) * (1.0 / ew) * (1.0 / safe_modk)
         v2drk = np.where(modk < self.tolr, 0.0 + 0.j, v2drk)

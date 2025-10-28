@@ -78,17 +78,84 @@ class Luminescence(BaseOpticalProperties):
         
         Parameters
         ----------
-        lelph_db : LetzElphElectronPhononDB, optional
-            Pre-loaded electron-phonon database.
-        latdb : YamboLatticeDB, optional
-            Pre-loaded lattice database.
-        wfdb : YamboWFDB, optional
-            Pre-loaded wavefunction database.
-        ydipdb : YamboDipolesDB, optional
-            Pre-loaded dipoles database.
-        bands_range : list, optional
-            Range of bands to load.
+        lelph_db : LetzElphElectronPhononDB
+            Electron-Phonon coupling database.
+        latdb : YamboLatticeDB
+            Yambo Lattice database.
+        wfdb : YamboWFDB
+            Yambo wavefunction database.
+        ydipdb : YamboDipolesDB
+            Yambo Dipoles database.
+        bands_range : list
+            Range of bands to load. Defaults to all bands. Python indexing. Right one is excluded.
         """
+        SAVE_dir = self.SAVE_dir
+        # readlatdb        
+        try:
+            ns_db1_fname = os.path.join(SAVE_dir, 'ns.db1')
+            if latdb :
+                if not hasattr(latdb,'ibz_kpoints'): latdb.expand_kpoints()
+                self.ydb = latdb
+            else :
+                self.ydb = YamboLatticeDB.from_db_file(ns_db1_fname, Expand=True)        
+        except Exception as e:
+            raise IOError(f'Cannot read ns.db1 file: {e}')
+
+        self.lat_vecs = self.ydb.lat
+        self.nibz = self.ydb.ibz_nkpoints
+        self.symm_mats = self.ydb.sym_car
+        self.ele_time_rev = self.ydb.time_rev
+        self.blat_vecs = self.ydb.rlat.T
+
+        #readwfdb
+        try:
+            ns_wfdb_fname = os.path.join(SAVE_dir, 'ns.wf')
+            if wfdb :
+                if not hasattr(wfdb,'save_Dmat'): wfdb.Dmat()
+                self.wfdb = wfdb
+            else :
+                self.wfdb = YamboWFDB(filename = ns_wfdb_fname, latdb=self.ydb, bands_range=bands_range)  
+        except Exception as e:
+            raise IOError(f'Cannot read ns.wf file: {e}')
+        #Read dimensions
+        self.nkpoints = self.wfdb.nkpoints # Number of k-points in iBZ
+        self.nspin    = self.wfdb.nspin       # Number of spin components
+        self.nspinor  = self.wfdb.nspinor   # Number of spinor components
+        self.nbands   = self.wfdb.nbands     # Number of bands
+       
+        nbnds = max(bands_range)-min(bands_range)
+        start_bnd_idx = 0
+        end_bnd = start_bnd_idx + nbnds
+        Dmat_data = Dataset(f'{self.LELPH_dir}/ndb.Dmats', 'r')
+        Dmats = Dmat_data['Dmats'][:, :, 0, start_bnd_idx:end_bnd,
+                                    start_bnd_idx:end_bnd, :].data
+        Dmats = Dmats[...,0] + 1j * Dmats[..., 1]
+        Dmats = Dmats.astype(self.wfdb.wf.dtype)
+        self.Dmats    = Dmats #self.wfdb.save_Dmat
+        Dmat_data.close()
+        #self.nbands = max(bands_range) - self.min_bnd
+        self.bands_range = bands_range
+        
+
+        # set kmap
+        kmap = np.zeros((self.wfdb.nkBZ,2), dtype=int)
+        kmap[:,0]=self.ydb.kpoints_indexes
+        kmap[:,1]=self.ydb.symmetry_indexes
+        self.kmap=kmap
+        # read exciton database
+        self.bs_bands, self.BS_eigs, self.BS_wfcs, self.excQpt = self.read_excdb(self.BSE_dir)
+
+        #read LetzElPhC
+        try:
+            ndb_lelph_fname = os.path.join(self.LELPH_dir, 'ndb.elph')
+            if lelph_db :
+                self.lelph_db = lelph_db
+            else :
+                self.lelph_db = LetzElphElectronPhononDB(filename = ndb_lelph_fname)        
+        except Exception as e:
+            raise IOError(f'Cannot read ndb.elph file: {e}')        
+        
+
         # Read common databases using base class method
         self.read_common_databases(latdb=latdb, wfdb=wfdb, bands_range=bands_range)
         

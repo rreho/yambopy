@@ -116,6 +116,7 @@ class ExcitonPhonon(BaseOpticalProperties):
         # Store specific parameters
         self.lelph_db = lelph_db
         self.ydipdb = ydipdb
+        self.neig = neig
         
         # Initialize caching
         self._Ak_cache = {}
@@ -206,7 +207,7 @@ class ExcitonPhonon(BaseOpticalProperties):
         """
         from time import time
 
-        # Timing key/value
+        # Timing key/values
         self.timings = {
         'elph_io': 0,
         'ex_rot': 0,
@@ -298,16 +299,16 @@ class ExcitonPhonon(BaseOpticalProperties):
 
             # Rotate exciton wavefunctions
             t0 = time()
-            Ak, Akq = self._rotate_exciton_pair(iq, iQ=0)
+            _, Akq = self._rotate_exciton_pair(iq, iQ=0)
             self.timings['ex_rot'] += time() - t0
-
+            Ak0,_ = self._rotate_exciton_pair(0,0)
             # Compute ex-ph element
             t0 = time()
-            ex_ph[0, iq] = exciton_X_matelem(
+            ex_ph[0,iq] = exciton_X_matelem(
                                     self.excQpt[0],         # Q
-                                    self.kpts[self.qidx_in_kpts[iq]],  # q
-                                    Akq, Ak, eph_mat_iq, self.kpts,
-                                    contribution='b'
+                                    self.lelph_db.qpoints[iq],
+                                    Akq, Ak0 ,eph_mat_iq, self.wfdb.kBZ,
+                                    contribution='b', diagonal_only=False, ktree=self.wfdb.ktree,
                                     )
             self.timings['exph'] += time() - t0
 
@@ -350,6 +351,8 @@ class ExcitonPhonon(BaseOpticalProperties):
                 # Rotate exciton wavefunctions
                 t0 = time()
                 Ak, Akq = self._rotate_exciton_pair(iq, iQ)
+                Ak0, Akq0 = self._rotate_exciton_pair(iq=0, iQ = iQ)
+
                 self.timings['ex_rot'] += time() - t0
 
                 # Compute ex-ph element
@@ -357,9 +360,9 @@ class ExcitonPhonon(BaseOpticalProperties):
                 #Evaluate the exciton-phonon matrix element ⟨Akq|g(q)|Ak⟩.
                 ex_ph[iQ, iq] = exciton_X_matelem(
                                     self.excQpt[iQ],         # Q
-                                    self.kpts[self.qidx_in_kpts[iq]],  # q
-                                    Akq, Ak, eph_mat_iq, self.kpts,
-                                    contribution='b'
+                                    self.lelph_db.qpoints[iq],  # q
+                                    Akq, Ak0, eph_mat_iq, self.wfdb.kBZ,
+                                    contribution='b', diagonal_only=False, ktree=self.wfdb.ktree
                                     )
                 self.timings['exph'] += time() - t0
 
@@ -386,7 +389,7 @@ class ExcitonPhonon(BaseOpticalProperties):
         if iq in self._eph_mat_cache:
             return self._eph_mat_cache[iq]
 
-        _, eph_mat_iq = self.lelph_db.read_iq(iq, bands_range=self.bands_range, convention='standard')
+        _, eph_mat_iq = self.lelph_db.read_iq(iq, convention='standard')
         self._eph_mat_cache[iq] = eph_mat_iq[:, :, 0, :, :].transpose(1, 0, 3, 2)
         # Select spin 0 and transpose axes: (spin, mode, m, n) → (mode, m, n)
         # Original shape: (nb1, nb2, 2 spins, nm, nk) → we keep only spin 0 and swap bands for compatibility
