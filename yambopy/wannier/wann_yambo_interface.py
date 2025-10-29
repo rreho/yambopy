@@ -495,22 +495,31 @@ class WannierYamboInterface:
         if not hasattr(self, 'em1s_db'):
             raise ValueError("Screening database not loaded. Call load_screening_db first.")
         
-        # Wrap q-vector to [0, 1)
-        q_wrapped = q_vec - np.floor(q_vec)
+        kmap = np.zeros((self.wfdb.nkBZ,2), dtype=int)
+        kmap[:,0]=self.wfdb.ydb.kpoints_indexes
+        kmap[:,1]=self.wfdb.ydb.symmetry_indexes
+        self.kmap=kmap
+
+        iq_BZ = find_kpt(self.ktree, q_vec)
+        iq_ibz, isym = self.kmap[iq_BZ]
+
+        return iq_ibz
+        # # Wrap q-vector to [0, 1)
+        # q_wrapped = q_vec - np.floor(q_vec)
         
-        # Compare with all q-points in database (also in crystal coordinates)
-        for iq, q_db in enumerate(self.em1s_db.red_qpoints):
-            q_db_wrapped = q_db - np.floor(q_db)
+        # # Compare with all q-points in database (also in crystal coordinates)
+        # for iq, q_db in enumerate(self.em1s_db.red_qpoints):
+        #     q_db_wrapped = q_db - np.floor(q_db)
             
-            # Check if they match (considering periodic boundary conditions)
-            diff = q_wrapped - q_db_wrapped
-            diff = diff - np.round(diff)  # Wrap to [-0.5, 0.5]
+        #     # Check if they match (considering periodic boundary conditions)
+        #     diff = q_wrapped - q_db_wrapped
+        #     diff = diff - np.round(diff)  # Wrap to [-0.5, 0.5]
             
-            if np.linalg.norm(diff) < tol:
-                return iq
+        #     if np.linalg.norm(diff) < tol:
+        #         return iq
         
-        raise ValueError(f"q-point {q_vec} not found in screening database. "
-                        f"Available q-points: {self.em1s_db.nqpoints}")
+        # raise ValueError(f"q-point {q_vec} not found in screening database. "
+        #                 f"Available q-points: {self.em1s_db.nqpoints}")
     
     def align_gvectors(self, gvecs_rho: np.ndarray, iq: int) -> Tuple[np.ndarray, np.ndarray]:
         """
