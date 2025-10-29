@@ -475,41 +475,445 @@ class WannierYamboInterface:
         )
         print(f"Loaded screening for {self.em1s_db.nqpoints} q-points")
     
-    def compute_bare_potential_V(self, rho_q_nR: np.ndarray, q_vec: np.ndarray) -> np.ndarray:
+    def find_q_in_screening_db(self, q_vec: np.ndarray, tol: float = 1e-5) -> int:
         """
-        Compute bare potential V_q^nR(r) from density.
+        Find the index of q-point in the screening database.
         
-        V_q^nR(r) = ∫ d³r' v(r,r') ρ_q^nR(r')
-        
-        In G-space: V_q^nR(G) = v(q+G) * ρ_q^nR(G)
+        The q-vector is provided in crystal coordinates and compared against
+        the q-points stored in the em1s database (also in crystal coordinates).
         
         Args:
-            rho_q_nR: Density in G-space [nwann, ngvecs]
-            q_vec: q-vector in crystal coordinates
+            q_vec: q-vector in crystal coordinates [3]
+            tol: Tolerance for matching q-points
             
         Returns:
-            V_q_nR: Bare potential in G-space [nwann, ngvecs]
+            iq: Index of q-point in em1s database
+            
+        Raises:
+            ValueError: If q-point not found in database
+        """
+        if not hasattr(self, 'em1s_db'):
+            raise ValueError("Screening database not loaded. Call load_screening_db first.")
+        
+        # Wrap q-vector to [0, 1)
+        q_wrapped = q_vec - np.floor(q_vec)
+        
+        # Compare with all q-points in database (also in crystal coordinates)
+        for iq, q_db in enumerate(self.em1s_db.red_qpoints):
+            q_db_wrapped = q_db - np.floor(q_db)
+            
+            # Check if they match (considering periodic boundary conditions)
+            diff = q_wrapped - q_db_wrapped
+            diff = diff - np.round(diff)  # Wrap to [-0.5, 0.5]
+            
+            if np.linalg.norm(diff) < tol:
+                return iq
+        
+        raise ValueError(f"q-point {q_vec} not found in screening database. "
+                        f"Available q-points: {self.em1s_db.nqpoints}")
+    
+    def align_gvectors(self, gvecs_rho: np.ndarray, iq: int) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Align G-vectors between density (from wfdb) and screening database.
+        
+        Both G-vectors from wfdb and em1s_db.red_gvectors are in crystal/reduced 
+        coordinates (integers). The em1s database may have fewer G-vectors than wfdb
+        (different cutoff), so we need to find which ones match.
+        
+        This function finds which G-vectors from em1s_db correspond to the
+        G-vectors in gvecs_rho.
+        
+        Args:
+            gvecs_rho: G-vectors from density in crystal coordinates [ngvecs_rho, 3]
+            iq: Index of q-point in em1s database
+            
+        Returns:
+            indices_in_em1s: Indices of matching G-vectors in em1s_db [ngvecs_rho]
+            mask_valid: Boolean mask for valid matches [ngvecs_rho]
+        """
+        if not hasattr(self, 'em1s_db'):
+            raise ValueError("Screening database not loaded. Call load_screening_db first.")
+        
+        # Get G-vectors from em1s in reduced coordinates
+        gvecs_em1s_red = self.em1s_db.red_gvectors  # [ngvecs_em1s, 3]
+        ngvecs_rho = len(gvecs_rho)
+        ngvecs_em1s = len(gvecs_em1s_red)
+        
+        # Round to integer (they should already be integers in reduced coords)
+        gvecs_rho_int = np.round(gvecs_rho).astype(int)
+        gvecs_em1s_int = np.round(gvecs_em1s_red).astype(int)
+        
+        # Build a dictionary for fast lookup: G_vector -> index in em1s
+        gvec_to_idx = {}
+        for ig_em1s, gvec in enumerate(gvecs_em1s_int):
+            key = tuple(gvec)
+            gvec_to_idx[key] = ig_em1s
+        
+        # Find matches
+        indices_in_em1s = np.full(ngvecs_rho, -1, dtype=int)
+        mask_valid = np.zeros(ngvecs_rho, dtype=bool)
+        
+        for ig_rho, gvec in enumerate(gvecs_rho_int):
+            key = tuple(gvec)
+            if key in gvec_to_idx:
+                indices_in_em1s[ig_rho] = gvec_to_idx[key]
+                mask_valid[ig_rho] = True
+        
+        return indices_in_em1s, mask_valid
+    
+    def compute_bare_potential_V(self, rho_q_nR: np.ndarray, q_vec: np.ndarray, 
+                                  gvecs_rho: np.ndarray) -> np.ndarray:
+        """
+        Compute bare Coulomb potential V_q^nR(G) from density.
+        
+        The bare Coulomb potential in G-space is:
+            V_q^nR(G) = v(q+G) * ρ_q^nR(G)
+        
+        where v(q+G) = 4π/|q+G|² is the bare Coulomb interaction.
+        
+        For G-vectors not present in the screening database, we compute
+        v(q+G) directly using the bare 3D formula.
+        
+        Args:
+            rho_q_nR: Density in G-space [nwann, ngvecs_rho]
+            q_vec: q-vector in crystal coordinates [3]
+            gvecs_rho: G-vectors in crystal coordinates [ngvecs_rho, 3]
+            
+        Returns:
+            V_q_nR: Bare potential in G-space [nwann, ngvecs_rho]
         """
         if not hasattr(self, 'em1s_db'):
             raise ValueError("Screening database not loaded. Call load_screening_db first.")
         
         # Find q-point in em1s database
-        # (This is simplified - needs proper q-point matching)
-        iq = 0  # TODO: Implement proper q-point finding
+        iq = self.find_q_in_screening_db(q_vec)
         
-        # Get bare Coulomb potential sqrt(v)
-        sqrt_v = self.em1s_db.sqrt_V[iq, :]  # [ngvecs]
+        # Align G-vectors
+        indices_in_em1s, mask_valid = self.align_gvectors(gvecs_rho, iq)
         
-        # V = v * rho, where v = sqrt_v^2
-        v_q = sqrt_v ** 2
+        # Initialize bare potential v(q+G)
+        nwann = rho_q_nR.shape[0]
+        ngvecs_rho = len(gvecs_rho)
+        v_qG = np.zeros(ngvecs_rho, dtype=np.float64)
         
-        # Apply to each Wannier function
-        V_q_nR = rho_q_nR * v_q[None, :]
+        # For G-vectors in em1s database, use stored sqrt(v)
+        if np.any(mask_valid):
+            sqrt_v_em1s = self.em1s_db.sqrt_V[iq, indices_in_em1s[mask_valid]]
+            v_qG[mask_valid] = sqrt_v_em1s ** 2
+        
+        # For G-vectors not in em1s, compute bare potential directly
+        if np.any(~mask_valid):
+            # Convert to Cartesian coordinates for |q+G| calculation
+            rlat = self.em1s_db.rlat  # Reciprocal lattice vectors
+            q_cart = q_vec @ rlat  # q in Cartesian (atomic units)
+            gvecs_cart = gvecs_rho[~mask_valid] @ rlat  # G in Cartesian
+            
+            # Compute |q+G| (multiply by 2π for actual reciprocal space)
+            qpG_cart = 2.0 * np.pi * (q_cart[None, :] + gvecs_cart)
+            qpG_norm = np.linalg.norm(qpG_cart, axis=1)
+            
+            # Avoid division by zero for G=0, q=0
+            qpG_norm = np.where(qpG_norm < 1e-10, 1e-10, qpG_norm)
+            
+            # v(q+G) = 4π/|q+G|²
+            v_qG[~mask_valid] = 4.0 * np.pi / (qpG_norm ** 2)
+        
+        # Apply potential: V = v * rho
+        V_q_nR = rho_q_nR * v_qG[None, :]
         
         return V_q_nR
     
+    def compute_screened_potential_W(self, rho_q_nR: np.ndarray, q_vec: np.ndarray,
+                                     gvecs_rho: np.ndarray) -> np.ndarray:
+        """
+        Compute screened Coulomb potential W_q^nR(G) from density.
+        
+        The screened potential is:
+            W_q^nR(G,G') = ε^{-1}(q; G,G') * v(q+G') * ρ_q^nR(G')
+        
+        where ε^{-1} is the inverse dielectric function from Yambo screening.
+        
+        Note: This computes the HEAD component (G=0) of the screened potential.
+        For full local-field effects, one would need to sum over all G' components.
+        
+        Args:
+            rho_q_nR: Density in G-space [nwann, ngvecs_rho]
+            q_vec: q-vector in crystal coordinates [3]
+            gvecs_rho: G-vectors in crystal coordinates [ngvecs_rho, 3]
+            
+        Returns:
+            W_q_nR: Screened potential in G-space [nwann, ngvecs_rho]
+        """
+        if not hasattr(self, 'em1s_db'):
+            raise ValueError("Screening database not loaded. Call load_screening_db first.")
+        
+        if not hasattr(self.em1s_db, 'X'):
+            raise ValueError("Screening data not loaded. em1s database fragments not found.")
+        
+        # Find q-point in em1s database
+        iq = self.find_q_in_screening_db(q_vec)
+        
+        # Align G-vectors
+        indices_in_em1s, mask_valid = self.align_gvectors(gvecs_rho, iq)
+        
+        # Get screening: X[iq] is sqrt(v)*chi*sqrt(v)
+        # We need eps^{-1} = 1 + v*chi = 1 + (sqrt(v)*chi*sqrt(v)) / (sqrt(v) * sqrt(v))
+        sqrt_v_em1s = self.em1s_db.sqrt_V[iq, :]  # [ngvecs_em1s]
+        X_iq = self.em1s_db.X[iq, :, :]  # [ngvecs_em1s, ngvecs_em1s]
+        
+        # Compute true chi: chi = X / (sqrt_v[G] * sqrt_v[G'])
+        # Avoid division by zero
+        sqrt_v_safe = np.where(sqrt_v_em1s < 1e-10, 1e-10, sqrt_v_em1s)
+        chi = X_iq / (sqrt_v_safe[:, None] * sqrt_v_safe[None, :])
+        
+        # Compute eps^{-1} = I + v * chi
+        v_em1s = sqrt_v_em1s ** 2
+        eps_inv = np.eye(len(v_em1s)) + v_em1s[:, None] * chi
+        
+        # Initialize screened potential
+        nwann = rho_q_nR.shape[0]
+        ngvecs_rho = len(gvecs_rho)
+        W_q_nR = np.zeros((nwann, ngvecs_rho), dtype=np.complex128)
+        
+        # For G-vectors in em1s database, apply full screening
+        if np.any(mask_valid):
+            idx_valid = indices_in_em1s[mask_valid]
+            
+            # W(G) = sum_{G'} eps^{-1}(G,G') * v(G') * rho(G')
+            # Extract relevant submatrix of eps_inv
+            eps_inv_sub = eps_inv[np.ix_(idx_valid, idx_valid)]  # [nvalid, nvalid]
+            v_sub = v_em1s[idx_valid]  # [nvalid]
+            
+            # For each Wannier function
+            for n in range(nwann):
+                rho_valid = rho_q_nR[n, mask_valid]  # [nvalid]
+                v_rho = v_sub * rho_valid  # [nvalid]
+                W_q_nR[n, mask_valid] = eps_inv_sub @ v_rho  # [nvalid]
+        
+        # For G-vectors not in em1s, use bare potential (no screening data)
+        if np.any(~mask_valid):
+            print(f"Warning: {np.sum(~mask_valid)} G-vectors not found in screening DB. "
+                  f"Using bare potential for these components.")
+            V_bare = self.compute_bare_potential_V(rho_q_nR, q_vec, gvecs_rho)
+            W_q_nR[:, ~mask_valid] = V_bare[:, ~mask_valid]
+        
+        return W_q_nR
+    
+    def compute_V_nm_R(self, rho_dict: dict, normalize: bool = True) -> dict:
+        """
+        Compute bare Coulomb matrix elements V_nm(R) in Wannier basis.
+        
+        Formula:
+            V_nm(R) = (1/Nq) * sum_q e^{iq·R} * sum_G ρ*_q^{nR}(G) V_q^{m0}(G)
+        
+        where V_q^{m0}(G) = v(q+G) * ρ_q^{m0}(G) is the bare potential.
+        
+        Args:
+            rho_dict: Precomputed densities from compute_rho_q_nR
+                      Format: rho_dict[(q_tuple, R_tuple)] = (rho_q_nR, gvecs)
+                      where q_tuple and R_tuple are tuples of crystal coordinates
+            normalize: If True, normalize by 1/Nq and cell volume
+        
+        Returns:
+            V_nm_dict: Dictionary with V_nm[R_tuple] = V_nm_R array [nwann, nwann]
+        """
+        if not hasattr(self, 'wfdb'):
+            raise ValueError("Wavefunction database not loaded.")
+        
+        nwann = self.nwann
+        
+        # Cell volume in atomic units (bohr^3)
+        cell_volume = abs(np.linalg.det(self.lat.T))
+        # Extract unique R vectors and q vectors
+        R_vecs = sorted(set(R for (q, R) in rho_dict.keys()))
+        q_vecs_all = sorted(set(q for (q, R) in rho_dict.keys()))
+        nq = len(q_vecs_all)
+        
+        print(f"Computing V_nm(R) for {len(R_vecs)} R-vectors...")
+        print(f"Using {nq} q-points with cell volume = {cell_volume:.3f} bohr^3")
+        if normalize:
+            print(f"Normalization: 1/(Nq * Ω) = 1/({nq} * {cell_volume:.3f}) = {1.0/(nq*cell_volume):.6e}")
+        
+        if nq == 1:
+            print("WARNING: Using only 1 q-point. This will give:")
+            print("  - Same V_nm for all R vectors (no R-dependence)")
+            print("  - Unphysical values dominated by G=0 at q=Γ")
+            print("  Recommendation: Use a full q-point grid (e.g., same as k-grid)")
+        
+        V_nm_dict = {}
+        
+        for R_tuple in R_vecs:
+            R_vec = np.array(R_tuple, dtype=np.float64)
+            print(f"  R = {R_tuple}")
+            V_nm_R = np.zeros((nwann, nwann), dtype=np.complex128)
+            
+            # Get all q-points that have this R vector
+            q_vecs = sorted([q for (q, R) in rho_dict.keys() if R == R_tuple])
+            
+            for iq, q_tuple in enumerate(q_vecs):
+                # Get precomputed densities
+                rho_q_nR, gvecs_rho = rho_dict[(q_tuple, R_tuple)]
+                rho_q_m0, gvecs_m0 = rho_dict[(q_tuple, (0, 0, 0))]
+                
+                # Verify G-vectors match
+                if not np.allclose(gvecs_rho, gvecs_m0):
+                    raise ValueError(f"G-vectors mismatch for q={q_tuple}, R={R_tuple}")
+                
+                # Compute Fourier phase factor: e^{iq·R}
+                # q is in crystal coordinates, R is in lattice units
+                # Phase = 2π * q·R
+                q_vec = np.array(q_tuple, dtype=np.float64)
+                phase = np.exp(1j * 2.0 * np.pi * np.dot(q_vec, R_vec))
+                
+                # Compute bare potential V_q^{m0}(G) = v(q+G) * ρ_q^{m0}(G)
+                V_q_m0 = self.compute_bare_potential_V(rho_q_m0, q_vec, gvecs_m0)
+                
+                # Matrix element: V_nm += e^{iq·R} * sum_G ρ*_q^{nR}(G) * V_q^{m0}(G)
+                # Shape: [nwann, 1, ngvecs] × [1, nwann, ngvecs] -> sum over G
+                V_nm_q = np.sum(rho_q_nR[:, None, :].conj() * V_q_m0[None, :, :], axis=2)
+                V_nm_R += phase * V_nm_q
+            
+            # Apply normalization: 1/(Nq * Ω)
+            if normalize:
+                V_nm_R /= (nq * cell_volume)
+            
+            V_nm_dict[R_tuple] = V_nm_R
+            print(f"    ✓ Summed over {len(q_vecs)} q-points")
+        
+        return V_nm_dict
+    
+    def compute_W_nm_R(self, rho_dict: dict) -> dict:
+        """
+        Compute screened Coulomb matrix elements W_nm(R) in Wannier basis.
+        
+        Formula:
+            W_nm(R) = V_nm(R) + sum_q sum_G V*_q^{nR}(G) Δρ_q^{n0}(G)
+        
+        where the induced density response is:
+            Δρ_q^{n0}(G) = sum_{G'} χ_q(G,G') V_q^{n0}(G')
+        
+        and χ is the bare response function from the screening database.
+        
+        Note: The screening correction is DIAGONAL in Wannier indices (both use n).
+        
+        Args:
+            rho_dict: Precomputed densities from compute_rho_q_nR
+                      Format: rho_dict[(q_tuple, R_tuple)] = (rho_q_nR, gvecs)
+        
+        Returns:
+            W_nm_dict: Dictionary with W_nm[R_tuple] = W_nm_R array [nwann, nwann]
+        """
+        if not hasattr(self, 'wfdb'):
+            raise ValueError("Wavefunction database not loaded.")
+        if not hasattr(self, 'em1s_db'):
+            raise ValueError("Screening database not loaded. Call load_screening_db first.")
+        
+        nwann = self.nwann
+        
+        # Cell volume for normalization
+        cell_volume = abs(np.linalg.det(wfdb.ydb.lat.T))
+        
+        # Start with bare Coulomb (without normalization yet)
+        print(f"Computing W_nm(R) with screening...")
+        V_nm_dict = self.compute_V_nm_R(rho_dict, normalize=False)
+        W_nm_dict = {R: V_nm.copy() for R, V_nm in V_nm_dict.items()}
+        
+        # Extract unique R vectors and q vectors
+        R_vecs = sorted(set(R for (q, R) in rho_dict.keys()))
+        q_vecs_all = sorted(set(q for (q, R) in rho_dict.keys()))
+        
+        print(f"Adding screening corrections for {len(q_vecs_all)} q-points...")
+        
+        for iq, q_tuple in enumerate(q_vecs_all):
+            if iq % max(1, len(q_vecs_all) // 10) == 0:
+                print(f"  q-point {iq+1}/{len(q_vecs_all)}: q={q_tuple}")
+            
+            q_vec = np.array(q_tuple)
+            
+            # Find q in screening database
+            try:
+                iq_em1s = self.find_q_in_screening_db(q_vec)
+            except ValueError:
+                print(f"    Warning: q not in screening DB, skipping")
+                continue
+            
+            # Get density at R=0 for all Wannier functions
+            if (q_tuple, (0, 0, 0)) not in rho_dict:
+                print(f"    Warning: ρ_q^{{n0}} not precomputed, skipping")
+                continue
+            
+            rho_q_n0, gvecs_n0 = rho_dict[(q_tuple, (0, 0, 0))]  # [nwann, ngvecs]
+            
+            # Compute bare potential V_q^{n0}(G) for each Wannier function
+            V_q_n0 = self.compute_bare_potential_V(rho_q_n0, q_vec, gvecs_n0)  # [nwann, ngvecs]
+            
+            # Get screening χ from em1s database
+            indices_in_em1s, mask_valid = self.align_gvectors(gvecs_n0, iq_em1s)
+            
+            if not np.any(mask_valid):
+                print(f"    Warning: No G-vectors overlap with screening DB")
+                continue
+            
+            sqrt_v_em1s = self.em1s_db.sqrt_V[iq_em1s, :]
+            X_iq = self.em1s_db.X[iq_em1s, :, :]
+            
+            # Compute χ_q(G,G')
+            sqrt_v_safe = np.where(sqrt_v_em1s < 1e-10, 1e-10, sqrt_v_em1s)
+            chi_q = X_iq / (sqrt_v_safe[:, None] * sqrt_v_safe[None, :])
+            
+            idx_valid = indices_in_em1s[mask_valid]
+            ngvecs_em1s = len(sqrt_v_em1s)
+            
+            # Compute induced density Δρ_q^{n0}(G) for each Wannier function n
+            Delta_rho_q_n0 = np.zeros((nwann, ngvecs_em1s), dtype=np.complex128)
+            
+            for n in range(nwann):
+                # Extract V_q^{n0} for valid G-vectors
+                V_q_n0_valid = np.zeros(ngvecs_em1s, dtype=np.complex128)
+                V_q_n0_valid[idx_valid] = V_q_n0[n, mask_valid]
+                
+                # Apply χ: Δρ_q^{n0} = χ @ V_q^{n0}
+                Delta_rho_q_n0[n, :] = chi_q @ V_q_n0_valid
+            
+            # Now add correction for each R vector
+            for R_tuple in R_vecs:
+                if (q_tuple, R_tuple) not in rho_dict:
+                    continue
+                
+                # Compute Fourier phase factor: e^{iq·R}
+                R_vec = np.array(R_tuple, dtype=np.float64)
+                phase = np.exp(1j * 2.0 * np.pi * np.dot(q_vec, R_vec))
+                
+                rho_q_nR, gvecs_nR = rho_dict[(q_tuple, R_tuple)]
+                
+                # Compute V_q^{nR}(G)
+                V_q_nR = self.compute_bare_potential_V(rho_q_nR, q_vec, gvecs_nR)  # [nwann, ngvecs]
+                
+                # Extract valid components
+                V_q_nR_valid = np.zeros((nwann, ngvecs_em1s), dtype=np.complex128)
+                
+                # Align G-vectors between nR and em1s
+                indices_nR_in_em1s, mask_nR_valid = self.align_gvectors(gvecs_nR, iq_em1s)
+                idx_nR_valid = indices_nR_in_em1s[mask_nR_valid]
+                V_q_nR_valid[:, idx_nR_valid] = V_q_nR[:, mask_nR_valid]
+                
+                # Correction: e^{iq·R} * sum_G V*_q^{nR}(G) Δρ_q^{n0}(G)
+                # This is DIAGONAL in n, and needs proper normalization
+                for n in range(nwann):
+                    correction_n = np.sum(V_q_nR_valid[n, :].conj() * Delta_rho_q_n0[n, :])
+                    W_nm_dict[R_tuple][n, n] += phase * correction_n
+        
+        # Apply the same normalization as V_nm: 1/(Nq * Ω)
+        cell_volume = abs(np.linalg.det(wfdb.ydb.lat.T))
+        nq = len(q_vecs_all)
+        for R_tuple in W_nm_dict:
+            W_nm_dict[R_tuple] /= (nq * cell_volume)
+        
+        print(f"✓ W_nm(R) computed with screening.")
+        return W_nm_dict
+    
     def __repr__(self):
-        """String representation."""
+        """WannierYamboInterface."""
         lines = []
         lines.append("=" * 60)
         lines.append("Wannier-Yambo Interface")
