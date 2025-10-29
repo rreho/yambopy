@@ -112,7 +112,7 @@ class YamboWFDB:
                 if not hasattr(latdb,'ibz_kpoints'): latdb.expand_kpoints()
                 self.ydb = latdb
             else :
-                self.ydb = YamboLatticeDB.from_db_file(ns_db1_fname, Expand=True)
+                self.ydb = YamboLatticeDB.from_db_file(filename=ns_db1_fname, Expand=True)
             ## total kpoints in full BZ
             self.nkBZ = len(self.ydb.red_kpoints)
             #
