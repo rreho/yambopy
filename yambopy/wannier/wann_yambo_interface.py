@@ -88,8 +88,10 @@ class WannierYamboInterface:
         self.nwann = None
         self.R_vectors = None
         self.nR = None
+        self.kmesh = None  # K-mesh dimensions [nk1, nk2, nk3]
         
         print(f"Loaded {self.nkpts} k-points (IBZ) with {self.nbands} bands")
+        print(f"Full BZ has {len(self.kpts_BZ)} k-points")
         print(f"Max G-vectors: {self.ngvecs}")
     
     def load_U_matrix_from_chk(self):
@@ -158,22 +160,108 @@ class WannierYamboInterface:
         self.nR = len(self.R_vectors)
         print(f"Set {self.nR} R vectors")
     
-    def load_R_vectors_from_hr(self):
-        """
-        Load R vectors from Wannier90 _hr.dat file.
-        """
-        from yambopy.wannier.wann_io import HR
+    # def load_R_vectors_from_hr(self):
+    #     """
+    #     Load R vectors from Wannier90 _hr.dat file.
+    #     """
+    #     from yambopy.wannier.wann_io import HR
         
-        print(f"Loading R vectors from {self.seedname}_hr.dat...")
-        hr = HR(os.path.join(self.wannier_path, self.seedname))
+    #     print(f"Loading R vectors from {self.seedname}_hr.dat...")
+    #     hr = HR(os.path.join(self.wannier_path, self.seedname))
         
-        self.R_vectors = hr.hop  # Shape [nR, 3]
-        self.nR = len(self.R_vectors)
-        self.ws_deg = hr.ws_deg  # Wigner-Seitz degeneracy factors
+    #     self.R_vectors = hr.hop  # Shape [nR, 3]
+    #     self.nR = len(self.R_vectors)
+    #     self.ws_deg = hr.ws_deg  # Wigner-Seitz degeneracy factors
         
-        print(f"Loaded {self.nR} R vectors from HR file")
+    #     print(f"Loaded {self.nR} R vectors from HR file")
     
+    def set_kmesh(self, kmesh: np.ndarray):
+        """
+        Set the k-point mesh dimensions.
+        
+        Args:
+            kmesh: K-mesh dimensions [nk1, nk2, nk3]
+        """
+        self.kmesh = np.array(kmesh, dtype=int)
+        nk_expected = np.prod(self.kmesh)
+        
+        if nk_expected != len(self.kpts_BZ):
+            print(f"Warning: k-mesh {self.kmesh} implies {nk_expected} k-points, "
+                  f"but full BZ has {len(self.kpts_BZ)} k-points")
+        
+        print(f"Set k-mesh: {self.kmesh[0]}×{self.kmesh[1]}×{self.kmesh[2]} = {nk_expected} k-points")
+    
+    def generate_R_vectors_from_kmesh(self, centered: bool = True):
+        """
+        Generate R-vectors from k-mesh dimensions.
+        
+        For a k-mesh of dimensions (nk1, nk2, nk3), the R-vectors span:
+        - If centered=True: R = (r1, r2, r3) with ri ∈ [-nki//2, nki//2)  (preferred)
+        - If centered=False: R = (r1, r2, r3) with ri ∈ [0, nki)
+        
+        These R-vectors connect unit cells in the supercell defined by the k-grid.
+        
+        Args:
+            centered: If True, center R-vectors around origin
+        """
+        if self.kmesh is None:
+            raise ValueError("K-mesh not set. Call set_kmesh first.")
+        
+        nk1, nk2, nk3 = self.kmesh
+        
+        if centered:
+            # Center around origin: [-N//2, N//2) for even N, [-(N-1)//2, (N+1)//2) for odd N
+            r1_range = np.arange(-nk1//2, (nk1+1)//2)
+            r2_range = np.arange(-nk2//2, (nk2+1)//2)
+            r3_range = np.arange(-nk3//2, (nk3+1)//2)
+        else:
+            r1_range = np.arange(nk1)
+            r2_range = np.arange(nk2)
+            r3_range = np.arange(nk3)
+        
+        # Generate all combinations
+        R_vecs = []
+        for r1 in r1_range:
+            for r2 in r2_range:
+                for r3 in r3_range:
+                    R_vecs.append([r1, r2, r3])
+        
+        self.R_vectors = np.array(R_vecs, dtype=int)
+        self.nR = len(self.R_vectors)
+        
+        print(f"Generated {self.nR} R-vectors from k-mesh {self.kmesh}")
+        if centered:
+            print(f"  R-vectors centered: [{r1_range[0]},{r1_range[-1]}] × "
+                  f"[{r2_range[0]},{r2_range[-1]}] × [{r3_range[0]},{r3_range[-1]}]")
+        else:
+            print(f"  R-vectors range: [0,{nk1-1}] × [0,{nk2-1}] × [0,{nk3-1}]")
 
+    def compute_rho(self, 
+                    q_vec: np.ndarray,
+                    ispin: int = 0,
+                    return_gspace: bool = True) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """
+        Compute the density matrix ρ_q^{n0} for R=0 only.
+        
+        ρ_q^{n0}(r) = (1/Nk) * Σ_k ũ*_nk(r) ũ_n,k+q(r)
+        
+        The R-dependence is added later via phase factors e^{-iq·R} 
+        
+        Args:
+            q_vec: q-vector in crystal coordinates [3]
+            ispin: Spin index  
+            return_gspace: If True, return in G-space; otherwise real-space
+            
+        Returns:
+            If return_gspace=True:
+                rho_G: Density in G-space [nwann, ngvecs]
+                gvecs: G-vectors [ngvecs, 3]
+            If return_gspace=False:
+                rho_r: Density in real space [nwann, nx, ny, nz]
+        """
+        # Simply call the old function with R=0
+        R_vec = np.array([0, 0, 0])
+        return self.compute_rho_q_nR(q_vec, R_vec, ispin, return_gspace, use_ibz_only=False)
     
     def compute_rho_q_nR(self, 
                          q_vec: np.ndarray,
@@ -189,7 +277,7 @@ class WannierYamboInterface:
         
         where ũ_nk are the Wannier-rotated periodic parts of Bloch wavefunctions.
         
-        This implementation uses a real-space approach (Option A):
+        This implementation uses a real-space approach:
         1. Load periodic parts u_mk(G) at k and k+q from Yambo (G-space)
         2. Apply Wannier transformation: ũ_nk(G) = Σ_m U_mn(k) u_mk(G)
         3. FFT to real space: ũ_nk(r)
@@ -227,6 +315,11 @@ class WannierYamboInterface:
         tmp_fft_k = np.zeros((self.nwann, self.wfdb.nspinor, *fft_grid), dtype=np.complex128)
         tmp_fft_kpq = np.zeros((self.nwann, self.wfdb.nspinor, *fft_grid), dtype=np.complex128)
         
+        # Create real-space grid once (reused if BZ wrapping is needed)
+        # r_grid in crystal coordinates: [nx, ny, nz, 3]
+        # mgrid gives (3, nx, ny, nz), moveaxis(0, -1) gives (nx, ny, nz, 3)
+        r_grid = np.moveaxis(np.mgrid[0:fft_grid[0], 0:fft_grid[1], 0:fft_grid[2]], 0, -1) / fft_grid
+        
         # Loop over k-points (vectorize where possible)
         for ik in range(self.nkpts):
             # Find k+q in BZ
@@ -234,8 +327,16 @@ class WannierYamboInterface:
             ikpq_bz = find_kpt(self.ktree, kpq_vec)
             ikpq_ibz = self.wfdb.ydb.kpoints_indexes[ikpq_bz]
             
+            # Check if k+q was wrapped (k+q went outside BZ)
+            # The wrapped k-point in crystal coordinates
+            kpq_wrapped = self.kpts_BZ[ikpq_bz]
+            
+            # Reciprocal lattice vector G needed to wrap k+q back: k+q = k_wrapped + G
+            G_wrap = kpq_vec - kpq_wrapped
+            G_wrap = np.round(G_wrap)  # Should be integer in crystal coordinates
+            
             # Load wavefunctions: [nspin, nbands, nspinor, ngvecs]
-            wf_k, gvecs_k = self.wfdb.get_iBZ_wf(ik)
+            wf_k, gvecs_k = self.wfdb.get_iBZ_wf(ik) # This works because we have full BZ grid = IBZ grid but it should be replaced by get_BZ_wf()
             wf_kpq, gvecs_kpq = self.wfdb.get_iBZ_wf(ikpq_ibz)
             #GVEC = K+Q+G-K+Q
             
@@ -270,7 +371,15 @@ class WannierYamboInterface:
             # Shape: [nwann, nspinor, nx, ny, nz]
             u_k_r = scipy.fft.ifftn(tmp_fft_k, norm="forward", axes=(2, 3, 4)) / np.sqrt(cel_vol)
             u_kpq_r = scipy.fft.ifftn(tmp_fft_kpq, norm="forward", axes=(2, 3, 4)) / np.sqrt(cel_vol)
-            # multiply by phase -iGR*u_kpq_r?
+            
+            # Apply phase correction if k+q was wrapped outside BZ
+            # If k+q = k_wrapped + G_wrap, we need to multiply by exp(-iG_wrap·r)
+            if np.linalg.norm(G_wrap) > 1e-6:
+                # Phase: exp(-2πi * G_wrap · r) using precomputed r_grid
+                phase_wrap = np.exp(-2j * np.pi * np.einsum('ijkd,d->ijk', r_grid, G_wrap))
+                # Apply phase to u_kpq_r: [nwann, nspinor, nx, ny, nz]
+                u_kpq_r *= phase_wrap[None, None, :, :, :]
+            
             # Sum over spinors: [nwann, nx, ny, nz]
             u_k_r_total = u_k_r.sum(axis=1)
             u_kpq_r_total = u_kpq_r.sum(axis=1)
@@ -307,7 +416,7 @@ class WannierYamboInterface:
             rho: Density matrices [nR, nwann, ngvecs] or [nR, nwann, nx, ny, nz]
         """
         if self.R_vectors is None:
-            raise ValueError("R vectors not set. Call set_R_vectors or load_R_vectors_from_hr.")
+            raise ValueError("R vectors not set.")
         
         if return_gspace:
             rho_all = np.zeros((self.nR, self.nwann, self.ngvecs), dtype=np.complex128)
@@ -352,7 +461,7 @@ class WannierYamboInterface:
                 - If not return_gspace: [nq, nR, nwann, nx, ny, nz]
         """
         if self.R_vectors is None:
-            raise ValueError("R vectors not set. Call set_R_vectors or load_R_vectors_from_hr.")
+            raise ValueError("R vectors not set.")
         
         nq = len(q_grid)
         
@@ -572,26 +681,22 @@ class WannierYamboInterface:
         
         return indices_in_em1s, mask_valid
     
-    def compute_bare_potential_V(self, rho_q_nR: np.ndarray, q_vec: np.ndarray, 
-                                  gvecs_rho: np.ndarray) -> np.ndarray:
+    def compute_bare_potential(self, q_vec: np.ndarray, gvecs: np.ndarray) -> np.ndarray:
         """
-        Compute bare Coulomb potential V_q^nR(G) from density.
+        Compute bare Coulomb potential v(q+G) for a given q-point.
         
-        The bare Coulomb potential in G-space is:
-            V_q^nR(G) = v(q+G) * ρ_q^nR(G)
+        The bare Coulomb potential in 3D is:
+            v(q+G) = 4π/|q+G|²
         
-        where v(q+G) = 4π/|q+G|² is the bare Coulomb interaction.
-        
-        For G-vectors not present in the screening database, we compute
-        v(q+G) directly using the bare 3D formula.
+        This method computes v(q+G) once for each q-point and can be reused
+        for all Wannier functions and R-vectors.
         
         Args:
-            rho_q_nR: Density in G-space [nwann, ngvecs_rho]
             q_vec: q-vector in crystal coordinates [3]
-            gvecs_rho: G-vectors in crystal coordinates [ngvecs_rho, 3]
+            gvecs: G-vectors in crystal coordinates [ngvecs, 3]
             
         Returns:
-            V_q_nR: Bare potential in G-space [nwann, ngvecs_rho]
+            v_qG: Bare potential [ngvecs]
         """
         if not hasattr(self, 'em1s_db'):
             raise ValueError("Screening database not loaded. Call load_screening_db first.")
@@ -600,12 +705,11 @@ class WannierYamboInterface:
         iq = self.find_q_in_screening_db(q_vec)
         
         # Align G-vectors
-        indices_in_em1s, mask_valid = self.align_gvectors(gvecs_rho, iq)
+        indices_in_em1s, mask_valid = self.align_gvectors(gvecs, iq)
         
         # Initialize bare potential v(q+G)
-        nwann = rho_q_nR.shape[0]
-        ngvecs_rho = len(gvecs_rho)
-        v_qG = np.zeros(ngvecs_rho, dtype=np.float64)
+        ngvecs = len(gvecs)
+        v_qG = np.zeros(ngvecs, dtype=np.float64)
         
         # For G-vectors in em1s database, use stored sqrt(v)
         if np.any(mask_valid):
@@ -617,7 +721,7 @@ class WannierYamboInterface:
             # Convert to Cartesian coordinates for |q+G| calculation
             rlat = self.em1s_db.rlat  # Reciprocal lattice vectors
             q_cart = q_vec @ rlat  # q in Cartesian (atomic units)
-            gvecs_cart = gvecs_rho[~mask_valid] @ rlat  # G in Cartesian
+            gvecs_cart = gvecs[~mask_valid] @ rlat  # G in Cartesian
             
             # Compute |q+G| (multiply by 2π for actual reciprocal space)
             qpG_cart = 2.0 * np.pi * (q_cart[None, :] + gvecs_cart)
@@ -629,31 +733,22 @@ class WannierYamboInterface:
             # v(q+G) = 4π/|q+G|²
             v_qG[~mask_valid] = 4.0 * np.pi / (qpG_norm ** 2)
         
-        # Apply potential: V = v * rho
-        V_q_nR = rho_q_nR * v_qG[None, :]
-        
-        return V_q_nR
+        return v_qG
     
-    def compute_screened_potential_W(self, rho_q_nR: np.ndarray, q_vec: np.ndarray,
-                                     gvecs_rho: np.ndarray) -> np.ndarray:
+    def compute_screened_potential(self, q_vec: np.ndarray, gvecs: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Compute screened Coulomb potential W_q^nR(G) from density.
+        Compute screened Coulomb interaction w(q; G,G') = ε^{-1}(q; G,G') * v(q+G').
         
-        The screened potential is:
-            W_q^nR(G,G') = ε^{-1}(q; G,G') * v(q+G') * ρ_q^nR(G')
-        
-        where ε^{-1} is the inverse dielectric function from Yambo screening.
-        
-        Note: This computes the HEAD component (G=0) of the screened potential.
-        For full local-field effects, one would need to sum over all G' components.
+        Returns both the inverse dielectric matrix and bare potential for efficiency.
         
         Args:
-            rho_q_nR: Density in G-space [nwann, ngvecs_rho]
             q_vec: q-vector in crystal coordinates [3]
-            gvecs_rho: G-vectors in crystal coordinates [ngvecs_rho, 3]
+            gvecs: G-vectors in crystal coordinates [ngvecs, 3]
             
         Returns:
-            W_q_nR: Screened potential in G-space [nwann, ngvecs_rho]
+            eps_inv: Inverse dielectric matrix [nvalid, nvalid] (submatrix for valid G-vectors)
+            v_qG: Bare potential [ngvecs]
+            mask_valid: Boolean mask indicating which G-vectors have screening data [ngvecs]
         """
         if not hasattr(self, 'em1s_db'):
             raise ValueError("Screening database not loaded. Call load_screening_db first.")
@@ -665,48 +760,95 @@ class WannierYamboInterface:
         iq = self.find_q_in_screening_db(q_vec)
         
         # Align G-vectors
-        indices_in_em1s, mask_valid = self.align_gvectors(gvecs_rho, iq)
+        indices_in_em1s, mask_valid = self.align_gvectors(gvecs, iq)
+        
+        # First compute bare potential
+        v_qG = self.compute_bare_potential(q_vec, gvecs)
         
         # Get screening: X[iq] is sqrt(v)*chi*sqrt(v)
-        # We need eps^{-1} = 1 + v*chi = 1 + (sqrt(v)*chi*sqrt(v)) / (sqrt(v) * sqrt(v))
         sqrt_v_em1s = self.em1s_db.sqrt_V[iq, :]  # [ngvecs_em1s]
         X_iq = self.em1s_db.X[iq, :, :]  # [ngvecs_em1s, ngvecs_em1s]
         
         # Compute true chi: chi = X / (sqrt_v[G] * sqrt_v[G'])
-        # Avoid division by zero
         sqrt_v_safe = np.where(sqrt_v_em1s < 1e-10, 1e-10, sqrt_v_em1s)
         chi = X_iq / (sqrt_v_safe[:, None] * sqrt_v_safe[None, :])
         
         # Compute eps^{-1} = I + v * chi
         v_em1s = sqrt_v_em1s ** 2
-        eps_inv = np.eye(len(v_em1s)) + v_em1s[:, None] * chi
+        eps_inv_full = np.eye(len(v_em1s)) + v_em1s[:, None] * chi
         
-        # Initialize screened potential
+        # Extract submatrix for valid G-vectors only
+        if np.any(mask_valid):
+            idx_valid = indices_in_em1s[mask_valid]
+            eps_inv = eps_inv_full[np.ix_(idx_valid, idx_valid)]
+        else:
+            eps_inv = np.array([])
+        
+        return eps_inv, v_qG, mask_valid
+    
+    def compute_bare_potential_V(self, rho_q_nR: np.ndarray, q_vec: np.ndarray, 
+                                  gvecs_rho: np.ndarray) -> np.ndarray:
+        """
+        Compute bare Coulomb potential V_q^nR(G) from density.
+        
+        Convenience wrapper: V_q^nR(G) = v(q+G) * ρ_q^nR(G)
+        
+        This is equivalent to:
+            v = compute_bare_potential(q_vec, gvecs_rho)
+            V = rho_q_nR * v[None, :]
+        
+        Args:
+            rho_q_nR: Density in G-space [nwann, ngvecs_rho]
+            q_vec: q-vector in crystal coordinates [3]
+            gvecs_rho: G-vectors in crystal coordinates [ngvecs_rho, 3]
+            
+        Returns:
+            V_q_nR: Bare potential in G-space [nwann, ngvecs_rho]
+        """
+        # Use the new efficient method
+        v_qG = self.compute_bare_potential(q_vec, gvecs_rho)
+        return rho_q_nR * v_qG[None, :]
+    
+    def compute_screened_potential_W(self, rho_q_nR: np.ndarray, q_vec: np.ndarray,
+                                     gvecs_rho: np.ndarray) -> np.ndarray:
+        """
+        Compute screened Coulomb potential W_q^nR(G) from density.
+        
+        Convenience wrapper that computes:
+            W_q^nR(G) = sum_{G'} ε^{-1}(q; G,G') * v(q+G') * ρ_q^nR(G')
+        
+        For efficiency, prefer using compute_screened_potential() once and reusing the result.
+        
+        Args:
+            rho_q_nR: Density in G-space [nwann, ngvecs_rho]
+            q_vec: q-vector in crystal coordinates [3]
+            gvecs_rho: G-vectors in crystal coordinates [ngvecs_rho, 3]
+            
+        Returns:
+            W_q_nR: Screened potential in G-space [nwann, ngvecs_rho]
+        """
+        # Use the new efficient method to get screening matrices
+        eps_inv, v_qG, mask_valid = self.compute_screened_potential(q_vec, gvecs_rho)
+        
         nwann = rho_q_nR.shape[0]
         ngvecs_rho = len(gvecs_rho)
         W_q_nR = np.zeros((nwann, ngvecs_rho), dtype=np.complex128)
         
-        # For G-vectors in em1s database, apply full screening
+        # For G-vectors with screening data, apply full screening
         if np.any(mask_valid):
-            idx_valid = indices_in_em1s[mask_valid]
-            
             # W(G) = sum_{G'} eps^{-1}(G,G') * v(G') * rho(G')
-            # Extract relevant submatrix of eps_inv
-            eps_inv_sub = eps_inv[np.ix_(idx_valid, idx_valid)]  # [nvalid, nvalid]
-            v_sub = v_em1s[idx_valid]  # [nvalid]
+            v_valid = v_qG[mask_valid]  # [nvalid]
             
-            # For each Wannier function
             for n in range(nwann):
                 rho_valid = rho_q_nR[n, mask_valid]  # [nvalid]
-                v_rho = v_sub * rho_valid  # [nvalid]
-                W_q_nR[n, mask_valid] = eps_inv_sub @ v_rho  # [nvalid]
+                v_rho = v_valid * rho_valid  # [nvalid]
+                W_q_nR[n, mask_valid] = eps_inv @ v_rho  # [nvalid]
         
         # For G-vectors not in em1s, use bare potential (no screening data)
         if np.any(~mask_valid):
             print(f"Warning: {np.sum(~mask_valid)} G-vectors not found in screening DB. "
                   f"Using bare potential for these components.")
-            V_bare = self.compute_bare_potential_V(rho_q_nR, q_vec, gvecs_rho)
-            W_q_nR[:, ~mask_valid] = V_bare[:, ~mask_valid]
+            W_q_nR[:, ~mask_valid] = rho_q_nR[:, ~mask_valid] * v_qG[~mask_valid][None, :]
         
         return W_q_nR
     
@@ -731,10 +873,13 @@ class WannierYamboInterface:
         if not hasattr(self, 'wfdb'):
             raise ValueError("Wavefunction database not loaded.")
         
+        if not hasattr(self, 'R_vectors'): self.generate_R_vectors_from_kmesh()
+        
         nwann = self.nwann
         
         # Cell volume in atomic units (bohr^3)
-        cell_volume = abs(np.linalg.det(self.lat.T))
+        # lat is already in bohr (units of alat × alat), so no additional factor needed
+        cell_volume = abs(np.linalg.det(self.wfdb.ydb.lat.T))
         # Extract unique R vectors and q vectors
         R_vecs = sorted(set(R for (q, R) in rho_dict.keys()))
         q_vecs_all = sorted(set(q for (q, R) in rho_dict.keys()))
@@ -753,6 +898,16 @@ class WannierYamboInterface:
         
         V_nm_dict = {}
         
+        # OPTIMIZATION: Precompute V_q_m0 for all q-points (only depends on q, not R)
+        print("  Precomputing bare potentials V_q^{m0} for all q-points...")
+        V_q_m0_cache = {}
+        for q_tuple in q_vecs_all:
+            rho_q_m0, gvecs_m0 = rho_dict[(q_tuple, (0, 0, 0))]
+            q_vec = np.array(q_tuple, dtype=np.float64)
+            # Compute once: v(q+G) * ρ_q^{m0}(G) for all Wannier functions m
+            v_bare = self.compute_bare_potential(q_vec, gvecs_m0)  # [ngvecs]
+            V_q_m0_cache[q_tuple] = rho_q_m0 * v_bare[None, :]  # [nwann, ngvecs]
+        
         for R_tuple in R_vecs:
             R_vec = np.array(R_tuple, dtype=np.float64)
             print(f"  R = {R_tuple}")
@@ -764,24 +919,17 @@ class WannierYamboInterface:
             for iq, q_tuple in enumerate(q_vecs):
                 # Get precomputed densities
                 rho_q_nR, gvecs_rho = rho_dict[(q_tuple, R_tuple)]
-                rho_q_m0, gvecs_m0 = rho_dict[(q_tuple, (0, 0, 0))]
-                
-                # Verify G-vectors match
-                if not np.allclose(gvecs_rho, gvecs_m0):
-                    raise ValueError(f"G-vectors mismatch for q={q_tuple}, R={R_tuple}")
                 
                 # Compute Fourier phase factor: e^{iq·R}
-                # q is in crystal coordinates, R is in lattice units
-                # Phase = 2π * q·R
                 q_vec = np.array(q_tuple, dtype=np.float64)
                 phase = np.exp(1j * 2.0 * np.pi * np.dot(q_vec, R_vec))
                 
-                # Compute bare potential V_q^{m0}(G) = v(q+G) * ρ_q^{m0}(G)
-                V_q_m0 = self.compute_bare_potential_V(rho_q_m0, q_vec, gvecs_m0)
+                # Use cached V_q^{m0}
+                V_q_m0 = V_q_m0_cache[q_tuple]
                 
                 # Matrix element: V_nm += e^{iq·R} * sum_G ρ*_q^{nR}(G) * V_q^{m0}(G)
-                # Shape: [nwann, 1, ngvecs] × [1, nwann, ngvecs] -> sum over G
-                V_nm_q = np.sum(rho_q_nR[:, None, :].conj() * V_q_m0[None, :, :], axis=2)
+                # Vectorized: [nwann, ngvecs].conj() @ [nwann, ngvecs].T -> [nwann, nwann]
+                V_nm_q = rho_q_nR.conj() @ V_q_m0.T
                 V_nm_R += phase * V_nm_q
             
             # Apply normalization: 1/(Nq * Ω)
@@ -818,11 +966,12 @@ class WannierYamboInterface:
             raise ValueError("Wavefunction database not loaded.")
         if not hasattr(self, 'em1s_db'):
             raise ValueError("Screening database not loaded. Call load_screening_db first.")
-        
+
+        if not hasattr(self, 'R_vectorss'): self.generate_R_vectors_from_kmesh()
         nwann = self.nwann
         
-        # Cell volume for normalization
-        cell_volume = abs(np.linalg.det(wfdb.ydb.lat.T))
+        # Cell volume for normalization (bohr^3)
+        cell_volume = abs(np.linalg.det(self.wfdb.ydb.lat.T))
         
         # Start with bare Coulomb (without normalization yet)
         print(f"Computing W_nm(R) with screening...")
@@ -835,34 +984,37 @@ class WannierYamboInterface:
         
         print(f"Adding screening corrections for {len(q_vecs_all)} q-points...")
         
+        # OPTIMIZATION: Precompute bare potentials for R=0
+        print("  Precomputing V_q^{n0} and Δρ_q^{n0} for all q-points...")
+        V_q_n0_cache = {}
+        Delta_rho_cache = {}
+        gvecs_alignment_cache = {}
+        
         for iq, q_tuple in enumerate(q_vecs_all):
-            if iq % max(1, len(q_vecs_all) // 10) == 0:
-                print(f"  q-point {iq+1}/{len(q_vecs_all)}: q={q_tuple}")
-            
             q_vec = np.array(q_tuple)
             
             # Find q in screening database
             try:
                 iq_em1s = self.find_q_in_screening_db(q_vec)
             except ValueError:
-                print(f"    Warning: q not in screening DB, skipping")
                 continue
             
             # Get density at R=0 for all Wannier functions
             if (q_tuple, (0, 0, 0)) not in rho_dict:
-                print(f"    Warning: ρ_q^{{n0}} not precomputed, skipping")
                 continue
             
             rho_q_n0, gvecs_n0 = rho_dict[(q_tuple, (0, 0, 0))]  # [nwann, ngvecs]
             
-            # Compute bare potential V_q^{n0}(G) for each Wannier function
-            V_q_n0 = self.compute_bare_potential_V(rho_q_n0, q_vec, gvecs_n0)  # [nwann, ngvecs]
+            # Compute bare potential V_q^{n0}(G) = v(q+G) * ρ_q^{n0}(G)
+            v_bare = self.compute_bare_potential(q_vec, gvecs_n0)  # [ngvecs]
+            V_q_n0 = rho_q_n0 * v_bare[None, :]  # [nwann, ngvecs]
+            V_q_n0_cache[q_tuple] = V_q_n0
             
             # Get screening χ from em1s database
             indices_in_em1s, mask_valid = self.align_gvectors(gvecs_n0, iq_em1s)
+            gvecs_alignment_cache[q_tuple] = (indices_in_em1s, mask_valid, iq_em1s)
             
             if not np.any(mask_valid):
-                print(f"    Warning: No G-vectors overlap with screening DB")
                 continue
             
             sqrt_v_em1s = self.em1s_db.sqrt_V[iq_em1s, :]
@@ -875,16 +1027,27 @@ class WannierYamboInterface:
             idx_valid = indices_in_em1s[mask_valid]
             ngvecs_em1s = len(sqrt_v_em1s)
             
-            # Compute induced density Δρ_q^{n0}(G) for each Wannier function n
-            Delta_rho_q_n0 = np.zeros((nwann, ngvecs_em1s), dtype=np.complex128)
+            # VECTORIZED: Apply χ to all Wannier functions at once
+            V_q_n0_valid = np.zeros((nwann, ngvecs_em1s), dtype=np.complex128)
+            V_q_n0_valid[:, idx_valid] = V_q_n0[:, mask_valid]
             
-            for n in range(nwann):
-                # Extract V_q^{n0} for valid G-vectors
-                V_q_n0_valid = np.zeros(ngvecs_em1s, dtype=np.complex128)
-                V_q_n0_valid[idx_valid] = V_q_n0[n, mask_valid]
-                
-                # Apply χ: Δρ_q^{n0} = χ @ V_q^{n0}
-                Delta_rho_q_n0[n, :] = chi_q @ V_q_n0_valid
+            # Δρ_q^{n0} = χ @ V_q^{n0}.T -> [ngvecs_em1s, ngvecs_em1s] @ [ngvecs_em1s, nwann] = [ngvecs_em1s, nwann]
+            Delta_rho_q_n0 = (chi_q @ V_q_n0_valid.T).T  # [nwann, ngvecs_em1s]
+            Delta_rho_cache[q_tuple] = Delta_rho_q_n0
+        
+        print(f"  Processing screening corrections for {len(R_vecs)} R-vectors...")
+        for iq, q_tuple in enumerate(q_vecs_all):
+            if iq % max(1, len(q_vecs_all) // 10) == 0:
+                print(f"    q-point {iq+1}/{len(q_vecs_all)}: q={q_tuple}")
+            
+            if q_tuple not in Delta_rho_cache:
+                continue
+            
+            q_vec = np.array(q_tuple)
+            Delta_rho_q_n0 = Delta_rho_cache[q_tuple]
+            indices_in_em1s, mask_valid, iq_em1s = gvecs_alignment_cache[q_tuple]
+            idx_valid = indices_in_em1s[mask_valid]
+            ngvecs_em1s = Delta_rho_q_n0.shape[1]
             
             # Now add correction for each R vector
             for R_tuple in R_vecs:
@@ -897,8 +1060,9 @@ class WannierYamboInterface:
                 
                 rho_q_nR, gvecs_nR = rho_dict[(q_tuple, R_tuple)]
                 
-                # Compute V_q^{nR}(G)
-                V_q_nR = self.compute_bare_potential_V(rho_q_nR, q_vec, gvecs_nR)  # [nwann, ngvecs]
+                # Compute V_q^{nR}(G) = v(q+G) * ρ_q^{nR}(G)
+                v_bare = self.compute_bare_potential(q_vec, gvecs_nR)  # [ngvecs]
+                V_q_nR = rho_q_nR * v_bare[None, :]  # [nwann, ngvecs]
                 
                 # Extract valid components
                 V_q_nR_valid = np.zeros((nwann, ngvecs_em1s), dtype=np.complex128)
@@ -908,11 +1072,13 @@ class WannierYamboInterface:
                 idx_nR_valid = indices_nR_in_em1s[mask_nR_valid]
                 V_q_nR_valid[:, idx_nR_valid] = V_q_nR[:, mask_nR_valid]
                 
-                # Correction: e^{iq·R} * sum_G V*_q^{nR}(G) Δρ_q^{n0}(G)
-                # This is DIAGONAL in n, and needs proper normalization
-                for n in range(nwann):
-                    correction_n = np.sum(V_q_nR_valid[n, :].conj() * Delta_rho_q_n0[n, :])
-                    W_nm_dict[R_tuple][n, n] += phase * correction_n
+                # VECTORIZED: Diagonal correction for all Wannier functions
+                # correction[n] = sum_G V*_q^{nR}(G) Δρ_q^{n0}(G)
+                # Shape: [nwann, ngvecs] * [nwann, ngvecs] -> sum over G -> [nwann]
+                corrections = np.sum(V_q_nR_valid.conj() * Delta_rho_q_n0, axis=1)  # [nwann]
+                
+                # Add phase * correction to diagonal: W_nn += phase * correction[n]
+                W_nm_dict[R_tuple][np.arange(nwann), np.arange(nwann)] += phase * corrections
         
         # Apply the same normalization as V_nm: 1/(Nq * Ω)
         cell_volume = abs(np.linalg.det(self.lat.T))
@@ -962,9 +1128,6 @@ def compute_rho_simple(save_path: str,
     
     # Load U matrix
     interface.load_U_matrix_from_umat()
-
-    # Load R vectors
-    interface.load_R_vectors_from_hr()
     
     # Compute rho for all R
     rho = interface.compute_all_rho_q_R(q_vec, return_gspace=True)
