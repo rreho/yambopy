@@ -237,6 +237,7 @@ class WannierYamboInterface:
             # Load wavefunctions: [nspin, nbands, nspinor, ngvecs]
             wf_k, gvecs_k = self.wfdb.get_iBZ_wf(ik)
             wf_kpq, gvecs_kpq = self.wfdb.get_iBZ_wf(ikpq_ibz)
+            #GVEC = K+Q+G-K+Q
             
             # Extract spin: [nbands, nspinor, ngvecs]
             unk_k = wf_k[ispin]
@@ -269,7 +270,7 @@ class WannierYamboInterface:
             # Shape: [nwann, nspinor, nx, ny, nz]
             u_k_r = scipy.fft.ifftn(tmp_fft_k, norm="forward", axes=(2, 3, 4)) / np.sqrt(cel_vol)
             u_kpq_r = scipy.fft.ifftn(tmp_fft_kpq, norm="forward", axes=(2, 3, 4)) / np.sqrt(cel_vol)
-            
+            # multiply by phase -iGR*u_kpq_r?
             # Sum over spinors: [nwann, nx, ny, nz]
             u_k_r_total = u_k_r.sum(axis=1)
             u_kpq_r_total = u_kpq_r.sum(axis=1)
@@ -471,7 +472,8 @@ class WannierYamboInterface:
         self.em1s_db = YamboStaticScreeningDB(
             save=self.save_path,
             em1s=em1s_path,
-            filename=filename
+            filename=filename,
+            do_not_read_cutoff= True
         )
         print(f"Loaded screening for {self.em1s_db.nqpoints} q-points")
     
@@ -913,7 +915,7 @@ class WannierYamboInterface:
                     W_nm_dict[R_tuple][n, n] += phase * correction_n
         
         # Apply the same normalization as V_nm: 1/(Nq * Ω)
-        cell_volume = abs(np.linalg.det(wfdb.ydb.lat.T))
+        cell_volume = abs(np.linalg.det(self.lat.T))
         nq = len(q_vecs_all)
         for R_tuple in W_nm_dict:
             W_nm_dict[R_tuple] /= (nq * cell_volume)

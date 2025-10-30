@@ -201,8 +201,11 @@ class YamboStaticScreeningDB(object):
                         Q = 2.*np.pi*self.car_qpoints[iq]
                         G = 2.*np.pi*self.gvectors[ig]
                         QPG = nrm(Q+G)
-                        if QPG==0.: QPG=1.e-5
-                        sqrt_V[iq,ig] = np.sqrt(4.0*np.pi)/QPG        
+                        if QPG==0.: 
+                            #QPG=1.e-5
+                            sqrt_V[iq,ig] = 0.0 #np.sqrt(4.0*np.pi)/QPG
+                        else:
+                            sqrt_V[iq,ig] = np.sqrt(4.0*np.pi)/QPG        
             self.sqrt_V = sqrt_V
 
     def _getepsq(self,volume=False,use_trueX=False,indices=None): 
