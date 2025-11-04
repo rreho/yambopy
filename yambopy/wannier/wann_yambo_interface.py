@@ -898,7 +898,6 @@ class WannierYamboInterface:
         
         V_nm_dict = {}
         
-        # OPTIMIZATION: Precompute V_q_m0 for all q-points (only depends on q, not R)
         print("  Precomputing bare potentials V_q^{m0} for all q-points...")
         V_q_m0_cache = {}
         for q_tuple in q_vecs_all:
@@ -1087,6 +1086,234 @@ class WannierYamboInterface:
             W_nm_dict[R_tuple] /= (nq * cell_volume)
         
         print(f"✓ W_nm(R) computed with screening.")
+        return W_nm_dict
+    
+    # ============================================================================
+    # NEW SIMPLIFIED METHODS: Read V and W directly from COLLISION databases
+    # ============================================================================
+    
+    def load_collision_db(self, collision_path: str = '.', collision_type: str = 'HXC', 
+                          expand_to_bz: bool = True, lattice_db=None):
+        """
+        Load COLLISION database (ndb.COLLISIONS_HXC or ndb.COLLISIONS_COH).
+        
+        Args:
+            collision_path: Path to directory containing COLLISION databases
+            collision_type: 'HXC' for bare V_nm, 'COH' for screened W_nm
+            expand_to_bz: If True, expand from IBZ to full BZ using lattice symmetries
+            lattice_db: YamboLatticeDB object for BZ expansion. If None, uses self.lattice
+        """
+        from yambopy.dbs.collisionsdb import YamboCollisionDB
+        
+        self.collision_db = YamboCollisionDB(path=collision_path, collision_type=collision_type)
+        self.collision_type = collision_type
+        
+        # Expand to full BZ if requested
+        if expand_to_bz:
+            if lattice_db is None:
+                if not hasattr(self, 'lattice') or self.lattice is None:
+                    raise ValueError("lattice_db not provided and self.lattice not set. "
+                                   "Load YamboLatticeDB first or pass lattice_db argument.")
+                lattice_db = self.lattice
+            
+            self.collision_db.expand_to_bz(lattice_db)
+        
+        print(f"✓ Loaded {collision_type} collision database")
+    
+    def compute_V_nm_R_from_collision(self, normalize: bool = True, 
+                                      band_mapping: dict = None) -> dict:
+        """
+        Compute bare Coulomb matrix elements V_nm(R) in Wannier basis
+        by reading directly from ndb.COLLISIONS_HXC database.
+        
+        This is a simplified alternative to compute_V_nm_R that doesn't require
+        computing densities from scratch.
+        
+        The transformation is:
+            V_ij(R) = Σ_k Σ_nm e^{-ik·R} U*_in(k) V_nm(k) U_mj(k)
+        
+        Args:
+            normalize: If True, normalize by (Nk * Ω)
+            band_mapping: Dictionary to map U-matrix bands to collision bands.
+                         Format: {'umat_offset': offset_value} where
+                         collision_band = umat_band + offset
+                         If None, assumes bands are aligned (collision band 1 = U band 0)
+            
+        Returns:
+            V_nm_dict: Dictionary with V_nm_dict[R_tuple] = V_ij[nwann, nwann]
+            
+        Example:
+            If collision bands are 3-6 (Fortran) and U matrix covers these same bands
+            starting from index 0, use band_mapping={'umat_offset': 3}
+            Then: U_matrix[ik, 0, :] corresponds to collision band 3
+                  U_matrix[ik, 1, :] corresponds to collision band 4, etc.
+        """
+        if not hasattr(self, 'collision_db'):
+            raise ValueError("COLLISION database not loaded. Call load_collision_db first.")
+        
+        if self.collision_db.collision_type != 'HXC':
+            raise ValueError(f"Wrong collision type: expected 'HXC', got '{self.collision_db.collision_type}'")
+        
+        if self.U_matrix is None:
+            raise ValueError("U matrix not loaded. Call load_U_matrix_from_umat first.")
+        
+        if self.R_vectors is None:
+            raise ValueError("R vectors not set. Call set_R_vectors or generate_R_vectors_from_kmesh first.")
+        
+        # Determine band mapping
+        if band_mapping is None:
+            # Default: assume U-matrix band 0 corresponds to collision band 1
+            umat_offset = 1
+            print("  Using default band mapping: U_matrix[i] = collision_band[i+1]")
+        else:
+            umat_offset = band_mapping.get('umat_offset', 1)
+            print(f"  Using band mapping: U_matrix[i] = collision_band[i+{umat_offset}]")
+        
+        print("Computing V_nm(R) from COLLISION database...")
+        print(f"  Collision band range: {self.collision_db.coll_band_range[0]} - {self.collision_db.coll_band_range[1]}")
+        print(f"  U-matrix shape: {self.U_matrix.shape}")
+        print(f"  Using full BZ: {self.collision_db.collision_v_bz is not None}")
+        
+        V_nm_dict = {}
+        
+        # Cell volume for normalization
+        cell_volume = abs(np.linalg.det(self.lat.T))
+        
+        # Determine which collision data to use
+        use_bz = self.collision_db.collision_v_bz is not None
+        
+        # Check k-point consistency
+        n_kpts_collision = self.collision_db.collision_v_bz.shape[1] if use_bz else self.collision_db.n_kpts_ibz
+        if self.nkpts != n_kpts_collision:
+            print(f"  Warning: U-matrix k-points ({self.nkpts}) != collision k-points ({n_kpts_collision})")
+        
+        # Loop over R vectors
+        for iR, R_vec in enumerate(self.R_vectors):
+            if iR % max(1, self.nR // 10) == 0:
+                print(f"  R-vector {iR+1}/{self.nR}")
+            
+            R_tuple = tuple(R_vec)
+            V_ij_R = np.zeros((self.nwann, self.nwann), dtype=np.complex128)
+            
+            # Loop over k-points
+            for ik in range(min(self.nkpts, n_kpts_collision)):
+                k_vec = self.kpts[ik]
+                
+                # Compute phase factor: e^{-ik·R}
+                phase = np.exp(-2j * np.pi * np.dot(k_vec, R_vec))
+                
+                # Get U matrices at this k-point
+                U_k = self.U_matrix[ik, :, :]  # [nbands, nwann]
+                n_umat_bands = U_k.shape[0]
+                
+                # Get collision matrix at this k-point
+                # Use efficient method that gets full matrix
+                V_nm_k = self.collision_db.get_collision_matrix_at_k(
+                    ik, use_bz=use_bz, band_offset=0
+                )
+                
+                # Check dimensions
+                if V_nm_k.shape[0] != n_umat_bands or V_nm_k.shape[1] != n_umat_bands:
+                    # Need to extract submatrix or pad
+                    # For now, assume they match; otherwise raise error
+                    if V_nm_k.shape[0] < n_umat_bands:
+                        # Pad with zeros
+                        V_nm_k_padded = np.zeros((n_umat_bands, n_umat_bands), dtype=np.complex128)
+                        V_nm_k_padded[:V_nm_k.shape[0], :V_nm_k.shape[1]] = V_nm_k
+                        V_nm_k = V_nm_k_padded
+                    else:
+                        # Extract submatrix
+                        V_nm_k = V_nm_k[:n_umat_bands, :n_umat_bands]
+                
+                # Transform to Wannier basis: V_ij = U^†_ni V_nm U_mj
+                # V_ij = (U^† @ V_nm @ U)
+                V_ij_k = U_k.conj().T @ V_nm_k @ U_k
+                
+                # Accumulate with phase: V_ij(R) += e^{-ik·R} V_ij(k)
+                V_ij_R += phase * V_ij_k
+            
+            # Normalize
+            if normalize:
+                V_ij_R /= (self.nkpts * cell_volume)
+            
+            V_nm_dict[R_tuple] = V_ij_R
+        
+        print(f"✓ V_nm(R) computed from COLLISION database")
+        return V_nm_dict
+    
+    def compute_W_nm_R_from_collision(self, normalize: bool = True) -> dict:
+        """
+        Compute screened Coulomb matrix elements W_nm(R) in Wannier basis
+        by reading directly from ndb.COLLISIONS_COH database.
+        
+        This is a simplified alternative to compute_W_nm_R that doesn't require
+        computing screening from scratch.
+        
+        The transformation is:
+            W_ij(R) = Σ_k Σ_nm e^{-ik·R} U*_in(k) W_nm(k) U_mj(k)
+        
+        Args:
+            normalize: If True, normalize by (Nk * Ω)
+            
+        Returns:
+            W_nm_dict: Dictionary with W_nm_dict[R_tuple] = W_ij[nwann, nwann]
+        """
+        if not hasattr(self, 'collision_db'):
+            raise ValueError("COLLISION database not loaded. Call load_collision_db first.")
+        
+        if self.collision_db.collision_type != 'COH':
+            raise ValueError(f"Wrong collision type: expected 'COH', got '{self.collision_db.collision_type}'")
+        
+        if self.U_matrix is None:
+            raise ValueError("U matrix not loaded. Call load_U_matrix_from_umat first.")
+        
+        if self.R_vectors is None:
+            raise ValueError("R vectors not set. Call set_R_vectors or generate_R_vectors_from_kmesh first.")
+        
+        print("Computing W_nm(R) from COLLISION database...")
+        W_nm_dict = {}
+        
+        # Cell volume for normalization
+        cell_volume = abs(np.linalg.det(self.lat.T))
+        
+        # Loop over R vectors
+        for iR, R_vec in enumerate(self.R_vectors):
+            if iR % max(1, self.nR // 10) == 0:
+                print(f"  R-vector {iR+1}/{self.nR}")
+            
+            R_tuple = tuple(R_vec)
+            W_ij_R = np.zeros((self.nwann, self.nwann), dtype=np.complex128)
+            
+            # Loop over k-points
+            for ik in range(self.nkpts):
+                k_vec = self.kpts[ik]
+                
+                # Compute phase factor: e^{-ik·R}
+                phase = np.exp(-2j * np.pi * np.dot(k_vec, R_vec))
+                
+                # Get U matrices at this k-point
+                U_k = self.U_matrix[ik, :, :]  # [nbands, nwann]
+                
+                # Build W_nm(k) matrix in band basis
+                W_nm_k = np.zeros((self.nbands, self.nbands), dtype=np.complex128)
+                
+                for n in range(self.nbands):
+                    for m in range(self.nbands):
+                        W_nm_k[n, m] = self.collision_db.get_collision(n+1, m+1, ik+1, spin=1)
+                
+                # Transform to Wannier basis: W_ij = U^†_ni W_nm U_mj
+                W_ij_k = U_k.conj().T @ W_nm_k @ U_k
+                
+                # Accumulate with phase: W_ij(R) += e^{-ik·R} W_ij(k)
+                W_ij_R += phase * W_ij_k
+            
+            # Normalize
+            if normalize:
+                W_ij_R /= (self.nkpts * cell_volume)
+            
+            W_nm_dict[R_tuple] = W_ij_R
+        
+        print(f"✓ W_nm(R) computed from COLLISION database")
         return W_nm_dict
     
     def __repr__(self):
