@@ -19,34 +19,73 @@ class YamboCollisionDB(object):
     from ndb.COLLISIONS_HXC or ndb.COLLISIONS_COH databases.
     
     Database structure:
-    - Header file: ndb.COLLISIONS_{type}_header
-      Contains COLLISIONS_STATE array: [n, m, k_idx, spin] for each collision
-      Contains X_X_band_range: band range used in response function
+    -------------------
+    Header file: ndb.COLLISIONS_{type}_header
+      - COLLISIONS_STATE: (4, n_collisions) array with [n, m, k, spin] for each base collision
+      - X_X_band_range: band range used in response function (not collision bands!)
     
-    - Main data file: ndb.COLLISIONS_{type}
-      Contains COLLISIONS_v: collision matrix elements (n_collisions, n_kpts, 2)
-      Contains N_COLLISIONS_STATES: number of k-points in IBZ
+    Main data file: ndb.COLLISIONS_{type}
+      - COLLISIONS_v: (n_collisions, n_collision_states, 2) array
+        * n_collisions: number of stored base collision pairs (upper triangle)
+        * n_collision_states: dimension of primed state space = n_bands² × n_kpts × n_spin
+        * 2: real and imaginary parts
+      - N_COLLISIONS_STATES: total dimension of primed state space
     
-    Note: COLLISION databases do NOT have fragment files (unlike em1s databases).
-          Data is stored for IBZ k-points only. Use expand_to_bz() to get full BZ.
+    Physical meaning:
+    -----------------
+    COLLISIONS_v[icoll, istate] = scattering matrix element between:
+      - Base collision icoll: (n, m, k, spin) from COLLISIONS_STATE[:,icoll]
+      - Primed state istate: (n', m', k', spin') from the full collision state space
+    
+    The collision represents: |n,k,spin⟩⟨m,k,spin| → |n',k',spin'⟩⟨m',k',spin'|
+    
+    Storage:
+    --------
+    Only upper triangle of (n,m) pairs is stored: n >= m
+    N_COLLISIONS_STATES = n_coll_bands × n_coll_bands × n_kpts_ibz × n_spin
     
     Attributes:
-        collision_type: 'HXC' for bare Coulomb V, 'COH' for screened W
-        collision_state: Array (4, n_collisions) with [n, m, k_idx, spin] for each collision
-        collision_v: Array (n_collisions, n_kpts_ibz) of complex collision matrix elements [Hartree]
-        n_collisions: Number of unique collision pairs (n,m) combinations
-        n_kpts_ibz: Number of k-points in IBZ
-        coll_band_range: [min_band, max_band] actual collision bands (1-based Fortran indexing)
-        response_band_range: [min_band, max_band] from X_X_band_range (response function)
+    -----------
+    collision_type : str
+        'HXC' for bare Coulomb V, 'COH' for screened W
+    collision_state : ndarray (4, n_collisions)
+        Base collision states [n, m, k_idx, spin] (Fortran 1-based indexing)
+    collision_v : ndarray (n_collisions, n_collision_states)
+        Collision matrix elements [Hartree], complex
+    n_collisions : int
+        Number of stored base collision pairs
+    n_collision_states : int
+        Dimension of primed state space (N_COLLISIONS_STATES)
+    n_kpts_ibz : int
+        Number of k-points in IBZ
+    n_coll_bands : int
+        Number of collision bands
+    coll_band_range : ndarray [min_band, max_band]
+        Actual collision bands (1-based Fortran indexing)
+    cv_only : bool
+        True if CV_only (conduction-valence only) mode is enabled
+    n_valence_bands : int
+        Number of valence bands (only for CV_only mode)
+    n_conduction_bands : int
+        Number of conduction bands (only for CV_only mode)
+    valence_band_range : ndarray [min, max]
+        Valence band range (only for CV_only mode)
+    conduction_band_range : ndarray [min, max]
+        Conduction band range (only for CV_only mode)
+    primed_state_map : ndarray (n_collision_states, 4)
+        Map from istate -> (n', m', k', spin') (to be built on demand)
     """
     
     def __init__(self, path: str = '.', collision_type: str = 'HXC'):
         """
         Initialize COLLISION database reader.
         
-        Args:
-            path: Path to directory containing ndb.COLLISIONS_* files
-            collision_type: 'HXC' for V_nm (bare), 'COH' for W_nm (screened)
+        Parameters
+        ----------
+        path : str
+            Path to directory containing ndb.COLLISIONS_* files
+        collision_type : str
+            'HXC' for V_nm (bare Coulomb), 'COH' for W_nm (screened)
         """
         self.path = path
         self.collision_type = collision_type.upper()
@@ -72,246 +111,394 @@ class YamboCollisionDB(object):
         print(f"Loading {header_file}...")
         with Dataset(header_path, 'r') as f:
             # Read collision states: (4, n_collisions) array
-            # Each column is [n, m, k_idx, spin] for a collision
+            # Each column is [n, m, k_idx, spin] for a base collision
             self.collision_state = np.array(f.variables['COLLISIONS_STATE'][:])
             self.n_collisions = self.collision_state.shape[1]
             
-            # Read response function band range (not necessarily collision band range!)
+            # Read response function band range (NOT collision band range!)
             if 'X_X_band_range' in f.variables:
                 self.response_band_range = np.array(f.variables['X_X_band_range'][:])
             else:
                 self.response_band_range = None
+            
+            # Check for CV_only mode
+            if 'CV_only_scattering' in f.variables:
+                self.cv_only = bool(f.variables['CV_only_scattering'][:])
+            else:
+                self.cv_only = False
+            
+            # Read valence and conduction band info if CV_only
+            if self.cv_only:
+                # Try to read from database
+                if 'GreenF_n_bands_valence' in f.variables:
+                    n_val = int(f.variables['GreenF_n_bands_valence'][:])
+                else:
+                    n_val = None
+                
+                if 'GreenF_n_bands_conduction' in f.variables:
+                    n_cond = int(f.variables['GreenF_n_bands_conduction'][:])
+                else:
+                    n_cond = None
+                
+                # Store for later inference if not found
+                self._n_val_db = n_val
+                self._n_cond_db = n_cond
         
         # Determine actual collision band range from collision states
-        n_bands = self.collision_state[0, :]  # First index band
-        m_bands = self.collision_state[1, :]  # Second index band
+        n_bands = self.collision_state[0, :]  # First band index
+        m_bands = self.collision_state[1, :]  # Second band index
         self.coll_band_range = np.array([
             min(n_bands.min(), m_bands.min()),
             max(n_bands.max(), m_bands.max())
-        ])
-        self.n_coll_bands = self.coll_band_range[1] - self.coll_band_range[0] + 1
+        ], dtype=int)
+        self.n_coll_bands = int(self.coll_band_range[1] - self.coll_band_range[0] + 1)
         
-        # Get unique k-points in IBZ
-        k_indices = np.unique(self.collision_state[2, :])
+        # Infer valence/conduction bands for CV_only mode
+        if self.cv_only:
+            # In CV_only: n bands are valence (lower), m bands are conduction (higher)
+            # Infer from collision states if not in database
+            unique_n = np.unique(n_bands)
+            unique_m = np.unique(m_bands)
+            
+            self.valence_band_range = np.array([unique_n.min(), unique_n.max()], dtype=int)
+            self.conduction_band_range = np.array([unique_m.min(), unique_m.max()], dtype=int)
+            
+            self.n_valence_bands = len(unique_n)
+            self.n_conduction_bands = len(unique_m)
+        else:
+            self.valence_band_range = None
+            self.conduction_band_range = None
+            self.n_valence_bands = None
+            self.n_conduction_bands = None
+        
+        # Get unique k-points in IBZ from collision states
+        k_indices = np.unique(self.collision_state[2, :]).astype(int)
         self.ibz_k_indices = k_indices
         self.n_kpts_ibz = len(k_indices)
         
+        # Get spin info
+        spin_indices = np.unique(self.collision_state[3, :]).astype(int)
+        self.n_spin = len(spin_indices)
+        
         print(f"  Collision bands: {self.coll_band_range[0]} - {self.coll_band_range[1]} (Fortran indexing)")
-        print(f"  Number of collision pairs: {self.n_collisions}")
+        print(f"  Number of stored base collisions: {self.n_collisions}")
         print(f"  K-points in IBZ: {self.n_kpts_ibz}")
+        print(f"  Spins: {self.n_spin}")
+        print(f"  CV_only mode: {self.cv_only}")
+        if self.cv_only:
+            print(f"    Valence bands: {self.valence_band_range[0]} - {self.valence_band_range[1]} ({self.n_valence_bands} bands)")
+            print(f"    Conduction bands: {self.conduction_band_range[0]} - {self.conduction_band_range[1]} ({self.n_conduction_bands} bands)")
         
         # Read main data file
         print(f"Loading {main_file}...")
         with Dataset(main_path, 'r') as f:
-            # Read number of k-points (should match IBZ count)
-            n_kpts_check = int(f.variables['N_COLLISIONS_STATES'][:])
-            if n_kpts_check != self.n_kpts_ibz:
-                print(f"  Warning: N_COLLISIONS_STATES ({n_kpts_check}) != n_kpts_ibz ({self.n_kpts_ibz})")
+            # Read N_COLLISIONS_STATES: dimension of primed state space
+            # Formula depends on CV_only mode:
+            #   CV_only: Nbv × Nbc × (2×Nk) × n_spin  (2×Nk for time-reversal)
+            #   General: Nb1 × Nb2 × Nk × n_spin
+            self.n_collision_states = int(f.variables['N_COLLISIONS_STATES'][:])
+            
+            # Calculate expected dimension
+            if self.cv_only:
+                n_expected = self.n_valence_bands * self.n_conduction_bands * (2 * self.n_kpts_ibz) * self.n_spin
+                print(f"  N_COLLISIONS_STATES (primed state dimension): {self.n_collision_states}")
+                print(f"  Expected (CV_only): {self.n_valence_bands}×{self.n_conduction_bands}×(2×{self.n_kpts_ibz})×{self.n_spin} = {n_expected}")
+            else:
+                n_expected = self.n_coll_bands * self.n_coll_bands * self.n_kpts_ibz * self.n_spin
+                print(f"  N_COLLISIONS_STATES (primed state dimension): {self.n_collision_states}")
+                print(f"  Expected (General): {self.n_coll_bands}×{self.n_coll_bands}×{self.n_kpts_ibz}×{self.n_spin} = {n_expected}")
             
             # Read collision matrix elements
-            # Shape: (n_collisions, n_kpts, 2) where last dim is [real, imag]
+            # Shape: (n_collisions, n_collision_states, 2)
             coll_v_raw = np.array(f.variables['COLLISIONS_v'][:])
             
-            # Convert to complex array: (n_collisions, n_kpts_ibz)
-            self.collision_v_ibz = coll_v_raw[:, :, 0] + 1j * coll_v_raw[:, :, 1]
+            print(f"  COLLISIONS_v shape: {coll_v_raw.shape}")
+            
+            # Convert to complex array: (n_collisions, n_collision_states)
+            self.collision_v = coll_v_raw[:, :, 0] + 1j * coll_v_raw[:, :, 1]
         
-        # Initially no expansion to full BZ
-        self.collision_v_bz = None
-        self.lattice = None
+        # Primed state map (built on demand)
+        self.primed_state_map = None
         
         print(f"✓ COLLISION database loaded successfully")
     
-    def expand_to_bz(self, lattice):
+    def build_primed_state_map(self):
         """
-        Expand collision matrix elements from IBZ to full BZ using YamboLatticeDB.
+        Build the mapping from primed state index to (n', m', k', spin').
         
-        Args:
-            lattice: YamboLatticeDB object with kpoints_indexes defined
+        The ordering depends on CV_only mode:
+        
+        General mode:
+            istate = (n' - n_min) + (m' - n_min) * n_bands + (k' - 1) * n_bands² + (spin' - 1) * n_bands² * n_kpts
+        
+        CV_only mode:
+            Loop order: spin → k (includes both k and -k, 2×Nk) → m_conduction → n_valence
+            istate = (n' - n_val_min) + (m' - m_cond_min) * Nbv + ik * Nbv*Nbc + (spin' - 1) * Nbv*Nbc*2*Nk
+            where ik goes from 0 to 2*Nk-1 (includes time-reversed -k points)
+        
+        This creates an array: primed_state_map[istate, :] = [n', m', k', spin']
         """
-        if not hasattr(lattice, 'kpoints_indexes'):
-            raise ValueError("YamboLatticeDB must have kpoints_indexes. Call expand_kpts() first.")
+        print("Building primed state map...")
         
-        self.lattice = lattice
-        n_kpts_bz = len(lattice.kpoints_indexes)
+        self.primed_state_map = np.zeros((self.n_collision_states, 4), dtype=int)
         
-        print(f"Expanding collision data from IBZ ({self.n_kpts_ibz}) to full BZ ({n_kpts_bz})...")
+        istate = 0
         
-        # Expand: collision_v_bz[icoll, ik_bz] = collision_v_ibz[icoll, kpoints_indexes[ik_bz]]
-        # Note: kpoints_indexes maps ik_bz -> ik_ibz, and k-points in collision_state are 1-based
-        # So we need to convert: collision_state k-index (1-based) -> Python index (0-based)
-        
-        # Build full BZ collision data
-        self.collision_v_bz = np.zeros((self.n_collisions, n_kpts_bz), dtype=np.complex128)
-        
-        for icoll in range(self.n_collisions):
-            # Get the IBZ k-index for this collision (1-based Fortran)
-            k_ibz_fortran = self.collision_state[2, icoll]
-            k_ibz_python = k_ibz_fortran - 1  # Convert to 0-based
+        if self.cv_only:
+            # CV_only mode: valence × conduction × (2×k) × spin
+            n_val_min = self.valence_band_range[0]
+            m_cond_min = self.conduction_band_range[0]
             
-            # This collision is defined at k_ibz_python in the IBZ
-            # Expand it to all k-points in BZ that map to this IBZ point
-            for ik_bz in range(n_kpts_bz):
-                if lattice.kpoints_indexes[ik_bz] == k_ibz_python:
-                    self.collision_v_bz[icoll, ik_bz] = self.collision_v_ibz[icoll, k_ibz_python]
-        
-        print(f"✓ Collision data expanded to full BZ")
-    
-    def get_collision_by_index(self, icoll: int, ik: int, use_bz: bool = False) -> complex:
-        """
-        Get collision matrix element by collision index and k-point index.
-        
-        Args:
-            icoll: Collision pair index (0-based Python indexing)
-            ik: k-point index (0-based Python indexing)
-            use_bz: If True, use full BZ data; if False, use IBZ data
+            k_list = sorted(self.ibz_k_indices)
             
-        Returns:
-            Matrix element in Hartree units (complex)
-        """
-        if icoll < 0 or icoll >= self.n_collisions:
-            raise ValueError(f"Invalid collision index {icoll}. Must be 0 <= icoll < {self.n_collisions}")
-        
-        if use_bz:
-            if self.collision_v_bz is None:
-                raise ValueError("BZ data not available. Call expand_to_bz() first.")
-            if ik < 0 or ik >= self.collision_v_bz.shape[1]:
-                raise ValueError(f"Invalid k-point index {ik}. Must be 0 <= ik < {self.collision_v_bz.shape[1]}")
-            return self.collision_v_bz[icoll, ik]
+            for spin in range(1, self.n_spin + 1):
+                # Loop over k and -k (time-reversed pairs)
+                for ik in range(2 * self.n_kpts_ibz):
+                    # Map to actual k-point index
+                    # First Nk indices: regular k-points
+                    # Next Nk indices: time-reversed -k points
+                    k_idx = k_list[ik % self.n_kpts_ibz]
+                    
+                    # Loop over conduction bands (m')
+                    for m in range(m_cond_min, m_cond_min + self.n_conduction_bands):
+                        # Loop over valence bands (n')
+                        for n in range(n_val_min, n_val_min + self.n_valence_bands):
+                            if istate < self.n_collision_states:
+                                self.primed_state_map[istate] = [n, m, k_idx, spin]
+                                istate += 1
+            
+            print(f"  CV_only ordering: spin → k (2×{self.n_kpts_ibz}) → m_cond → n_val")
         else:
-            if ik < 0 or ik >= self.n_kpts_ibz:
-                raise ValueError(f"Invalid k-point index {ik}. Must be 0 <= ik < {self.n_kpts_ibz}")
-            return self.collision_v_ibz[icoll, ik]
-    
-    def get_collision(self, n: int, m: int, ik: int, spin: int = 1, use_bz: bool = False) -> complex:
-        """
-        Get collision matrix element V_nm or W_nm for given bands and k-point.
-        
-        Args:
-            n, m: Band indices (1-based Fortran indexing, as in Yambo)
-            ik: k-point index (1-based Fortran indexing, as in Yambo)
-            spin: Spin index (1 or 2)
-            use_bz: If True, search in full BZ; if False, search in IBZ
+            # General mode: n' × m' × k × spin
+            n_min = self.coll_band_range[0]
             
-        Returns:
-            Matrix element in Hartree units (complex)
-            Returns 0 if collision not found in database
+            for spin in range(1, self.n_spin + 1):
+                for k in sorted(self.ibz_k_indices):
+                    for m in range(n_min, n_min + self.n_coll_bands):
+                        for n in range(n_min, n_min + self.n_coll_bands):
+                            if istate < self.n_collision_states:
+                                self.primed_state_map[istate] = [n, m, k, spin]
+                                istate += 1
+            
+            print(f"  General ordering: spin → k → m → n")
+        
+        if istate != self.n_collision_states:
+            print(f"Warning: Built {istate} states but expected {self.n_collision_states}")
+        else:
+            print(f"✓ Built primed state map with {self.n_collision_states} states")
+    
+    def get_collision_element(self, n: int, m: int, k: int, 
+                              n_prime: int, m_prime: int, k_prime: int,
+                              spin: int = 1) -> complex:
         """
-        # Find collision index matching (n, m, k_idx, spin)
+        Get collision matrix element V_{(n,m,k),(n',m',k')} or W_{(n,m,k),(n',m',k')}.
+        
+        Parameters
+        ----------
+        n, m : int
+            Base state band indices (Fortran 1-based)
+        k : int
+            Base state k-point index (Fortran 1-based, in IBZ)
+        n_prime, m_prime : int
+            Primed state band indices (Fortran 1-based)
+        k_prime : int
+            Primed state k-point index (Fortran 1-based, in IBZ)
+        spin : int
+            Spin index (1 or 2)
+            
+        Returns
+        -------
+        complex
+            Collision matrix element in Hartree units
+            Returns 0 if not found
+        """
+        # Find base collision index
+        icoll = self._find_collision_index(n, m, k, spin)
+        if icoll is None:
+            return 0.0 + 0.0j
+        
+        # Find primed state index
+        if self.primed_state_map is None:
+            self.build_primed_state_map()
+        
+        istate = self._find_primed_state_index(n_prime, m_prime, k_prime, spin)
+        if istate is None:
+            return 0.0 + 0.0j
+        
+        return self.collision_v[icoll, istate]
+    
+    def get_collision_matrix_at_k(self, k: int, k_prime: int = None, spin: int = 1) -> np.ndarray:
+        """
+        Get collision matrix V_nm(k, k') or W_nm(k, k') at specific k-points.
+        
+        If k_prime is None, returns diagonal elements: V_nm(k, k).
+        This is the typical case for Wannier transformations.
+        
+        Parameters
+        ----------
+        k : int
+            Base state k-point index (Fortran 1-based)
+        k_prime : int, optional
+            Primed state k-point index (Fortran 1-based)
+            If None, uses k_prime = k (diagonal)
+        spin : int
+            Spin index (1 or 2)
+            
+        Returns
+        -------
+        ndarray (n_coll_bands, n_coll_bands)
+            Collision matrix V_nm or W_nm in Hartree units
+        """
+        if k_prime is None:
+            k_prime = k
+        
+        # Build primed state map if needed
+        if self.primed_state_map is None:
+            self.build_primed_state_map()
+        
+        # Initialize matrix
+        V_matrix = np.zeros((self.n_coll_bands, self.n_coll_bands), dtype=np.complex128)
+        
+        n_min = self.coll_band_range[0]
+        
+        # Fill matrix
+        for n_band in range(n_min, n_min + self.n_coll_bands):
+            for m_band in range(n_min, n_min + self.n_coll_bands):
+                for n_prime_band in range(n_min, n_min + self.n_coll_bands):
+                    for m_prime_band in range(n_min, n_min + self.n_coll_bands):
+                        # Get collision element
+                        V_elem = self.get_collision_element(n_band, m_band, k, 
+                                                           n_prime_band, m_prime_band, k_prime, spin)
+                        
+                        # Store in matrix (convert to 0-based Python indexing)
+                        n_idx = n_band - n_min
+                        m_idx = m_band - n_min
+                        n_prime_idx = n_prime_band - n_min
+                        m_prime_idx = m_prime_band - n_min
+                        
+                        # For diagonal k=k', the matrix is V[n,m,n',m']
+                        # Typically we want V[n,n'] * delta_{m,m'}
+                        # or the full 4D tensor collapsed appropriately
+                        if m_band == m_prime_band:  # Diagonal in m indices
+                            V_matrix[n_idx, n_prime_idx] += V_elem
+        
+        return V_matrix
+    
+    def _find_collision_index(self, n: int, m: int, k: int, spin: int) -> int:
+        """
+        Find the collision index for given (n, m, k, spin).
+        
+        Returns None if not found.
+        """
         for icoll in range(self.n_collisions):
             state = self.collision_state[:, icoll]
             if (state[0] == n and state[1] == m and 
-                state[2] == ik and state[3] == spin):
-                # Found matching collision
-                # Return value at the k-point (convert ik from 1-based to 0-based)
-                return self.get_collision_by_index(icoll, ik - 1, use_bz=use_bz)
+                state[2] == k and state[3] == spin):
+                return icoll
         
-        # Collision not found in database
-        return 0.0 + 0.0j
+        # Try swapped (m, n) if not found (due to upper triangle storage)
+        for icoll in range(self.n_collisions):
+            state = self.collision_state[:, icoll]
+            if (state[0] == m and state[1] == n and 
+                state[2] == k and state[3] == spin):
+                return icoll
+        
+        return None
+    
+    def _find_primed_state_index(self, n_prime: int, m_prime: int, k_prime: int, spin: int) -> int:
+        """
+        Find the primed state index for given (n', m', k', spin).
+        
+        Returns None if not found.
+        """
+        for istate in range(self.n_collision_states):
+            state = self.primed_state_map[istate]
+            if (state[0] == n_prime and state[1] == m_prime and 
+                state[2] == k_prime and state[3] == spin):
+                return istate
+        
+        return None
     
     def get_collision_state(self, icoll: int) -> tuple:
         """
-        Get the (n, m, k_idx, spin) tuple for a given collision index.
+        Get the (n, m, k, spin) tuple for a given collision index.
         
-        Args:
-            icoll: Collision pair index (0-based Python indexing)
+        Parameters
+        ----------
+        icoll : int
+            Collision index (0-based Python indexing)
             
-        Returns:
-            Tuple (n, m, k_idx, spin) with 1-based Fortran indices
+        Returns
+        -------
+        tuple (n, m, k, spin)
+            Base collision state with Fortran 1-based indices
         """
         if icoll < 0 or icoll >= self.n_collisions:
-            raise ValueError(f"Invalid collision index {icoll}. Must be 0 <= icoll < {self.n_collisions}")
+            raise ValueError(f"Invalid collision index {icoll}")
         
         state = self.collision_state[:, icoll]
         return tuple(int(x) for x in state)
     
-    def get_collision_array(self, icoll: int, use_bz: bool = False) -> np.ndarray:
+    def get_primed_state(self, istate: int) -> tuple:
         """
-        Get collision matrix elements at all k-points for a given collision.
+        Get the (n', m', k', spin') tuple for a given primed state index.
         
-        Args:
-            icoll: Collision pair index (0-based Python indexing)
-            use_bz: If True, return full BZ data; if False, return IBZ data
+        Parameters
+        ----------
+        istate : int
+            Primed state index (0-based Python indexing)
             
-        Returns:
-            Array (n_kpts,) of complex collision matrix elements
+        Returns
+        -------
+        tuple (n', m', k', spin')
+            Primed state with Fortran 1-based indices
         """
-        if icoll < 0 or icoll >= self.n_collisions:
-            raise ValueError(f"Invalid collision index {icoll}. Must be 0 <= icoll < {self.n_collisions}")
+        if self.primed_state_map is None:
+            self.build_primed_state_map()
         
-        if use_bz:
-            if self.collision_v_bz is None:
-                raise ValueError("BZ data not available. Call expand_to_bz() first.")
-            return self.collision_v_bz[icoll, :]
-        else:
-            return self.collision_v_ibz[icoll, :]
-    
-    def get_collision_matrix_at_k(self, ik: int, use_bz: bool = False, 
-                                   band_offset: int = 0) -> np.ndarray:
-        """
-        Get full collision matrix V_nm(k) or W_nm(k) for all bands at a given k-point.
+        if istate < 0 or istate >= self.n_collision_states:
+            raise ValueError(f"Invalid primed state index {istate}")
         
-        Useful for integration with WannierYamboInterface where band indexing may differ.
-        
-        Args:
-            ik: k-point index (0-based Python indexing)
-            use_bz: If True, use full BZ data; if False, use IBZ data
-            band_offset: Offset to apply to band indices for 0-based Python indexing
-                        (e.g., if collision bands are 3-6 in Fortran, use band_offset=-3 
-                         to get 0-based Python indices 0-3)
-            
-        Returns:
-            V_nm or W_nm matrix (n_coll_bands, n_coll_bands) in Hartree units
-        """
-        # Initialize matrix
-        V_nm = np.zeros((self.n_coll_bands, self.n_coll_bands), dtype=np.complex128)
-        
-        # Determine which k-point to use
-        if use_bz:
-            if self.collision_v_bz is None:
-                raise ValueError("BZ data not available. Call expand_to_bz() first.")
-            k_fortran = ik + 1  # Convert to 1-based
-        else:
-            k_fortran = ik + 1  # Convert to 1-based
-        
-        # Fill matrix
-        for icoll in range(self.n_collisions):
-            n, m, k_coll, spin = self.get_collision_state(icoll)
-            
-            # Check if this collision is for the requested k-point
-            if k_coll == k_fortran:
-                # Convert band indices
-                n_idx = n - self.coll_band_range[0] + band_offset
-                m_idx = m - self.coll_band_range[0] + band_offset
-                
-                if 0 <= n_idx < self.n_coll_bands and 0 <= m_idx < self.n_coll_bands:
-                    V_nm[n_idx, m_idx] = self.get_collision_by_index(icoll, ik, use_bz=use_bz)
-        
-        return V_nm
+        state = self.primed_state_map[istate]
+        return tuple(int(x) for x in state)
     
     def __str__(self):
         lines = []
         lines.append("=" * 70)
         lines.append(f"Yambo COLLISION Database ({self.collision_type})")
         lines.append("=" * 70)
-        lines.append(f"Path:                {self.path}")
-        lines.append(f"Base file:           {self.base_name}")
-        lines.append(f"Type:                {'Bare Coulomb V_nm' if self.collision_type == 'HXC' else 'Screened W_nm'}")
-        lines.append(f"N collision pairs:   {self.n_collisions}")
-        lines.append(f"Collision bands:     {self.coll_band_range[0]} - {self.coll_band_range[1]} ({self.n_coll_bands} bands)")
+        lines.append(f"Path:                    {self.path}")
+        lines.append(f"Base file:               {self.base_name}")
+        lines.append(f"Type:                    {'Bare Coulomb V_nm' if self.collision_type == 'HXC' else 'Screened W_nm'}")
+        lines.append(f"")
+        lines.append(f"Base collision pairs:    {self.n_collisions}")
+        lines.append(f"Primed state space:      {self.n_collision_states}")
+        lines.append(f"Collision bands:         {self.coll_band_range[0]} - {self.coll_band_range[1]} ({self.n_coll_bands} bands)")
         if self.response_band_range is not None:
-            lines.append(f"Response bands:      {self.response_band_range[0]} - {self.response_band_range[1]}")
-        lines.append(f"K-points (IBZ):      {self.n_kpts_ibz}")
-        if self.collision_v_bz is not None:
-            lines.append(f"K-points (Full BZ):  {self.collision_v_bz.shape[1]}")
-            lines.append(f"Expanded to BZ:      Yes")
-        else:
-            lines.append(f"Expanded to BZ:      No")
+            lines.append(f"Response bands:          {self.response_band_range[0]} - {self.response_band_range[1]}")
+        lines.append(f"K-points (IBZ):          {self.n_kpts_ibz}")
+        lines.append(f"Spin channels:           {self.n_spin}")
+        lines.append(f"CV_only mode:            {self.cv_only}")
+        if self.cv_only:
+            lines.append(f"  Valence bands:         {self.valence_band_range[0]} - {self.valence_band_range[1]} ({self.n_valence_bands} bands)")
+            lines.append(f"  Conduction bands:      {self.conduction_band_range[0]} - {self.conduction_band_range[1]} ({self.n_conduction_bands} bands)")
+            lines.append(f"  Time-resolved k-pts:   2×{self.n_kpts_ibz} = {2*self.n_kpts_ibz} (includes -k)")
         lines.append("")
-        lines.append("Collision states (first 5):")
+        lines.append("Base collision states (first 5):")
         for i in range(min(5, self.n_collisions)):
-            n, m, k_idx, spin = self.get_collision_state(i)
-            value_ibz = self.collision_v_ibz[i, k_idx - 1]  # k_idx is 1-based
-            lines.append(f"  [{i:3d}] bands ({n},{m}) k={k_idx} spin={spin} | V_ibz = {value_ibz:.6e}")
+            n, m, k, spin = self.get_collision_state(i)
+            lines.append(f"  [{i:3d}] (n={n}, m={m}, k={k}, spin={spin})")
         if self.n_collisions > 5:
             lines.append(f"  ... and {self.n_collisions - 5} more")
+        
+        if self.primed_state_map is not None:
+            lines.append("")
+            lines.append("Primed states (first 5):")
+            for i in range(min(5, self.n_collision_states)):
+                np, mp, kp, spinp = self.get_primed_state(i)
+                lines.append(f"  [{i:3d}] (n'={np}, m'={mp}, k'={kp}, spin'={spinp})")
+            if self.n_collision_states > 5:
+                lines.append(f"  ... and {self.n_collision_states - 5} more")
+        
+        lines.append("=" * 70)
         return "\n".join(lines)
