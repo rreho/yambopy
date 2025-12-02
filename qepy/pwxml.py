@@ -255,24 +255,28 @@ class PwXML():
         if self.lsda == False:
             # occupations = 'smearing'
             if self.occ_type == 'smearing':
-           if self.occ_type == 'fixed' and self.lsda == False:
-              print('Fermi energy for the case occ: %s and spin polarization false' % self.occ_type)
-              self.fermi = float(self.datafile_xml.find("output/band_structure/highestOccupiedLevel").text)*HatoeV
-              print('Fermi energy = %lf eV' % self.fermi)
-              self.eigen1 = np.array(self.eigen1)*HatoeV - self.fermi
+                print('Fermi energy for the case occ: %s and spin polarization false' % self.occ_type)
+                self.fermi = float(self.datafile_xml.find("output/band_structure/fermi_energy").text)*HatoeV
+                print('Fermi energy = %lf eV' % self.fermi)
+                self.eigen1 = np.array(self.eigen1)*HatoeV - self.fermi
             # occupations = 'fixed'
-           else:
-              try: 
-                 print('Fermi energy for the case occ: %s and spin polarization false' % self.occ_type)
-                 self.fermi = float(self.datafile_xml.find("output/band_structure/fermi_energy").text)*HatoeV
-                 print('Fermi energy = %lf eV' % self.fermi)
-                 self.eigen1 = np.array(self.eigen1)*HatoeV - self.fermi
-              except AttributeError: 
-                 print('Fermi energy for the case occ: %s and spin polarization false' % self.occ_type)
-                 print('Attention!!!! Two fermi levels detected')
-                 fermis = self.datafile_xml.find("output/band_structure/two_fermi_energies").text.split()
-                 self.fermis = [float(fermis[0])*HatoeV,float(fermis[1])*HatoeV]
-                 self.fermi = self.fermis[1] # set to spin minority energy
+            elif self.occ_type == 'fixed':
+                print('Fermi energy for the case occ: %s and spin polarization false' % self.occ_type)
+                self.fermi = float(self.datafile_xml.find("output/band_structure/highestOccupiedLevel").text)*HatoeV
+                print('Fermi energy = %lf eV' % self.fermi)
+                self.eigen1 = np.array(self.eigen1)*HatoeV - self.fermi
+            else:
+                try: 
+                    print('Fermi energy for the case occ: %s and spin polarization false' % self.occ_type)
+                    self.fermi = float(self.datafile_xml.find("output/band_structure/fermi_energy").text)*HatoeV
+                    print('Fermi energy = %lf eV' % self.fermi)
+                    self.eigen1 = np.array(self.eigen1)*HatoeV - self.fermi
+                except AttributeError: 
+                    print('Fermi energy for the case occ: %s and spin polarization false' % self.occ_type)
+                    print('Attention!!!! Two fermi levels detected')
+                    fermis = self.datafile_xml.find("output/band_structure/two_fermi_energies").text.split()
+                    self.fermis = [float(fermis[0])*HatoeV,float(fermis[1])*HatoeV]
+                    self.fermi = self.fermis[1]
 
         if self.lsda == True:
             # occupations = 'smearing'
