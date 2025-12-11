@@ -19,16 +19,17 @@ from yambopy.nl.nl_analysis import Xn_from_signal
 # Derived class for monochromatic signal
 #    
 class Xn_from_sine(Xn_from_signal):
-        @property
         def set_defaults(self):
             EFIELDS = ["SIN","SOFTSIN"]
             if self.efield["name"] not in EFIELDS:
                 raise ValueError(f"Invalid electric field for frequency mixing analysis. Expected one of: {EFIELDS}")
-            if any(name != '' for name in self.pumps[:]["name"]):
-                raise ValueError("This analysis is for one monochromatic field only.")
+            for i_n in range(len(self.pumps)):
+                if self.pumps[i_n]["name"] != 'none':
+                    raise ValueError("This analysis is for one monochromatic field only.")
             if self.solver == '':
                 self.solver = 'stnd'
             self.out_dim = self.X_order + 1
+            return
 
         def get_sampling(self,idir,ifrq):
             samp_order = 2*self.X_order + 1

@@ -18,7 +18,7 @@ from abc import ABC,abstractmethod
 # Template class
 #
 class Xn_from_signal(ABC):
-    def __init__(self,nldb,X_order=4,T_urange=[-1, -1],l_out_current=False,nsamp=-1,samp_mod='',solver=''): # note I need to add user opportunity to set time-range  
+    def __init__(self,nldb,X_order=4,T_range=[-1, -1],l_out_current=False,nsamp=-1,samp_mod='',solver='',tol=1e-10): # note I need to add user opportunity to set time-range  
         self.time = nldb.IO_TIME_points # Time series
         self.T_step =self.time[1] - self.time[0]     # Time step of the simulation
         self.T_deph =12.0/nldb.NL_damping 
@@ -40,9 +40,11 @@ class Xn_from_signal(ABC):
             raise ValueError(f"Invalid sampling mode. Expected one of: {SAMP_MODES}")
         self.samp_mod = samp_mod
         self.nsamp = nsamp
-        self.T_urange = T_urange 
+        self.T_urange = T_range 
         self.freqs = np.array([efield["freq_range"][0] for efield in nldb.Efield], dtype=np.double)     # Harmonic frequencies
         self.prefix = f'-{nldb.calc}' if nldb.calc != 'SAVE' else ''
+        self.out_dim = 0
+        self.tol = tol
         super().__init__()
         
     def __str__(self): 
@@ -100,22 +102,22 @@ class Xn_from_signal(ABC):
         if self.solver=="stnd":
             out = np.linalg.solve(mat,samp)
         if self.solver=="lstsq":
-            out = np.linalg.lstsq(mat,samp,rcond=tol)[0]
+            out = np.linalg.lstsq(mat,samp,rcond=self.tol)[0]
         if self.solver=="svd":
-            inv = np.linalg.pinv(mat,rcond=tol)
+            inv = np.linalg.pinv(mat,rcond=self.tol)
             for i_n in range(mat_dim):
                 out[i_n]=out[i_n]+np.sum(inv[i_n,:]*samp[:])
         return out
     
     def perform_analysis(self):
-        self.set_defaults()
+        _ = self.set_defaults()
         out = np.zeros((self.out_dim, self.n_runs, 3), dtype=np.cdouble) 
         for i_f in tqdm(range(self.n_runs)):
             for i_d in range(3):
                 samp_time, samp_sig= self.get_sampling(i_d,i_f)
                 matrix = self.define_matrix(samp_time,i_f)
                 raw = self.solve_lin_system(matrix,samp_sig)
-                out[:, i_f, i_d] = raw[:self.X_order + 1]
+                out[:, i_f, i_d] = raw[:self.out_dim]
         return out
 
     def get_Unit_of_Measure(self,i_order): # not sure if this is a general or specific method - let it here for the moment
