@@ -13,26 +13,39 @@ from tqdm import tqdm
 import sys
 import os
 from abc import ABC,abstractmethod
-from nl_analysis import *
+from yambopy.nl.nl_analysis import Xn_from_signal
 #
 #
 # Derived class for monochromatic signal
 #    
 class Xn_from_sine(Xn_from_signal):
+        @property
+        def set_defaults(self):
+            EFIELDS = ["SIN","SOFTSIN"]
+            if self.efield["name"] not in EFIELDS:
+                raise ValueError(f"Invalid electric field for frequency mixing analysis. Expected one of: {EFIELDS}")
+            if any(name != '' for name in self.pumps[:]["name"]):
+                raise ValueError("This analysis is for one monochromatic field only.")
+            if self.solver == '':
+                self.solver = 'stnd'
+            self.out_dim = self.X_order + 1
+
         def get_sampling(self,idir,ifrq):
-            samp_dim = 2*self.X_order + 1
+            samp_order = 2*self.X_order + 1
+            if self.nsamp == -1:
+                self.nsamp = samp_order
             T_period = 2.0 * np.pi / self.freqs[ifrq]
             T_range, out_of_bounds = self.update_time_range(T_period)
             if (out_of_bounds):
                 print(f'User range redifined for frequency {self.freqs[ifrq]* ha2ev:.3e} [eV]')
             print(f"Time range: {T_range[0] / fs2aut:.3f} - {T_range[1] / fs2aut:.3f} [fs]")
             i_t_start = int(np.round(T_range[0]/self.T_step)) 
-            i_deltaT  = int(np.round(T_period/self.T_step)/samp_dim)
-            T_i = np.array([(i_t_start + i_deltaT * i) * self.T_step - self.efield["initial_time"] for i in range(samp_dim)])
+            i_deltaT  = int(np.round(T_period/self.T_step)/self.nsamp)
+            T_i = np.array([(i_t_start + i_deltaT * i) * self.T_step - self.efield["initial_time"] for i in range(self.nsamp)])
             if self.l_out_current:
-                S_i = np.array([self.current[ifrq][idir,i_t_start + i_deltaT * i] for i in range(samp_dim)]) # **CURRENT
+                S_i = np.array([self.current[ifrq][idir,i_t_start + i_deltaT * i] for i in range(self.nsamp)]) # **CURRENT
             else:
-                S_i = np.array([self.polarization[ifrq][idir,i_t_start + i_deltaT * i] for i in range(samp_dim)]) 
+                S_i = np.array([self.polarization[ifrq][idir,i_t_start + i_deltaT * i] for i in range(self.nsamp)]) 
             return T_i,S_i
         
         def update_time_range(self,T_period): # not sure if this is a general or specific method - let it here for the moment
@@ -62,16 +75,6 @@ class Xn_from_sine(Xn_from_signal):
                 M[:, i_n +self.X_order] = exp_pos
             return M
 
-        def get_Unit_of_Measure(self,i_order): # not sure if this is a general or specific method - let it here for the moment
-            linear = 1.0
-            ratio = SVCMm12VMm1 / AU2VMm1 # is there a better way than this?
-            if self.l_out_current:
-                linear = Junit/EFunit
-                ratio = 1.0/EFunit
-            if i_order == 0:
-                return np.power(ratio, 1, dtype=np.float64)*linear
-            return np.power(ratio, i_order - 1, dtype=np.float64)*linear
-        
         def output_analysis(self,out,to_file=True):
             for i_order in range(self.X_order + 1):
                 for i_f in range(self.n_runs):
@@ -79,10 +82,10 @@ class Xn_from_sine(Xn_from_signal):
                 out[i_order,:,:]*=self.get_Unit_of_Measure(i_order) 
                 if (to_file):
                     output_file = f'o{self.prefix}.YamboPy-X_probe_order_{i_order}'
-                    header = "[eV] " + " ".join([f"X/Im(z){i_order} X/Re(z){i_order}" for _ in range(3)])
+                    header = "E[eV] " + " ".join([f"X{i_order}/Im({d}) X{i_order}/Re({d})" for d in ('x','y','z')])
                     if self.l_out_current:
                         output_file = f'o{self.prefix}.YamboPy-Sigma_probe_order_{i_order}'
-                        header = "[eV] " + " ".join([f"S/Im(z){i_order} S/Re(z){i_order}" for _ in range(3)])                        
+                        header = "E[eV] " + " ".join([f"S{i_order}/Im({d}) S{i_order}/Re({d})" for d in ('x','y','z')])
                     values = np.column_stack((self.freqs * ha2ev, out[i_order, :, 0].imag, out[i_order, :, 0].real,
                                       out[i_order, :, 1].imag, out[i_order, :, 1].real,
                                       out[i_order, :, 2].imag, out[i_order, :, 2].real))
