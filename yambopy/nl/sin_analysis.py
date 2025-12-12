@@ -27,7 +27,7 @@ class Xn_from_sine(Xn_from_signal):
                 if self.pumps[i_n]["name"] != 'none':
                     raise ValueError("This analysis is for one monochromatic field only.")
             if self.solver == '':
-                self.solver = 'stnd'
+                self.solver = 'full'
             self.out_dim = self.X_order + 1
             return
 

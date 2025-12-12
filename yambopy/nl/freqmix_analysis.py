@@ -127,6 +127,3 @@ class Xn_from_freqmix(Xn_from_signal):
 
         #def spike_correction(X_eff):# Response function to check for spike
         #    return 'Not implemented yet'
-
-        #def residuals_func(x):
-        #    return 'Not implemented yet'

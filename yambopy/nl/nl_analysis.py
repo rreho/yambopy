@@ -10,6 +10,7 @@ import numpy as np
 from yambopy.units import ha2ev,fs2aut, Junit, EFunit,SVCMm12VMm1,AU2VMm1
 from yambopy.nl.external_efield import Divide_by_the_Field
 from tqdm import tqdm
+from scipy.optimize import least_squares
 import sys
 import os
 from abc import ABC,abstractmethod
@@ -31,7 +32,7 @@ class Xn_from_signal(ABC):
         self.l_eval_current=nldb.l_eval_CURRENT
         self.l_out_current = l_out_current and self.l_eval_current
         self.X_order = X_order
-        SOLVE_MODES = ['', 'stnd', 'lstsq', 'svd']
+        SOLVE_MODES = ['', 'full', 'lstsq', 'lstsq_opt', 'svd']
         if solver not in SOLVE_MODES: 
             raise ValueError("Invalid solver mode. Expected one of: %s" % SOLVE_MODES)
         self.solver = solver
@@ -93,13 +94,13 @@ class Xn_from_signal(ABC):
     def get_Unit_of_Measure(self,i_order):
         pass
     
-    def solve_lin_system(self,mat,samp):
+    def solve_lin_system(self,mat,samp,init=None):
         mat_dim = int(mat.shape[1])
         out=np.zeros(mat_dim,dtype=np.cdouble)
-        if self.solver=="stdn" and ((not IsSquare(mat)) or (not IsWellDefined(mat))):
+        if self.solver=="full" and ((not IsSquare(mat)) or (not IsWellDefined(mat))):
             print('WARNING: solver changed to least square')
             self.solver = "lstsq"
-        if self.solver=="stnd":
+        if self.solver=="full":
             out = np.linalg.solve(mat,samp)
         if self.solver=="lstsq":
             out = np.linalg.lstsq(mat,samp,rcond=self.tol)[0]
@@ -107,6 +108,14 @@ class Xn_from_signal(ABC):
             inv = np.linalg.pinv(mat,rcond=self.tol)
             for i_n in range(mat_dim):
                 out[i_n]=out[i_n]+np.sum(inv[i_n,:]*samp[:])
+        if self.solver=="lstsq_opt":
+            if(init is None):
+                x0_cmplx = np.linalg.lstsq(mat, samp, rcond=tol)[0]
+            else:
+                x0_cmplx = init
+            x0 = np.concatenate((x0_cmplx.real, x0_cmplx.imag))
+            res = least_squares(residuals_func, x0, ftol=1e-11,gtol=1e-11,xtol=1e-11,verbose=0,x_scale='jac',args=(mat,samp))
+            out = res.x[0:int(res.x.size/2)] + 1j * res.x[int(res.x.size/2):res.x.size]
         return out
     
     def perform_analysis(self):
@@ -122,7 +131,7 @@ class Xn_from_signal(ABC):
 
     def get_Unit_of_Measure(self,i_order): # not sure if this is a general or specific method - let it here for the moment
         linear = 1.0
-        ratio = SVCMm12VMm1 / AU2VMm1 # is there a better way than this?
+        ratio = SVCMm12VMm1 / AU2VMm1 # From AU to statVolt/cm ...is there a better way than this?
         if self.l_out_current:
             linear = Junit/EFunit
             ratio = 1.0/EFunit
@@ -143,3 +152,7 @@ class Xn_from_signal(ABC):
 
     def IsWellConditioned(m): # with this I am trying to avoid inverting a matrix
         return np.linalg.cond(m) < 1/sys.float_info.epsilon
+
+    def residuals_func(x,M,S_i):
+        x_cmplx=x[0:int(x.size/2)] + 1j * x[int(x.size/2):x.size]
+        return np.linalg.norm(np.dot(M, x_cmplx) - S_i)
