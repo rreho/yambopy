@@ -153,6 +153,6 @@ class Xn_from_signal(ABC):
     def IsWellConditioned(m): # with this I am trying to avoid inverting a matrix
         return np.linalg.cond(m) < 1/sys.float_info.epsilon
 
-    def residuals_func(x,M,S_i):
+    def residuals_func(x,M,S_i):
         x_cmplx=x[0:int(x.size/2)] + 1j * x[int(x.size/2):x.size]
         return np.linalg.norm(np.dot(M, x_cmplx) - S_i)

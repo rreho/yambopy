@@ -10,6 +10,7 @@ import numpy as np
 from yambopy.units import ha2ev,fs2aut, Junit, EFunit,SVCMm12VMm1,AU2VMm1
 from yambopy.nl.external_efield import Divide_by_the_Field
 from tqdm import tqdm
+from scipy.andimage import uniform_filter1d
 import sys
 import os
 import itertools
@@ -124,6 +125,30 @@ class Xn_from_freqmix(Xn_from_signal):
                 np.savetxt(output_file, values, header=header, delimiter=' ', footer="Reconstructed signal")
         else:
             return values
-
-        #def spike_correction(X_eff):# Response function to check for spike
-        #    return 'Not implemented yet'
+    #
+    # unused function so far
+    # check for spikes in the solution and recalculate the solution
+    # The function can be called after perform_analysis
+    # in a loop over cartesian directions
+    # Note that it can be taken into nl_analysis to be shared with other classes
+    #    
+    def spike_correction(self,mat,samp,out):
+        window_size, threshold_local = (5,2.0)
+        out_corr = out
+        self.solver = "lstq_opt"
+        signal_im= abs(out[self.X_order[0]+1,self.X_order[1]+1,:].imag)
+        signal_re= abs(out[self.X_order[0]+1,self.X_order[1]+1,:].real)
+        smooth_signal_im = uniform_filter1d(signal_im, size=window_size)
+        smooth_signal_re = uniform_filter1d(signal_re, size=window_size)
+        spike_indices_local_im = np.where(np.abs(signal_im - smooth_signal_im)/smooth_signal_im > threshold_local)[0]
+        spike_indices_local_re = np.where(np.abs(signal_re - smooth_signal_re)/smooth_signal_re > threshold_local)[0]
+        spike_indices_local = np.unique(np.concatenate((spike_indices_local_im, spike_indices_local_re)))
+        for i_f in tqdm(spike_indices_local):
+            if(i_f==0 and i_f in spike_indices_local):
+                x0=out[:,i_f+1]
+            elif(i_f==n_frequencies-1 and i_f in spike_indices_local):
+                x0=out[:,i_f-1]
+            else:
+                x0=(out[:,i_f+1]+out[:,i_f-1])/2.0
+                out_corr[:,i_f] = self.solve_lin_system(mat,samp,init=x0)
+        return out_corr, spike_indices_local
