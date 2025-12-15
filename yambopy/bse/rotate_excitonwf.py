@@ -4,10 +4,12 @@
 # Authors: MN
 import numpy as np
 from yambopy.kpoints import build_ktree, find_kpt
-from yambopy.tools.function_profiler import func_profile 
+from yambopy.tools.function_profiler import func_profile
+from yambopy.tools.citations import citation
 
 
 @func_profile
+@citation("M. Nalabothula et al. arXiv:2511.21540 (2025)")
 def rotate_exc_wf(Ak, symm_mat_red, kpoints, exe_qpt, dmats, time_rev, ktree=None):
     """
     Rotate the exciton wavefunction Ak using symmetry operations.

@@ -32,10 +32,12 @@ import re
 from numpy.linalg import matrix_power
 from dataclasses import dataclass
 from scipy.spatial import KDTree
+from yambopy.tools.citations import citation
 
 global_tol = 1e-6
 
 
+@citation("S. M. Goodlett et al. J. Chem. Phys. 161, 024107 (2024)")
 def get_pg_info(symm_mats):
     """
     Given list of symmetries that form a crystallographic point 

@@ -24,6 +24,7 @@ except ImportError as e:
     from scipy.spatial import KDTree
 from yambopy.kpoints import build_ktree, find_kpt
 from yambopy.tools.function_profiler import func_profile
+from yambopy.tools.citations import citation
 
 class YamboWFDB:
     """
@@ -532,9 +533,11 @@ class YamboWFDB:
 
 
     @func_profile
+    @citation("M. Nalabothula et al. arXiv:2511.21540 (2025)")
     def Dmat(self, symm_mat=None, frac_vec=None, time_rev=None):
         """
         Computes the symmetry-adapted matrix elements < Rk | U(R) | k >.
+        Implements Eq. 5 of M Nalabothula et al. arXiv:2511.21540.
 
         Parameters
         ----------
