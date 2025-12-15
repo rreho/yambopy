@@ -31,8 +31,8 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
 
     .. note::
        For finite q ≠ 0, use ``Lkind="full"`` (default in Yambo).
-       For q = 0, ``Lkind="bar"`` is recommended as ``"full"`` may
-       artificially break symmetries depending on the gauge.
+       For q = 0, ``Lkind="bar"`` should be used as ``"full"``
+       breaks symmetries depending on the gauge.
 
     Parameters
     ----------
