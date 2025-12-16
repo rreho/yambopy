@@ -17,9 +17,9 @@ def run_plot_exc_wf_real_space(args):
                                      "exciton wavefunction in Gaussian .cube file.")
 
     parser.add_argument("--path", type=str, default=".",
-                        help="Calculation directory (default: Current working directory '.')")
+                        help="Calculation directory [PATH/SAVE] (default: Current working directory '.')")
     parser.add_argument("-J","--jobdir", type=str, default="SAVE", metavar="DIR",
-                        help="BSE JOB directory (default: SAVE)")
+                        help="BSE JOB directory [PATH/DIR] (default: SAVE)")
     parser.add_argument("--iqpt", type=int, default=1,help="Q-point index (default: 1)")
     parser.add_argument("--iexe", type=int, required=True,help="Exciton index to plot.")
     # --iexe and --iqpt are not python indexing. i,e 1st item starts from 1.
