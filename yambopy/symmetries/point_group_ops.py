@@ -270,7 +270,8 @@ def transform_matrix(sym_mats_old, sym_mats_new):
     # 2. Identify Symmetry Elements
     px_1 = get_paxis(mats1)
     px_2 = get_paxis(mats2)
-    assert len(px_1) > 0 and len(px_2) > 0, "Could not determine principal axis for one or both groups."
+    if len(px_1) == 0: px_1 = [np.array([0.0, 0.0, 1.0])]
+    if len(px_2) == 0: px_2 = [np.array([0.0, 0.0, 1.0])]
 
     dets1, nfold1, axes1 = find_symm_axis(mats1)
     dets2, nfold2, axes2 = find_symm_axis(mats2)
