@@ -37,6 +37,10 @@ def run_exc_irrep(args):
         * ``--sym_tol`` : float, optional
           Numerical tolerance for evaluating symmetry operations (default: ``1e-2``).
 
+        * ``--use_save_symm`` : bool, optional
+          If True, use save symmetries instead of spglib ones. For non-collinear magnets, it is automatically
+          set to True,
+
     Notes
     -----
     This function only handles argument parsing and dispatching.
@@ -49,7 +53,9 @@ def run_exc_irrep(args):
     parser.add_argument("--nstates", type=int, default=1, help="Number of exciton states. Default 1")
     parser.add_argument("--degen_tol", type=float, default=1e-2, help="Tolerance for degeneracy. Default 0.01 eV")
     parser.add_argument("--sym_tol", type=float, default=1e-2, help="Tolerance for Symmetry operations. Default 0.01")
+    parser.add_argument("--use_save_symm", action="store_true", help="use save symmetries instead of spglib ones. "
+                        "For non-collinear magnets, it is automatically set to True")
     #
     args = parser.parse_args(args)
     compute_exc_rep(path=args.path,bse_dir=args.jobdir, iqpt=args.iqpt,
-                    nstates=args.nstates, degen_tol=args.degen_tol,symm_tol=args.sym_tol)
+                    nstates=args.nstates, degen_tol=args.degen_tol,symm_tol=args.sym_tol,use_save_symmetries=args.use_save_symm)

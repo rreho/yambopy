@@ -15,7 +15,8 @@ from yambopy.symmetries.crystal_symmetries import Crystal_Symmetries
 from yambopy.tools.citations import citation
 
 @citation("M. Nalabothula et al. arXiv:2511.21540 (2025)")
-def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e-3, degen_rtol=1e-3, symm_tol=1e-2):
+def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e-3,
+                    degen_rtol=1e-3, symm_tol=1e-2, use_save_symmetries=False):
     """
     Perform a group–theoretical analysis of excitonic wavefunctions
     at a given BSE q-point using the crystal symmetries.
@@ -33,6 +34,12 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
        For finite q ≠ 0, use ``Lkind="full"`` (default in Yambo).
        For q = 0, ``Lkind="bar"`` should be used as ``"full"``
        breaks symmetries depending on the gauge.
+
+       For magnetic non-collinear systems, this function falls back to SAVE symmetries.
+       This is because, spglib requires magnetic moment  for each atom and there
+       is no way we can get it from SAVE as of now. Ofcourse, the price we pay is that
+       non-symmorphic symmetries are not taken into account and there by much smaller groups.
+
 
     Parameters
     ----------
@@ -57,6 +64,8 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     symm_tol : float, optional
         Tolerance to Symmetry operators.
         Default ``1e-2``.
+    use_save_symmetries : bool, optional
+        If True, uses internal symmetries from SAVE instead of spglib symmetries.
 
     Outputs
     -------
@@ -97,12 +106,25 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
         return None
     # Load the lattice database
     lattice = YamboLatticeDB.from_db_file(os.path.join(path, 'SAVE', 'ns.db1'))
+    # NM  : For now fall back to save symmetries as we donot have information on magnetic moments of atoms
+    # to get the magnetic symmetries of the crystal.
+    if lattice.mag_syms and not use_save_symmetries:
+        print("Warning : For magnetic symmetries, the code falls back to symmetries in the SAVE")
+        use_save_symmetries = True
+    #
     ## Get spglib symmetries to have full symmtries of the crystal even though they are not in yambo base
-    symm = Crystal_Symmetries(lattice,tol=1e-4)
     # Write basic symmetry information to file
-    symm_info_file_name = "Symmetry_info_excitons.txt"
-    print("Writing Basic symmetry information to file : ",symm_info_file_name)
-    symm.write_symmetry_info_to_file(symm_info_file_name)
+    Rotation_matrices_symm = lattice.sym_car
+    frac_trans_symm = np.zeros((len(Rotation_matrices_symm),3),dtype=Rotation_matrices_symm.dtype)
+    time_rev = int(np.rint(lattice.time_rev))
+    if not use_save_symmetries:
+        symm = Crystal_Symmetries(lattice,tol=1e-4)
+        symm_info_file_name = "Symmetry_info_excitons.txt"
+        print("Writing Basic symmetry information to file : ",symm_info_file_name)
+        symm.write_symmetry_info_to_file(symm_info_file_name)
+        Rotation_matrices_symm = symm.rotations
+        frac_trans_symm = symm.translations
+        time_rev = False
     #
     # NM : I am assuming that we can have atmost 100 accidental degeneracies (only for TDA).
     # This is a fine if we are not in continum. In that case, use should increase more states.
@@ -168,14 +190,25 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     lat_vec = lattice.lat
     lat_vec_inv = np.linalg.inv(lat_vec)
     #
+    trev_fac = 1
+    if not lattice.mag_syms:
+        trev_fac = 1 + int(time_rev)
+    # The number of symmetries for which we need representations matrices.
+    # in non-magnetic cases, we donot need time reversal, so we only need rep for 
+    # spatial symmetries. For magnetic non-collinear, both are mixed, so we need to
+    # consider full symmetries.
+    nsym_spatial = len(Rotation_matrices_symm)//trev_fac
+    #
     Dmat_path = os.path.join(bse_dir, 'Dmat_elec_Cache_spglib.npy')
+    if use_save_symmetries: Dmat_path = os.path.join(bse_dir, 'Dmat_elec_Cache_SAVE.npy')
+    #
     if os.path.exists(Dmat_path):
         print("Dmats found. Loading ....")
         dmats = np.load(Dmat_path)
     else:
         print("Dmats not found. Computing ....")
-        dmats = wfdb.Dmat(symm_mat=symm.rotations,
-                          frac_vec=symm.translations, time_rev=False)
+        dmats = wfdb.Dmat(symm_mat=Rotation_matrices_symm[:nsym_spatial],
+                          frac_vec=frac_trans_symm[:nsym_spatial], time_rev=(lattice.mag_syms and time_rev))
         np.save(Dmat_path,dmats)
     #
     ## print some data about the degeneracies
@@ -187,9 +220,11 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     trace_all_imag = []
     little_group = []
     #
-    for isym in range(len(symm.rotations)):
-        symm_mat = symm.rotations[isym]
+    #
+    for isym in range(len(Rotation_matrices_symm)//trev_fac):
+        symm_mat = Rotation_matrices_symm[isym]
         symm_mat_red = lat_vec@symm_mat@lat_vec_inv
+        isym_trev = (isym >= len(Rotation_matrices_symm)/(1+int(time_rev)))
         #isym = 2
         Sq_minus_q = np.einsum('ij,j->i', symm_mat_red, excQpt) - excQpt
         #print(Sq_minus_q)
@@ -199,16 +234,16 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
         if np.linalg.norm(Sq_minus_q) > 10**-5: continue
         little_group.append(isym + 1)
         tau_dot_k = np.exp(1j * 2 * np.pi *
-                       np.dot(excdb.car_qpoint, symm.translations[isym]))
+                       np.dot(excdb.car_qpoint, frac_trans_symm[isym]))
         #assert(np.linalg.norm(Sq_minus_q)<10**-5)
         rot_Akcv = rotate_exc_wf(Ak_r, symm_mat_red, wfdb.kBZ, excQpt,
-                                 dmats[isym], False, ktree=wfdb.ktree)
+                                 dmats[isym], isym_trev, ktree=wfdb.ktree)
         rep = tau_dot_k*np.einsum('m...,n...->mn',Ak_l,rot_Akcv,optimize=True)
         # NM : In case of non-trivial projective irrep, we cannot do this,
         # so this fails for boundary Q points, for example (0,0,0.5) in bulk hBN.
         ## Check if this is projective rep and exit as it is yet not implemented.
         G0_tmp = np.einsum('ji,j->i', symm_mat, excdb.car_qpoint) - excdb.car_qpoint
-        G0_tau_tmp = G0_tmp.dot(symm.translations[isym])
+        G0_tau_tmp = G0_tmp.dot(frac_trans_symm[isym])
         G0_tau_tmp = G0_tau_tmp-np.rint(G0_tau_tmp)
         if np.abs(G0_tau_tmp) > 1e-3:
             exit("Error : Projective representations are not implemented")
@@ -230,9 +265,14 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
         trace_all_imag.append(imag_trace)
 
     little_group = np.array(little_group, dtype=int)
-
+    #
+    # Change the sign of time reversal symmetries. This is because,
+    # yambo store time reversal symmetries are -R and -tau.
+    Rotation_matrices_symm[nsym_spatial:] *= -1
+    frac_trans_symm[nsym_spatial:] *= -1
+    #
     pg_label, classes, class_dict, char_tab, irreps = get_pg_info(
-        symm.rotations[little_group - 1])
+        Rotation_matrices_symm[little_group - 1])
 
     print('Little group : ', pg_label)
     print('Little group symmetries : ', little_group)
