@@ -190,13 +190,10 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     lat_vec = lattice.lat
     lat_vec_inv = np.linalg.inv(lat_vec)
     #
-    trev_fac = 1
-    if not lattice.mag_syms:
-        trev_fac = 1 + int(time_rev)
+    trev_fac = 1 + int(time_rev)
     # The number of symmetries for which we need representations matrices.
-    # in non-magnetic cases, we donot need time reversal, so we only need rep for 
-    # spatial symmetries. For magnetic non-collinear, both are mixed, so we need to
-    # consider full symmetries.
+    # We only need representations for spatial symmetries.
+    # Note yambo always orders time rev symmeties in second half, even for magnetic systems.
     nsym_spatial = len(Rotation_matrices_symm)//trev_fac
     #
     Dmat_path = os.path.join(bse_dir, 'Dmat_elec_Cache_spglib.npy')
@@ -208,7 +205,7 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     else:
         print("Dmats not found. Computing ....")
         dmats = wfdb.Dmat(symm_mat=Rotation_matrices_symm[:nsym_spatial],
-                          frac_vec=frac_trans_symm[:nsym_spatial], time_rev=(lattice.mag_syms and time_rev))
+                          frac_vec=frac_trans_symm[:nsym_spatial], time_rev=False)
         np.save(Dmat_path,dmats)
     #
     ## print some data about the degeneracies
@@ -221,11 +218,10 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     little_group = []
     #
     #
-    for isym in range(len(Rotation_matrices_symm)//trev_fac):
+    for isym in range(nsym_spatial):
         symm_mat = Rotation_matrices_symm[isym]
         symm_mat_red = lat_vec@symm_mat@lat_vec_inv
-        isym_trev = (isym >= len(Rotation_matrices_symm)/(1+int(time_rev)))
-        #isym = 2
+        #
         Sq_minus_q = np.einsum('ij,j->i', symm_mat_red, excQpt) - excQpt
         #print(Sq_minus_q)
         #diff = Sq_minus_q.copy()
@@ -237,7 +233,7 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
                        np.dot(excdb.car_qpoint, frac_trans_symm[isym]))
         #assert(np.linalg.norm(Sq_minus_q)<10**-5)
         rot_Akcv = rotate_exc_wf(Ak_r, symm_mat_red, wfdb.kBZ, excQpt,
-                                 dmats[isym], isym_trev, ktree=wfdb.ktree)
+                                 dmats[isym], False, ktree=wfdb.ktree)
         rep = tau_dot_k*np.einsum('m...,n...->mn',Ak_l,rot_Akcv,optimize=True)
         # NM : In case of non-trivial projective irrep, we cannot do this,
         # so this fails for boundary Q points, for example (0,0,0.5) in bulk hBN.
@@ -265,11 +261,6 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
         trace_all_imag.append(imag_trace)
 
     little_group = np.array(little_group, dtype=int)
-    #
-    # Change the sign of time reversal symmetries. This is because,
-    # yambo store time reversal symmetries are -R and -tau.
-    Rotation_matrices_symm[nsym_spatial:] *= -1
-    frac_trans_symm[nsym_spatial:] *= -1
     #
     pg_label, classes, class_dict, char_tab, irreps = get_pg_info(
         Rotation_matrices_symm[little_group - 1])
