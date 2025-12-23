@@ -52,8 +52,9 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
 
     # Load exc dbs
     exdbs = []
-    for ik in range(wfdb.nkpoints):
-        filename = 'ndb.BS_diago_Q%d' % (ik+1)
+    for iQ in tqdm(range(Qrange[0],Qrange[1])):
+        # wfdb.kpoints_indexes[iQ]
+        filename = 'ndb.BS_diago_Q%d' % (latdb.kpoints_indexes[iQ]+1)
         excdb = YamboExcitonDB.from_db_file(latdb,filename=filename,folder=BSE_dir,\
                                             Load_WF=True, neigs=neigs)
         exdbs.append(excdb)
