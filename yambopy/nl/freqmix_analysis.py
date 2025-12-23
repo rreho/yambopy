@@ -79,8 +79,7 @@ class Xn_from_freqmix(Xn_from_signal):
         NX,MX = self.X_order[:]
         W1 = self.freqs[ifrq]
         W2 = self.pump_freq
-        M_size = self.out_dim
-        M = np.zeros((self.nsamp, M_size), dtype=np.cdouble)
+        M = np.zeros((self.nsamp, self.out_dim), dtype=np.cdouble)
         for i_t in range(self.nsamp):
             for i_c,(i_n,i_m) in enumerate(itertools.product(range(-NX, NX+1),range(-MX, MX+1))):
                 M[i_t, i_c] = np.exp(-1j * (i_n*W1+i_m*W2) * T_i[i_t],dtype=np.cdouble)

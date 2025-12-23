@@ -7,7 +7,7 @@
 # Modified to allow generalisation
 #
 import numpy as np
-from yambopy.units import ha2ev,fs2aut, Junit, EFunit,SVCMm12VMm1,AU2VMm1
+from yambopy.units import ha2ev,fs2aut
 from yambopy.nl.external_efield import Divide_by_the_Field
 from tqdm import tqdm
 import sys
@@ -101,16 +101,16 @@ class Xn_from_sine(Xn_from_signal):
                     for i_order in range(self.X_order + 1):
                         freq_term = np.exp(-1j * i_order * self.freqs[i_f] * self.time)
                         Seff[i_f, i_d, :] += out[i_order, i_f, i_d] * freq_term
-                        Seff[i_f, i_d, :] += np.conj(out[i_order, i_f, i_d]) * np.conj(freq_term)
-            if (to_file):
-                for i_f in tqdm(range(self.n_runs)):
-                    values = np.column_stack((self.time / fs2aut, Seff[i_f, 0, :].real, Seff[i_f, 1, :].real, Seff[i_f, 2, :].real))
-                    output_file = f'o{self.prefix}.YamboPy-pol_reconstructed_F{i_f + 1}'
-                    header="[fs] Px Py Pz"
-                    if self.l_out_current:
-                        output_file = f'o{self.prefix}.YamboPy-curr_reconstructed_F{i_f + 1}'
-                        header="[fs] Jx Jy Jz"
+                        Seff[i_f, i_d, :] += np.conj(out[i_order, i_f, i_d]) * np.conj(freq_term)    
+            for i_f in tqdm(range(self.n_runs)):
+                values = np.column_stack((self.time / fs2aut, Seff[i_f, 0, :].real, Seff[i_f, 1, :].real, Seff[i_f, 2, :].real))
+                output_file = f'o{self.prefix}.YamboPy-pol_reconstructed_F{i_f + 1}'
+                header="[fs] Px Py Pz"
+                if self.l_out_current:
+                    output_file = f'o{self.prefix}.YamboPy-curr_reconstructed_F{i_f + 1}'
+                    header="[fs] Jx Jy Jz"
+                if (to_file):
                     np.savetxt(output_file, values, header=header, delimiter=' ', footer="Reconstructed signal")
-            else:
-                return values
+                else:
+                   return values
 
