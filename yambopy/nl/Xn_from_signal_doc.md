@@ -4,11 +4,12 @@
 
 #### Myrta Grüning, Claudio Attaccalite, Mike Pointeck, Anna Romani, Mao Yuncheng
 
-This document describes the `Xn_from_signal` abstract python class and a set of derived classes, part of the `YamboPy` code, for extracting nonlinear susceptibilities and conductivities from the macroscopic time-dependent polarization $P$ and current $J$.  An extended theoretical background  can be found in Nonlinear Optics textbooks, see e.g. Sec. 2 of “The Elements of Nonlinear Optics” by Butcher and Cotter and the other sources listed in the [Bibliography](## Bibliography). The [minimal background](## 0. Theory ) to understand the code and facilitate further development is given in the next session. The rest of the document is dedicated to describe the [code structure](## Code), key workflows, main functions and to provide an [essential guide](## How to use) of the code use.  
+This document describes the `Xn_from_signal` abstract python class and a set of derived classes, part of the `YamboPy` code, for extracting nonlinear susceptibilities and conductivities from the macroscopic time-dependent polarization $P$ and current $J$.  An extended theoretical background  can be found in Nonlinear Optics textbooks, see e.g. Sec. 2 of “The Elements of Nonlinear Optics” and the other sources listed in the bibliography. The minimal background to understand the code and facilitate further development is given in the next session. The rest of the document is dedicated to describe the code structure, key workflows, main functions and to provide an essential guide of the code use.
 
 ---
 
-## 0. Theory 
+## 0. Minimal theoretical compendium 
+
 
 The problem solved is algebraic:
 
@@ -32,7 +33,7 @@ $$ S_j = C_0 K (-\omega_\sigma, \omega_1, \dots, \omega_n)\chi^{(n)}(-\omega_\si
 
 where $K(-\omega_\sigma; \omega_1, \dots, \omega_n)$ is a numerical factor that accounts for the intrinsic permutation symmetry depending on the nonlinear order and frequency arguments of $\chi$. $C_0$ is a further numerical factor depending on the applied electric field (field strength, normalisation factor, nonlinear order).
 
-Details on the implementation can be found in the sources listed in the [Bibliography](## Bibliography)
+Details on the implementation can be found in the sources listed in the bibliography.
 
 ---
 
@@ -219,7 +220,7 @@ Note: in all snippets one must add `from yambopy import *`
 
 ## Bibliography
 
-1. Butcher PN, Cotter D. The constitutive relation. In: The Elements of Nonlinear Optics. Cambridge Studies in Modern Optics. Cambridge University Press; 1990:12-36.
+1. Butcher PN, Cotter D. The constitutive relation. In: The Elements of Nonlinear Optics. Cambridge Studies in Modern Optics. Cambridge University Press; 1990:12-36.[doi.org/10.1017/CBO9781139167994](https://doi.org/10.1017/CBO9781139167994)
 2. Attaccalite C and Grüning M, [Phys. Rev. B 88, 235113 (2013)](https://doi.org/10.1103/PhysRevB.88.235113)
 3. Pionteck MN, Grüning M, Sanna S, Attaccalite C, [SciPost Phys. 19, 129 (2025)](https://10.21468/SciPostPhys.19.5.129) 
 4. Romani A, Grüning M, 'Notes on nonlinear analysis from Gaussian pulses' (unpublished)
