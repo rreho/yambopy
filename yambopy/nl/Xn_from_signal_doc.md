@@ -4,7 +4,7 @@
 
 #### Myrta Grüning, Claudio Attaccalite, Mike Pointeck, Anna Romani, Mao Yuncheng
 
-This document describes the `Xn_from_signal` abstract python class and a set of derived classes, part of the `YamboPy` code, for extracting nonlinear susceptibilities and conductivities from the macroscopic time-dependent polarization $P$ and current $J$.  An extended theoretical background  can be found in Nonlinear Optics textbooks, see e.g. Sec. 2 of “The Elements of Nonlinear Optics” and the other sources listed in the bibliography. The minimal background to understand the code and facilitate further development is given in the next session. The rest of the document is dedicated to describe the code structure, key workflows, main functions and to provide an essential guide of the code use.
+This document describes the `Xn_from_signal` abstract python class and a set of derived classes, part of the `YamboPy` code, for extracting nonlinear susceptibilities and conductivities from the macroscopic time-dependent polarization $P$ and current $J$.  An extended theoretical background  can be found in Nonlinear Optics textbooks, see e.g. Sec. 2 of “The Elements of Nonlinear Optics” and the other sources listed in the [bibliography](# Bibliography). The [minimal background](# 0. Minimal theoretical compendium) to understand the code and facilitate further development is given in the next session. The rest of the document is dedicated to describe the [code structure, key workflows, main functions](# 1. Code) and to provide an essential guide of the [code use](# 2. How to use).
 
 ---
 
@@ -151,7 +151,7 @@ class Xn_from_freqmix{
 class Xn_from_sine
 ```
 ---
-## How to use
+## 2. How to use
 
 The diagram below illustrates the general use of the code.
 
@@ -224,3 +224,5 @@ Note: in all snippets one must add `from yambopy import *`
 2. Attaccalite C and Grüning M, [Phys. Rev. B 88, 235113 (2013)](https://doi.org/10.1103/PhysRevB.88.235113)
 3. Pionteck MN, Grüning M, Sanna S, Attaccalite C, [SciPost Phys. 19, 129 (2025)](https://10.21468/SciPostPhys.19.5.129) 
 4. Romani A, Grüning M, 'Notes on nonlinear analysis from Gaussian pulses' (unpublished)
+
+[# Bibliography]: 
