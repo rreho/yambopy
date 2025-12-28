@@ -39,15 +39,17 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     dmat_mode : str, optional
         If 'save', print dmats on .npy file for faster recalculation. If 'load', load from .npy file. Else, calculate Dmats at runtime.
     save_files : bool, optional
-        If True, the matrix elements will be saved in .npy file `exph_file`. Default is True.
+        If True, the matrix elements will be saved in .npz file `exph_file` with metadata. Default is True.
     overwrite : bool, optional
         If False and `exph_file` is found, the matrix elements will be loaded from file. Default is False.
     """
 
     # Check if we just need to load
-    if os.path.exists(exph_file) and overwrite==False:
-        print(f'Loading EXCPH matrices from {exph_file}...')
-        exph_mat_loaded = np.load(exph_file)
+    exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
+    if os.path.exists(exph_file_path) and overwrite==False:
+        print(f'Loading EXCPH matrices from {exph_file_path}...')
+        data = np.load(exph_file_path)
+        exph_mat_loaded = data['G']
         return exph_mat_loaded
 
     # Load exc dbs
@@ -64,18 +66,20 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     # Calculation
     print('Calculating EXCPH matrix elements...')
     exph_mat = []
+    Q_points = []
     for iQ in tqdm(range(Qrange[0],Qrange[1])):
         Q_in = wfdb.kBZ[iQ]
+        Q_points.append(Q_in)
         exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,\
                                                    BSE_Lin_dir=BSE_Lin_dir,Q_in=Q_in,neigs=neigs) )
     # IO
     if len(exph_mat)<2: exph_mat = exph_mat[0] # single Q-point calculation (suppress axis)
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
     
-    if save_files: 
-        if exph_file[-4:]!='.npy': exph_file = exph_file+'.npy'
-        print(f'Excph coupling file saved to {exph_file}')
-        np.save(exph_file,exph_mat)
+    if save_files:
+        exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
+        print(f'Excph coupling file saved to {exph_file_path}')
+        np.savez(exph_file_path, G=exph_mat, Q_init=np.array(Q_points), q_phonon=elphdb.qpoints)
     
     return exph_mat
 
