@@ -224,5 +224,3 @@ Note: in all snippets one must add `from yambopy import *`
 2. Attaccalite C and Grüning M, [Phys. Rev. B 88, 235113 (2013)](https://doi.org/10.1103/PhysRevB.88.235113)
 3. Pionteck MN, Grüning M, Sanna S, Attaccalite C, [SciPost Phys. 19, 129 (2025)](https://10.21468/SciPostPhys.19.5.129) 
 4. Romani A, Grüning M, 'Notes on nonlinear analysis from Gaussian pulses' (unpublished)
-
-[# Bibliography]: 
