@@ -189,175 +189,172 @@ def Sn(axis, n):
     """
     return np.dot(reflection_matrix(axis), Cn(axis, n))
 
-def check_transform(R, mats1, mats2, tol=1e-3):
+def get_symmetry_axes(mats, tol=1e-4):
     """
-    Checks if the transformation R correctly maps mats1 to mats2.
+    Extracts unique rotation axes and their orders from a set of symmetry matrices.
+    Returns a list of tuples: [(order, axis_vector), ...] sorted by order descending.
     """
-    # Take a sample matrix from the first group (avoiding identity)
-    s_old = None
-    for mat in mats1:
-        if not np.allclose(mat, np.eye(3)):
-            s_old = mat
-            break
-    if s_old is None: # Only identity matrix in group
-        return True
+    # Use a list to store unique axes so we can update orders: [[n, axis], ...]
+    unique_axes = []
 
-    # Apply the transformation
-    s_transformed = R @ s_old @ R.T
+    for mat in mats:
+        # Focus on rotation part R = det * M to handle improper rotations
+        det = np.linalg.det(mat)
+        R_part = mat * det
+        w, v = np.linalg.eig(R_part)
 
-    # Check if the transformed matrix exists in the second group
-    for s_new in mats2:
-        if np.allclose(s_transformed, s_new, atol=tol):
-            return True # Found a match!
+        # Find eigenvector with eigenvalue 1
+        idx = np.argmin(np.abs(w - 1.0))
+        if np.abs(w[idx] - 1.0) > tol: continue
+
+        axis = np.real(v[:, idx])
+        norm = np.linalg.norm(axis)
+        if norm < tol: continue
+        axis = axis / norm
+
+        # Enforce unique hemisphere for direction (v vs -v)
+        for k in range(3):
+            if abs(axis[k]) > tol:
+                if axis[k] < 0: axis = -axis
+                break
+
+        # Calculate rotation order from trace
+        tr = np.trace(R_part)
+        cos_t = np.clip((tr - 1.0) / 2.0, -1.0, 1.0)
+        theta = np.arccos(cos_t)
+
+        if abs(theta) < tol: continue # Identity
+
+        n = int(np.round(2 * np.pi / theta))
+        if n < 2: continue
+
+        # Check if axis already exists
+        found = False
+        for i in range(len(unique_axes)):
+            old_n, old_ax = unique_axes[i]
+            # Check collinearity (1 - |dot| < tol)
+            if 1.0 - abs(np.dot(axis, old_ax)) < tol:
+                found = True
+                # CRITICAL FIX: Upgrade order if this operation is higher symmetry
+                # e.g., Update C2 (n=2) to S4 (n=4) for the same axis
+                if n > old_n:
+                    unique_axes[i] = [n, old_ax]
+                break
+
+        if not found:
+            unique_axes.append([n, axis])
+
+    # Convert to list of tuples and sort
+    unique_axes = [tuple(x) for x in unique_axes]
+    unique_axes.sort(key=lambda x: x[0], reverse=True)
+    return unique_axes
+
+
+def align_basis(u1, v1, u2, v2):
+    """Constructs rotation matrix R aligning (u1, v1) to (u2, v2)."""
+    # Frame 1
+    x1 = u1 / np.linalg.norm(u1)
+    y1 = v1 - np.dot(v1, x1) * x1
+    if np.linalg.norm(y1) < 1e-4: return None
+    y1 = y1 / np.linalg.norm(y1)
+    z1 = np.cross(x1, y1)
+    F1 = np.column_stack((x1, y1, z1))
     
-    return False # No match found
+    # Frame 2
+    x2 = u2 / np.linalg.norm(u2)
+    y2 = v2 - np.dot(v2, x2) * x2
+    if np.linalg.norm(y2) < 1e-4: return None
+    y2 = y2 / np.linalg.norm(y2)
+    z2 = np.cross(x2, y2)
+    F2 = np.column_stack((x2, y2, z2))
+    
+    return F2 @ F1.T
 
 def check_transform(R, mats1, mats2, tol=1e-3):
-    """
-    Verifies if the transformation R correctly maps a sample matrix from
-    mats1 to a corresponding matrix in mats2.
-    The transformation is defined as S_new = R @ S_old @ R.T for orthogonal R.
-    """
-    s_old = None
-    # Pick a sample matrix from the first group that is not the identity.
-    # Using a more complex matrix is a more robust test.
-    for mat in sorted(mats1, key=lambda m: -np.abs(np.trace(m))):
-        if not np.allclose(mat, np.eye(3), atol=tol):
-            s_old = mat
-            break
-
-    # If only the identity matrix exists, the transform is trivially correct.
-    if s_old is None:
-        return True
-
-    # Apply the transformation
-    s_transformed = R @ s_old @ R.T
-
-    # Check if this transformed matrix exists in the second group
-    for s_new in mats2:
-        if np.allclose(s_transformed, s_new, atol=tol):
-            return True  # Found a match!
-
-    return False  # No match found, the transformation is incorrect.
-
+    """Verifies if R @ mats1 @ R.T is a subset of mats2."""
+    for m1 in mats1:
+        m1_trans = R @ m1 @ R.T
+        found = False
+        # Optimization: Filter by trace first (rotation angle invariant)
+        tr1 = np.trace(m1_trans)
+        for m2 in mats2:
+            if abs(tr1 - np.trace(m2)) > tol: continue
+            if np.allclose(m1_trans, m2, atol=tol):
+                found = True
+                break
+        if not found: return False
+    return True
 
 def transform_matrix(sym_mats_old, sym_mats_new):
     """
-    Finds a transformation matrix R that maps two point groups.
-
-    This function is robust for all molecular point groups (e.g., Oh, Td, Dnh, Cnv)
-    by systematically testing axis pairings and using a fallback mechanism for
-    groups without perpendicular C2 axes.
-
-    Args:
-        sym_mats_old (list or np.ndarray): A list of 3x3 symmetry matrices for the original group.
-        sym_mats_new (list or np.ndarray): A list of 3x3 symmetry matrices for the target group.
-
-    Returns:
-        np.ndarray: A 3x3 transformation matrix R.
-
-    Raises:
-        ValueError: If no valid transformation matrix can be found.
+    Finds transformation R mapping sym_mats_old to sym_mats_new.
+    Uses Geometric Hashing to handle Th, D2d, and arbitrary rotations robustly.
     """
-    # 1. Sanitize Inputs
     mats1 = np.array(sym_mats_old)[:, :3, :3]
     mats2 = np.array(sym_mats_new)[:, :3, :3]
-    assert len(mats1) == len(mats2), "Groups must have the same number of symmetry operations."
 
-    if len(mats1) <= 1:
-        return np.eye(3)
+    if len(mats1) <= 1: return np.eye(3)
 
-    # 2. Identify Symmetry Elements
-    px_1 = get_paxis(mats1)
-    px_2 = get_paxis(mats2)
-    if len(px_1) == 0: px_1 = [np.array([0.0, 0.0, 1.0])]
-    if len(px_2) == 0: px_2 = [np.array([0.0, 0.0, 1.0])]
+    axes1 = get_symmetry_axes(mats1)
+    axes2 = get_symmetry_axes(mats2)
 
-    dets1, nfold1, axes1 = find_symm_axis(mats1)
-    dets2, nfold2, axes2 = find_symm_axis(mats2)
+    if not axes1 or not axes2: return np.eye(3)
 
-    # 3. Define Secondary Axis Search Strategies
-    # Strategy 1 (Primary): Look for perpendicular C2 axes (det > 0).
-    is_c2_op1 = np.logical_and(dets1 > 0, np.abs(nfold1) == 2)
-    is_perp1 = np.abs(axes1 @ px_1[0]) < 1e-4
-    sec_axis1_c2 = axes1[np.logical_and(is_c2_op1, is_perp1)]
+    # Strategy 1: Two-Vector Alignment (Geometric Hashing)
+    # Essential for groups with multiple axes (Dnd, T, O, I)
+    n1_a, u1 = axes1[0]
 
-    is_c2_op2 = np.logical_and(dets2 > 0, np.abs(nfold2) == 2)
-    is_perp2 = np.abs(axes2 @ px_2[0]) < 1e-4
-    sec_axis2_c2 = axes2[np.logical_and(is_c2_op2, is_perp2)]
+    # Find a non-collinear secondary axis
+    v1 = None
+    n1_b = 0
+    for n, ax in axes1[1:]:
+        if abs(np.dot(u1, ax)) < 1.0 - 1e-3:
+            v1 = ax
+            n1_b = n
+            break
 
-    # Strategy 2 (Fallback): Look for vertical mirror planes (det < 0).
-    # The axis of a mirror plane operation is the normal to the plane.
-    is_mirror1 = dets1 < 0
-    sec_axis1_mirror = axes1[np.logical_and(is_mirror1, is_perp1)]
+    if v1 is not None:
+        target_angle = np.arccos(np.clip(np.dot(u1, v1), -1.0, 1.0))
 
-    is_mirror2 = dets2 < 0
-    sec_axis2_mirror = axes2[np.logical_and(is_mirror2, is_perp2)]
+        # Search all compatible pairs in target group
+        for n2_a, u2 in axes2:
+            if n2_a != n1_a: continue
 
-    # Choose the appropriate set of secondary axes. Prioritize C2 axes.
-    sec_axis1 = sec_axis1_c2 if len(sec_axis1_c2) > 0 else sec_axis1_mirror
-    sec_axis2 = sec_axis2_c2 if len(sec_axis2_c2) > 0 else sec_axis2_mirror
+            for n2_b, v2 in axes2:
+                if n2_b != n1_b: continue
 
-    # 4. Iterative Search for the Transformation Matrix
-    for p1 in px_1:
-        p1 = normalize(p1)
-        for p2 in px_2:
-            p2 = normalize(p2)
+                ang = np.arccos(np.clip(np.dot(u2, v2), -1.0, 1.0))
+                if abs(ang - target_angle) > 1e-3: continue
 
-            # --- Find R1: Align principal axes ---
-            dot = np.dot(p1, p2)
-            if abs(abs(dot) - 1) < 1e-4: # Already parallel or anti-parallel
-                R1 = np.sign(dot) * np.eye(3)
-            else:
-                axis = normalize(np.cross(p1, p2))
-                theta = np.arccos(np.clip(dot, -1.0, 1.0))
-                R1 = rotation_matrix(axis, theta)
+                R = align_basis(u1, v1, u2, v2)
+                if R is not None and check_transform(R, mats1, mats2):
+                    return R
 
-            # If no secondary axes exist (e.g., for C_n groups), R1 might be sufficient.
-            if len(sec_axis1) == 0:
-                if check_transform(R1, mats1, mats2):
-                    return R1
-                else:
-                    continue # Try next principal axis pair
+    # Strategy 2: Single Axis Alignment (Fallback)
+    # Sufficient for Cn, Sn, Cnh, Cnv
+    for n2_a, u2 in axes2:
+        if n2_a != n1_a: continue
 
-            # --- Find R2: Align secondary axes ---
-            # We only need to align one secondary axis correctly.
-            v1_candidate = sec_axis1[0]
-            v1 = normalize(v1_candidate)
-            v1_rotated = R1 @ v1
+        dot = np.dot(u1, u2)
+        if dot > 1.0 - 1e-4:
+            R = np.eye(3)
+        elif dot < -1.0 + 1e-4:
+            # 180 flip around arbitrary perpendicular axis
+            perp = np.array([1.0, 0.0, 0.0])
+            if abs(np.dot(perp, u1)) > 0.9: perp = np.array([0.0, 1.0, 0.0])
+            rot_ax = np.cross(u1, perp)
+            rot_ax /= np.linalg.norm(rot_ax)
+            R = rotation_matrix(rot_ax, np.pi)
+        else:
+            rot_ax = np.cross(u1, u2)
+            rot_ax /= np.linalg.norm(rot_ax)
+            angle = np.arccos(np.clip(dot, -1.0, 1.0))
+            R = rotation_matrix(rot_ax, angle)
 
-            # Find the best matching secondary axis in the new frame
-            dots = sec_axis2 @ v1_rotated
-            best_match_idx = np.argmax(np.abs(dots))
-            v2 = normalize(sec_axis2[best_match_idx])
+        if check_transform(R, mats1, mats2):
+            return R
 
-            # Correct for sign ambiguity (v2 and -v2 are the same axis/normal)
-            if np.dot(v1_rotated, v2) < 0:
-                v2 = -v2
-
-            # Find the rotation (R2) around the principal axis p2 that aligns the secondary axes.
-            v1_proj = normalize(v1_rotated - np.dot(v1_rotated, p2) * p2)
-            v2_proj = normalize(v2 - np.dot(v2, p2) * p2)
-            dot2 = np.clip(np.dot(v1_proj, v2_proj), -1.0, 1.0)
-
-            if abs(dot2) > 1 - 1e-5:
-                R2 = np.eye(3) # Already aligned
-            else:
-                angle2 = np.arccos(dot2)
-                # Determine sign of rotation from the cross product
-                cross_prod = np.cross(v1_proj, v2_proj)
-                if np.dot(p2, cross_prod) < 0:
-                    angle2 = -angle2
-                R2 = rotation_matrix(p2, angle2)
-
-            R_candidate = R2 @ R1
-
-            # 5. Final Verification
-            if check_transform(R_candidate, mats1, mats2):
-                return R_candidate # Success!
-
-    raise ValueError("Failed to find a valid transformation matrix. The groups may not be isomorphic.")
-
+    return np.eye(3)
 
 def reduce(n, i):
     """
@@ -391,35 +388,6 @@ def gcd(A, B):
     else:
         r = a % b
         return gcd(b, r)
-
-
-def divisors(n):
-    """
-    Returns the divisors of n.
-    This isn't meant to handle large numbers, thankfully most point groups have an order less than 100
-    
-    :type n: int
-    :return: List of n's divisors
-    :rtype: List[int]
-    """
-    out = []
-    for i in range(n):
-        if n % (i + 1) == 0:
-            out.append(i + 1)
-    return out
-
-
-def distance(a, b):
-    """
-    Euclidean distance between a and b.
-
-    :type a: NumPy array of shape (n,)
-    :type b: NumPy array of shape (n,)
-    :return: Distance between a and b
-    :rtype: float
-    """
-    return np.sqrt(((a - b)**2).sum())
-
 
 class PointGroup():
     """
@@ -1794,19 +1762,6 @@ def point_group_classes(point_group, tol=1e-4):
 
     return [list(item) for item in set(tuple(row) for row in pg_classes)]
 
-
-def vec_similar(vec1, vec2, tol=1e-3):
-    """
-    Checks if two matrices are parallel
-    """
-    v1 = vec1 / np.linalg.norm(vec1)
-    v2 = vec2 / np.linalg.norm(vec2)
-    if abs(abs(np.dot(v1, v2)) - 1) < tol:
-        return True
-    else:
-        return False
-
-
 def find_axis_angle(Rmat):
     """
     Given an orthogonal matrix 
@@ -1897,108 +1852,87 @@ def find_symm_axis(sym_mats):
     nfold = np.array(nfold, dtype=int)
     return [dets, nfold, axes]
 
-
 def get_point_grp(symm_mats):
-    ## Works for only crystallographic point groups !
-    ## Adapted from :
-    ## "http://faculty.otterbein.edu/djohnston/sym/common/images/flowchart.pdf"
     """
-    Given a list of symmetries, return a point group label
+    Identifies the point group label from symmetry matrices.
+    Correctly handles D2d vs D2 ambiguity by checking improper axes.
     """
     dets, nfold, axes = find_symm_axis(symm_mats)
-    ## first find paxis
     order = len(symm_mats)
-    #
-    if order == 1:
+    if order == 1: return "C1"
+    
+    # Identify Proper Rotations
+    proper_indices = np.where(np.logical_and(dets > 0, nfold > 0))[0]
+    if len(proper_indices) == 0:
+        if np.any(dets < 0):
+             return "Cs" if np.abs(nfold).max() > 0 else "Ci"
         return "C1"
-    #
-    nidx = np.argmax(np.abs(nfold[dets > 0]))
-    ## find principal axis and nfold symmetry
-    n = abs(nfold[dets > 0][nidx])  ## nfold
-    paxis = axes[dets > 0, :][nidx]
-    Cn = symm_mats[dets > 0, :, :][nidx]
 
-    if order == 2 and n == 0:
-        ## check if it Cs
-        if np.abs(nfold).max() > 0:
-            return "Cs"
-        else:
-            return "Ci"
-    # if order == 2 and n == 2:
-    #     return "C_2"
+    nfold_proper = nfold[proper_indices]
+    axes_proper = axes[proper_indices]
+    n = np.max(nfold_proper)
+    
+    # --- Principal Axis Selection (Critical for D2d) ---
+    candidate_mask = (nfold_proper == n)
+    candidate_axes = axes_proper[candidate_mask]
+    paxis = candidate_axes[0]
+    
+    # If multiple max-order axes exist (e.g., D2, D2h, D2d), favor one collinear with S_2n
+    if n == 2 and len(candidate_axes) > 1:
+        improper_indices = np.where(dets < 0)[0]
+        if len(improper_indices) > 0:
+            nfold_imp = np.abs(nfold[improper_indices])
+            axes_imp = axes[improper_indices]
+            # S4 has nfold=4 in rotation part
+            if np.any(nfold_imp > n): 
+                target_axes = axes_imp[nfold_imp > n]
+                for cand in candidate_axes:
+                    if np.any(np.abs(np.abs(target_axes @ cand) - 1.0) < 1e-3):
+                        paxis = cand
+                        break
+
+    # --- Classification ---
     nfold_abs = np.abs(nfold)
     inversion_present = len(nfold_abs[nfold_abs == 0]) > 1
-    if len(nfold_abs[np.logical_and(dets > 0, nfold_abs == 3)]) > 2:
-        ## High symmetry points (O/T)
-        if len(nfold_abs[np.logical_and(dets > 0, nfold_abs == 4)]) > 2:
-            ## Oh/O
-            if inversion_present:
-                return "Oh"
-            else:
-                return "O"
-        else:
-            if len(nfold[np.logical_and(dets < 0, nfold_abs == 2)]) == 0:
-                return "T"
-            else:
-                if inversion_present:
-                    return "Th"
-                else:
-                    return "Td"
-    else:
-        ## Low symmetric (C/S/D)
-        nC1 = np.abs(axes[np.logical_and(dets > 0, nfold_abs == 2), :] @ paxis)
-        nC_perp = len(nC1[nC1 < 1e-3])
-        ## is horizontal mirror present ?
-        sig_h = np.abs(
-            np.abs(axes[np.logical_and(dets < 0, nfold_abs == 2), :] @ paxis) -
-            1)
-        nsig_h = len(sig_h[sig_h < 1e-3])
-        ## number of perpendicular planes
-        sig_v = np.abs(
-            axes[np.logical_and(dets < 0, nfold_abs == 2), :] @ paxis)
-        nsig_v = len(sig_v[sig_v < 1e-3])
-        #
-        if n == nC_perp:
-            # D groups
-            if nsig_h > 0:
-                return "D%dh" % (n)
-            else:
-                if (n == nsig_v):
-                    return "D%dd" % (n)  # dihedral plane :
-                else:
-                    return "D%d" % (n)
-        else:
-            ## C/S groups
-            if nsig_h > 0:
-                return "C%dh" % (n)
-            else:
-                if n == nsig_v:
-                    return "C%dv" % (n)
-                else:
-                    ##
-                    isSsym = len(nfold[np.logical_and(dets < 0,
-                                                      nfold_abs == 2 * n)]) > 0
-                    if isSsym:
-                        return "S%d" % (2 * n)
-                    else:
-                        return "C%d" % (n)
+    
+    # Cubic/Icosahedral checks
+    c3_axes = axes[np.logical_and(dets > 0, nfold_abs == 3)]
+    # Filter unique C3 axes
+    c3_unique = []
+    for ax in c3_axes:
+        if not any(np.abs(np.dot(u, ax)) > 1-1e-3 for u in c3_unique): c3_unique.append(ax)
+        
+    if len(c3_unique) > 1:
+        has_c5 = np.any(np.logical_and(dets > 0, nfold_abs == 5))
+        has_c4 = np.any(np.logical_and(dets > 0, nfold_abs == 4))
+        if has_c5: return "Ih" if inversion_present else "I"
+        if has_c4: return "Oh" if inversion_present else "O"
+        if inversion_present: return "Th"
+        return "Td" if np.any(np.logical_and(dets < 0, nfold_abs == 4)) else "T"
 
+    # Axial Checks
+    perp_c2_axes = []
+    c2_candidates = axes[np.logical_and(dets > 0, nfold_abs == 2)]
+    for ax in c2_candidates:
+        if np.abs(np.dot(ax, paxis)) < 1e-3:
+            if not any(np.abs(np.dot(u, ax)) > 1-1e-3 for u in perp_c2_axes):
+                perp_c2_axes.append(ax)
+    nC_perp = len(perp_c2_axes)
+    
+    mirror_axes = axes[np.logical_and(dets < 0, nfold_abs == 2)]
+    has_sigma_h = any(np.abs(np.abs(np.dot(ax, paxis)) - 1.0) < 1e-3 for ax in mirror_axes)
+    nsig_v = sum(1 for ax in mirror_axes if np.abs(np.dot(ax, paxis)) < 1e-3)
 
-def get_paxis(symm_mats):
-    dets, nfold, axes = find_symm_axis(symm_mats)
-    ## first find paxis
-    order = len(symm_mats)
-    if order == 1:
-        return np.array([])
-    if order > 2:
-        nfold_pos = nfold[np.logical_and(dets > 0, nfold > 0)]
-        nidx = np.argwhere(nfold_pos == np.amax(nfold_pos)).reshape(-1)
-        paxis = axes[np.logical_and(dets > 0, nfold > 0), :][nidx, :]
-        paxis = paxis / np.linalg.norm(paxis, axis=-1)[:, None]
-        return paxis
-    else:
-        paxis = axes[nfold == 2, :]
-        return paxis
+    if n == nC_perp: # D groups
+        if has_sigma_h: return "D%dh" % n
+        if nsig_v > 0: return "D%dd" % n
+        return "D%d" % n
+    else: # C/S groups
+        if has_sigma_h: return "C%dh" % n
+        if nsig_v > 0: return "C%dv" % n
+        if np.any(np.logical_and(dets < 0, nfold_abs == 2 * n)): return "S%d" % (2 * n)
+        return "C%d" % n
+
 
 
 def generate_symel_to_class_map(symels, ctab):
@@ -2171,3 +2105,104 @@ def cn_class_map(class_map, n, idx_offset, cls_offset):
         else:
             class_map[i + idx_offset] = i + cls_offset
     return class_map
+
+
+
+
+
+
+### ============ Unit test ======================
+### Generated using chatgpt ####################
+### =============================================
+if __name__ == '__main__':
+    import unittest
+    import sys
+
+    class TestPointGroupRobustness(unittest.TestCase):
+
+        def setUp(self):
+            # List of groups to test (Crystallographic + Icosahedral)
+            self.test_groups = [
+                # Triclinic
+                "C1", "Ci",
+                # Monoclinic
+                "C2", "Cs", "C2h",
+                # Orthorhombic
+                "D2", "C2v", "D2h",
+                # Tetragonal
+                "C4", "S4", "C4h", "D4", "C4v", "D2d", "D4h",
+                # Trigonal
+                "C3", "S6", "D3", "C3v", "D3d",
+                # Hexagonal
+                "C6", "C3h", "C6h", "D6", "C6v", "D3h", "D6h",
+                # Cubic
+                "T", "Th", "Td", "O", "Oh"
+            ]
+
+            self.num_trials = 50
+
+
+        def test_get_pg_info_robustness(self):
+            """
+            Tests get_pg_info by rotating the molecule randomly in 3D space.
+            """
+            print(f"\nRunning Robustness Test on {len(self.test_groups)} Point Groups")
+            print(f"Configurations per group: {self.num_trials}")
+            print("=" * 70)
+
+            for label in self.test_groups:
+                with self.subTest(group=label):
+                    # ----------------------------------------------------------
+                    # 1. Generate Ground Truth (Standard Orientation)
+                    # ----------------------------------------------------------
+                    try:
+                        symels = pg_to_symels(label)
+                        # Use float64 for precision
+                        std_mats = np.array([s.rrep for s in symels], dtype=np.float64)
+                    except Exception as e:
+                        self.fail(f"[{label}] Setup Error: Could not generate standard symels. {e}")
+
+                    # ----------------------------------------------------------
+                    # 2. Run Random Trials
+                    # ----------------------------------------------------------
+                    for i in range(self.num_trials):
+                        R, _ = np.linalg.qr(np.random.randn(3, 3))
+                        transformed_mats = np.einsum('ij,njk,kl->nil', R, std_mats, R.T,optimize=True)
+                        np.random.shuffle(transformed_mats)
+                        try:
+                            res_label, classes, class_dict, char_tab, irreps = get_pg_info(transformed_mats)
+                        except AssertionError as e:
+                            # This catches "assert len(pg_sym_mats) == order" and "assert distance < 1e-4"
+                            self.fail(f"[{label}] Trial {i+1} FAILED: Library Assertion Error. "
+                                  f"The algorithm failed to identify or align the rotated group. "
+                                  f"\nMatrix Det: {np.linalg.det(R):.2f}")
+                        except Exception as e:
+                            self.fail(f"[{label}] Trial {i+1} CRASHED: {e}")
+
+                        self.assertEqual(res_label, label,
+                                     f"[{label}] Trial {i+1}: Misclassified as '{res_label}'")
+
+                        if char_tab.ndim == 1:
+                            ct_rows, ct_cols = 1, char_tab.shape[0]
+                        else:
+                            ct_rows, ct_cols = char_tab.shape
+
+                        self.assertEqual(len(irreps), ct_rows,
+                                     f"[{label}] CharTable rows {ct_rows} != Irreps {len(irreps)}")
+                        self.assertEqual(len(classes), ct_cols,
+                                     f"[{label}] CharTable cols {ct_cols} != Classes {len(classes)}")
+
+                        assigned_indices = []
+                        for idx_list in class_dict.values():
+                            assigned_indices.extend(idx_list)
+
+                        self.assertEqual(len(assigned_indices), len(std_mats),
+                                     f"[{label}] Class dictionary missing matrices")
+                        self.assertEqual(len(set(assigned_indices)), len(std_mats),
+                                     f"[{label}] Class dictionary contains duplicates")
+
+            print("\nSUCCESS: All groups passed robust randomization tests.")
+
+
+    unittest.main(verbosity=2)
+
