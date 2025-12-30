@@ -117,7 +117,6 @@ Active contributors:
 - Miki Bonacci
 - José Castelo
 - Jorge Cervantes-Villanueva
-- Muralidhar Nalabothula
 - Riccardo Reho
 - Michele Re Fiorentin
 - Ali Esquembre-Kucukalic
@@ -131,6 +130,7 @@ Past contributors:
 - Alexandre Morlet
 - Davide Romanin
 - Daniel Murphy
+- Muralidhar Nalabothula
 
 The code is at an ongoing stage of development, help us by sending bug reports, patches and suggestions!
 
