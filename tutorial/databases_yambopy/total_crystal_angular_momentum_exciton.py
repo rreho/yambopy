@@ -16,17 +16,17 @@ from yambopy.dbs.wfdb import YamboWFDB
 import os
 
 ## inputs 
-iqpt = 1 
+iqpt = 1
 # This is the index of the q-point (momentum transfer). 
 
-path = '.' 
+path = '.'
 # This defines the working directory where your 'GW_BSE' and 'SAVE' folders are located.
 # '.' means the current directory.
 
 gw_bse_dir = 'GW_BSE'
 # BSE Job name. This is where your bse file are store after your yambo bse run.
 
-iexe = 1 
+iexe = 1
 # This is the index of the specific exciton state you want to analyze.
 # You likely found this index by looking at the absorption spectrum or energy table previously.
 
@@ -54,47 +54,54 @@ excdb = YamboExcitonDB.from_db_file(lattice, filename=filename,
 # Load the wavefunction database
 wfdb = YamboWFDB(path='.', latdb=lattice, bands_range=[np.min(excdb.table[:, 1]) - 1, np.max(excdb.table[:, 2])])
 
-symm_mat_cat = lattice.sym_car[2] 
+symm_mat_cart = lattice.sym_car[2] 
 # The rotation symmetry for which we want to find total_crys_angular_momentum values and simentineous eigenbasis
 # For example, here I am selecting 8th symmetry matrix which corresponds to 90 degree rotation along z.
 # you can check this in qe scf out file when verbosity = 'high'
 # Neverthesless you can also give your custom 3x3 matrix which must satisfy Rq = q and is a symmetry of the crystal.
 
-sbasis = excdb.total_crys_angular_momentum(wfdb, iexe, symm_mat_cat, np.zeros(3), degen_tol=degen_tol)
+frac_trans_cart = np.zeros(3)
+# Fractional translation vector in cart units for the corre symmetry.
+# i.e x -> Rx + t where R is symm_mat_cart and t is frac_trans_cart 
+
+sbasis = excdb.total_crys_angular_momentum(wfdb, iexe, symm_mat_cart, frac_trans_cart, degen_tol=degen_tol)
 # This is the core calculation.
 # It computes the "Total Crystal Angular Momentum" for the target exciton ('iexe').
-# It uses the wavefunctions ('wfdb') and the specific symmetry ('symm_mat_cat').
+# It uses the wavefunctions ('wfdb') and the specific symmetry ('symm_mat_cart').
 # 'np.zeros(3)' sets the center of rotation to the origin [0,0,0].
 # It returns 'sbasis', which contains the angular momentum values and the new basis vectors.
 
 jvals = sbasis[0]
-# These are the angular momentum eigenvalues (the 'j' values) for the degenerate states.
+# These are the total crystal angular momentum eigenvalues (the 'j' values) for the degenerate states.
 
 Akcv_j = sbasis[1]
-# These are the new coefficients (eigenvectors) for the excitons.
-# They represent how to mix the original states to create states with well-defined angular momentum.
+# These are the new eigenvectors (Akcv) for the excitons i.e are simentineous eigenstates of Hbse and symmetry operator.
+# i.e they represent how to mix the original states to create states with well-defined angular momentum.
 
 print('Total crystal angular momentum : ', jvals)
 # Prints the calculated j-values to the screen.
 
-## Plot read space wf
+## Now we Plot read space wf
 idegen = np.array(excdb.get_degenerate(iexe+1, eps=degen_tol), dtype=int) - 1
 # We find the indices of all states that are degenerate with our target exciton.
 # 'iexe+1' is used because some internal functions use 1-based indexing, while python uses 0-based.
 # The result 'idegen' is an array of Python indices (0-based) for these states.
 
 ## Update the existing wfs with the new rotated similentious eigenbasis
+old_eig_states = excdb.Akcv[idegen].copy()
 excdb.Akcv[idegen] = Akcv_j
 # We overwrite the original exciton coefficients in the database object with our new, rotated coefficients.
 # This ensures that when we plot the state later, we are plotting the angular momentum eigenstate, 
 # not the arbitrary original state.
 
-## we temporartly break degeneracies to plot each state rather than averaging
+## we break degeneracies to plot each state rather than averaging. THis is to trick the real_wf_to_cube
+## as it will always internally average the eigenstates 
 degen_tol_add = excdb.eigenvalues.max()*4
 # We prepare a large number to shift the energies.
 # Plotting tools often average degenerate states. To plot a specific 'j' state individually,
 # we need to trick the tool into thinking they have different energies.
 
+old_eig_states_ene = excdb.eigenvalues[idegen].copy()
 for i in idegen:
     degen_tol_add += 1 
     # Increment the shift value.
@@ -114,6 +121,10 @@ excdb.real_wf_to_cube(iexe=idegen[0], wfdb=wfdb, fixed_postion=[0.0, 0.0, 0.0], 
 # 'supercell=[9,9,9]': The plot will span a 9x9x9 grid of unit cells.
 # 'degen_tol=1e-14': We use a tiny tolerance here because we manually shifted the energies above; we want it to pick ONLY this one state.
 # 'wfcCutoffRy=-1': -1 means we use all G-vectors (no energy cutoff) for maximum precision.
+
+## restore the db back
+excdb.eigenvalues[idegen] = old_eig_states_ene
+excdb.Akcv[idegen] = old_eig_states
 
 ## .cube will be dumped and use vesta to visualize it !
 # The script finishes here. You will find a .cube file in your directory which can be opened in VESTA.

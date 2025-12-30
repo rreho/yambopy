@@ -420,9 +420,7 @@ class YamboExcitonDB(object):
 
         # Check for improper rotation
         det_r = np.linalg.det(symm_mat_cat)
-        if det_r < 0:
-            print("Warning : Improper rotation. Returns None.")
-            return None
+        assert det_r > 0, "Warning : Improper rotation, Only rotation are allowed."
 
         # Prepare lattice vectors and transformation matrices
         lat_vec = wfdb.ydb.lat
@@ -439,9 +437,7 @@ class YamboExcitonDB(object):
         sq_minus_q = np.einsum('ij,j->i', symm_mat_red, exc_qpt_crys) - exc_qpt_crys
         sq_minus_q = sq_minus_q - np.rint(sq_minus_q)
 
-        if np.linalg.norm(sq_minus_q) > 1e-4:
-            print("Warning : The given symmetry does not belong to little group of Q. Return None.")
-            return None
+        assert np.linalg.norm(sq_minus_q) < 1e-4, "Warning : The given symmetry does not belong to little group of Q."
 
         # Compute representation matrices if not provided
         if Dmats is None:
