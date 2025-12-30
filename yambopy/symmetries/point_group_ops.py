@@ -59,7 +59,7 @@ def get_pg_info(symm_mats):
     sym_tree = KDTree(pg_sym_mats.reshape(order, -1))
     distance, idx = sym_tree.query(symm_mats_transformed.reshape(order, -1),
                                    k=1)
-    assert np.max(distance) < 1e-4
+    assert np.max(distance) < 1e-4, np.max(distance)
     assert len(np.unique(idx)) == order
     ctab = pg_to_chartab(pg_label)
     classes = ctab.classes
@@ -191,63 +191,56 @@ def Sn(axis, n):
 
 def get_symmetry_axes(mats, tol=1e-4):
     """
-    Extracts unique rotation axes and their orders from a set of symmetry matrices.
-    Returns a list of tuples: [(order, axis_vector), ...] sorted by order descending.
+    Extracts unique rotation axes and their orders.
+    Robustly handles order upgrades (e.g. identifying C3 then S3 -> Order 6).
     """
-    # Use a list to store unique axes so we can update orders: [[n, axis], ...]
-    unique_axes = []
+    # Dictionary mapping axis_vector_hash -> [order, axis_vector]
+    # We use a simple list and loop for 'hashing' due to float tolerance
+    unique_axes = [] # List of [order, axis]
 
     for mat in mats:
-        # Focus on rotation part R = det * M to handle improper rotations
         det = np.linalg.det(mat)
         R_part = mat * det
         w, v = np.linalg.eig(R_part)
 
-        # Find eigenvector with eigenvalue 1
         idx = np.argmin(np.abs(w - 1.0))
         if np.abs(w[idx] - 1.0) > tol: continue
 
         axis = np.real(v[:, idx])
-        norm = np.linalg.norm(axis)
-        if norm < tol: continue
-        axis = axis / norm
+        if np.linalg.norm(axis) < tol: continue
+        axis = axis / np.linalg.norm(axis)
 
-        # Enforce unique hemisphere for direction (v vs -v)
+        # Enforce unique hemisphere
         for k in range(3):
             if abs(axis[k]) > tol:
                 if axis[k] < 0: axis = -axis
                 break
 
-        # Calculate rotation order from trace
         tr = np.trace(R_part)
         cos_t = np.clip((tr - 1.0) / 2.0, -1.0, 1.0)
         theta = np.arccos(cos_t)
-
-        if abs(theta) < tol: continue # Identity
+        if abs(theta) < tol: continue
 
         n = int(np.round(2 * np.pi / theta))
         if n < 2: continue
 
-        # Check if axis already exists
+        # Update or Append
         found = False
         for i in range(len(unique_axes)):
             old_n, old_ax = unique_axes[i]
-            # Check collinearity (1 - |dot| < tol)
             if 1.0 - abs(np.dot(axis, old_ax)) < tol:
                 found = True
-                # CRITICAL FIX: Upgrade order if this operation is higher symmetry
-                # e.g., Update C2 (n=2) to S4 (n=4) for the same axis
+                # Upgrade order if higher symmetry found (e.g. 3 -> 6)
                 if n > old_n:
-                    unique_axes[i] = [n, old_ax]
+                    unique_axes[i] = [n, axis]
                 break
 
         if not found:
             unique_axes.append([n, axis])
 
-    # Convert to list of tuples and sort
-    unique_axes = [tuple(x) for x in unique_axes]
+    # Sort by order descending
     unique_axes.sort(key=lambda x: x[0], reverse=True)
-    return unique_axes
+    return [tuple(x) for x in unique_axes]
 
 
 def align_basis(u1, v1, u2, v2):
@@ -288,7 +281,7 @@ def check_transform(R, mats1, mats2, tol=1e-3):
 def transform_matrix(sym_mats_old, sym_mats_new):
     """
     Finds transformation R mapping sym_mats_old to sym_mats_new.
-    Uses Geometric Hashing to handle Th, D2d, and arbitrary rotations robustly.
+    Relaxed order checks allow matching subsets (e.g. C3 -> C6).
     """
     mats1 = np.array(sym_mats_old)[:, :3, :3]
     mats2 = np.array(sym_mats_new)[:, :3, :3]
@@ -300,29 +293,26 @@ def transform_matrix(sym_mats_old, sym_mats_new):
 
     if not axes1 or not axes2: return np.eye(3)
 
-    # Strategy 1: Two-Vector Alignment (Geometric Hashing)
-    # Essential for groups with multiple axes (Dnd, T, O, I)
+    # Strategy 1: Two-Vector Alignment
     n1_a, u1 = axes1[0]
 
-    # Find a non-collinear secondary axis
+    # Find secondary axis
     v1 = None
-    n1_b = 0
     for n, ax in axes1[1:]:
         if abs(np.dot(u1, ax)) < 1.0 - 1e-3:
             v1 = ax
-            n1_b = n
             break
 
     if v1 is not None:
         target_angle = np.arccos(np.clip(np.dot(u1, v1), -1.0, 1.0))
 
-        # Search all compatible pairs in target group
+        # Try to align u1 to u2, and v1 to v2
         for n2_a, u2 in axes2:
-            if n2_a != n1_a: continue
+            # RELAXED CHECK: Allow match if orders are compatible or if check_transform passes
+            # (Removes strict n2_a == n1_a check)
 
             for n2_b, v2 in axes2:
-                if n2_b != n1_b: continue
-
+                # Check angle match between primary and secondary
                 ang = np.arccos(np.clip(np.dot(u2, v2), -1.0, 1.0))
                 if abs(ang - target_angle) > 1e-3: continue
 
@@ -330,16 +320,14 @@ def transform_matrix(sym_mats_old, sym_mats_new):
                 if R is not None and check_transform(R, mats1, mats2):
                     return R
 
-    # Strategy 2: Single Axis Alignment (Fallback)
-    # Sufficient for Cn, Sn, Cnh, Cnv
+    # Strategy 2: Single Axis Alignment
     for n2_a, u2 in axes2:
-        if n2_a != n1_a: continue
+        # RELAXED CHECK: Try aligning primary axes even if orders mismatch (e.g. 3 vs 6)
 
         dot = np.dot(u1, u2)
         if dot > 1.0 - 1e-4:
             R = np.eye(3)
         elif dot < -1.0 + 1e-4:
-            # 180 flip around arbitrary perpendicular axis
             perp = np.array([1.0, 0.0, 0.0])
             if abs(np.dot(perp, u1)) > 0.9: perp = np.array([0.0, 1.0, 0.0])
             rot_ax = np.cross(u1, perp)
