@@ -2117,6 +2117,7 @@ if __name__ == '__main__':
     import unittest
     import sys
 
+    ntrials = 50
     class TestPointGroupRobustness(unittest.TestCase):
 
         def setUp(self):
@@ -2138,13 +2139,17 @@ if __name__ == '__main__':
                 "T", "Th", "Td", "O", "Oh"
             ]
 
-            self.num_trials = 50
+            self.num_trials = ntrials
 
 
         def test_get_pg_info_robustness(self):
             """
             Tests get_pg_info by rotating the molecule randomly in 3D space.
             """
+            print("\n")
+            print("="*50)
+            print("="*20 + "Test 1" + "="*20)
+            print("="*50)
             print(f"\nRunning Robustness Test on {len(self.test_groups)} Point Groups")
             print(f"Configurations per group: {self.num_trials}")
             print("=" * 70)
@@ -2168,6 +2173,15 @@ if __name__ == '__main__':
                         R, _ = np.linalg.qr(np.random.randn(3, 3))
                         transformed_mats = np.einsum('ij,njk,kl->nil', R, std_mats, R.T,optimize=True)
                         np.random.shuffle(transformed_mats)
+                        mats_clean = []
+                        for m in transformed_mats:
+                            U, S, Vt = np.linalg.svd(m)
+                            m_clean = U @ Vt
+                            if np.linalg.det(m_clean) * np.linalg.det(m) < 0:
+                                m_clean = -m_clean
+                            mats_clean.append(m_clean)
+                        transformed_mats = np.array(mats_clean)
+
                         try:
                             res_label, classes, class_dict, char_tab, irreps = get_pg_info(transformed_mats)
                         except AssertionError as e:
@@ -2200,7 +2214,251 @@ if __name__ == '__main__':
                         self.assertEqual(len(set(assigned_indices)), len(std_mats),
                                      f"[{label}] Class dictionary contains duplicates")
 
-            print("\nSUCCESS: All groups passed robust randomization tests.")
+            print("\nSUCCESS: All groups passed Test 1")
+
+    class SymmetryBaseXX:
+        """
+        Port of the symmetry definitions from Quantum Espresso's symm_base.f90.
+        """
+        def __init__(self):
+            # Constants
+            sin3 = 0.866025403784438597
+            cos3 = 0.5
+            msin3 = -0.866025403784438597
+            mcos3 = -0.5
+
+            # Raw data from symm_base.f90
+            # This is a flat list of the 32 matrices (3x3).
+            # Fortran DATA statements fill arrays in column-major order.
+            raw_s0 = [
+                # 1-9 (Identity, 180s, 90s)
+                1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0,   # 1: Identity
+                -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0, # 2: 180 z
+                -1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0, # 3: 180 y
+                1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, # 4: 180 x
+                0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0,  # 5: 180 [1,1,0]
+                0.0, -1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, -1.0,# 6: 180 [1,-1,0]
+                0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,  # 7: 90 z
+                0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0,  # 8: -90 z
+
+                # 10-17 (More 180s, 90s)
+                0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, 0.0,  # 9: 180 [1,0,1]
+                0.0, 0.0, -1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 0.0,# 10: 180 [-1,0,1]
+                0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0,  # 11: 90 y
+                0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0,  # 12: -90 y
+                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,   # 13: 180 [0,1,1]
+                0.0, 0.0, -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 0.0, # 14: 180 [0,1,-1]
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0,  # 15: 90 x
+                1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0,  # 16: -90 x
+
+                # 18-25 (Cubic Diagonals / 120 deg)
+                0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0,   # 17: 120 [-1,-1,-1]
+                0.0, -1.0, 0.0, 0.0, 0.0, 1.0, -1.0, 0.0, 0.0, # 18: 120 [-1,1,1]
+                0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, # 19: 120 [1,1,-1]
+                0.0, 1.0, 0.0, 0.0, 0.0, -1.0, -1.0, 0.0, 0.0, # 20: 120 [1,-1,1]
+                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,   # 21: 120 [1,1,1]
+                0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0, # 22: 120 [-1,1,-1]
+                0.0, 0.0, -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 0.0, # 23: 120 [1,-1,-1]
+                0.0, 0.0, 1.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, # 24: 120 [-1,-1,1]
+
+                # 26-29 (Hexagonal 60/120 z)
+                cos3, msin3, 0.0, sin3, cos3, 0.0, 0.0, 0.0, 1.0,   # 25: 60 z
+                cos3, sin3, 0.0, msin3, cos3, 0.0, 0.0, 0.0, 1.0,   # 26: -60 z
+                mcos3, msin3, 0.0, sin3, mcos3, 0.0, 0.0, 0.0, 1.0, # 27: 120 z
+                mcos3, sin3, 0.0, msin3, mcos3, 0.0, 0.0, 0.0, 1.0, # 28: -120 z
+
+                # 30-32 (Hexagonal 180s)
+                cos3, msin3, 0.0, msin3, mcos3, 0.0, 0.0, 0.0, -1.0,# 29: 180 [1,-1,0]
+                cos3, sin3, 0.0, sin3, mcos3, 0.0, 0.0, 0.0, -1.0,  # 30: 180 [2,1,0]
+                mcos3, msin3, 0.0, msin3, cos3, 0.0, 0.0, 0.0, -1.0,# 31: 180 [0,1,0]
+                mcos3, sin3, 0.0, sin3, cos3, 0.0, 0.0, 0.0, -1.0   # 32: 180 [1,1,0]
+            ]
+
+            # Reshape: (32, 3, 3).
+            # Note: Fortran fills columns first. A reshape(32,3,3) in numpy fills rows.
+            # We must reshape to (3,3,32) with Fortran order, then transpose axes.
+            s0_fortran = np.array(raw_s0).reshape((3, 3, 32), order='F')
+
+            # Move the 32 axis to the front: (32, 3, 3)
+            self.s0 = np.moveaxis(s0_fortran, -1, 0)
+
+            # Create Inversions (Indices 32-63)
+            self.s_full = np.concatenate((self.s0, -self.s0), axis=0)
+
+        def get_group_by_generators(self, gen_indices):
+            """
+            Constructs a full group by closing the set of generators.
+            gen_indices: List of indices into s_full (0-63).
+            """
+            generators = [self.s_full[i] for i in gen_indices]
+
+            # Closure: Keep multiplying until set size is constant
+            group = list(generators)
+
+            # Add Identity explicitly if not present (Index 0)
+            id_mat = self.s_full[0]
+            if not any(np.allclose(g, id_mat, atol=1e-5) for g in group):
+                group.append(id_mat)
+
+            while True:
+                current_len = len(group)
+                new_mats = []
+                for m1 in group:
+                    for m2 in group:
+                        prod = m1 @ m2
+                        # Check if prod exists in group
+                        is_new = True
+                        for existing in group:
+                            if np.allclose(prod, existing, atol=1e-5):
+                                is_new = False
+                                break
+                        if is_new:
+                            # Also check against new_mats to avoid duplicates in this batch
+                            for nm in new_mats:
+                                if np.allclose(prod, nm, atol=1e-5):
+                                    is_new = False
+                                    break
+                        if is_new:
+                            new_mats.append(prod)
+
+                if not new_mats:
+                    break
+                group.extend(new_mats)
+
+            return np.array(group)
+
+    class TestAll32Groups(unittest.TestCase):
+        @classmethod
+        def setUpClass(cls):
+            cls.qe = SymmetryBaseXX()
+
+            # =========================================================================
+            # Map 32 Point Groups 
+            # 0-31: Proper Rotations | 32-63: Inversions (Inv * s0)
+            # =========================================================================
+            I = 32 # Offset for inversion
+
+            # Indices derived from symm_base.f90 comments
+            # 0: E
+            # 1: C2z, 2: C2y, 3: C2x
+            # 6: C4z (90 z), 7: C4z^-1
+            # 24: C6z (60 z) -> s0 index 25 in Fortran (1-based) -> 24 Python
+            # 26: C3z (120 z)
+            # 16: C3 diagonal (120 [-1,-1,-1])
+
+            cls.generators = {
+                # Triclinic
+                "C1": [0],
+                "Ci": [0 + I],
+
+                # Monoclinic (Standard: z-axis)
+                "C2": [1],       # C2z
+                "Cs": [1 + I],   # sigma_h (Inv * C2z)
+                "C2h": [1, 0+I], # C2z, i
+
+                # Orthorhombic
+                "D2": [1, 3],      # C2z, C2x
+                "C2v": [1, 3 + I], # C2z, sigma_v(x) (Inv * C2x)
+                "D2h": [1, 3, 0+I],# C2z, C2x, i
+
+                # Tetragonal
+                "C4": [6],         # C4z
+                "S4": [6 + I],     # S4z (Inv * C4z)
+                "C4h": [6, 0+I],   # C4z, i
+                "D4": [6, 3],      # C4z, C2x
+                "C4v": [6, 3 + I], # C4z, sigma_v(x)
+                "D2d": [6 + I, 3], # S4z, C2x (Classic D2d generators)
+                "D4h": [6, 3, 0+I],
+
+                # Trigonal (Using Hexagonal basis indices 24-31)
+                "C3": [26],           # C3z (120 deg)
+                "S6": [26, 0 + I],    # C3z, i (S6 = C3 x i)
+                "D3": [26, 28],       # C3z, C2' (180 perp)
+                "C3v": [26, 28 + I],  # C3z, sigma_v
+                "D3d": [26, 28, 0+I], # C3z, C2', i
+
+                # Hexagonal
+                "C6": [24],           # C6z
+                "C3h": [26, 1 + I],   # C3z, sigma_h (Inv * C2z is sigma_h perp to z)
+                "C6h": [24, 0 + I],   # C6z, i
+                "D6": [24, 28],       # C6z, C2'
+                "C6v": [24, 28 + I],  # C6z, sigma_v
+                "D3h": [26, 28, 1+I], # C3z, C2', sigma_h
+                "D6h": [24, 28, 0+I],
+
+                # Cubic
+                "T": [3, 16],      # C2x, C3_diag
+                "Th": [3, 16, 0+I],# T + i
+                "O": [6, 16],      # C4z, C3_diag
+                "Td": [16, 6 + I], # C3_diag, S4z
+                "Oh": [6, 16, 0+I] # O + i
+            }
+
+        def test_randomized_32_groups(self):
+            """
+            Generates all 32 groups and applies random rotations,
+            and verifies detection.
+            """
+            n_trials = ntrials # Number of random rotations per group
+
+            print("\n")
+            print("="*50)
+            print("="*20 + "Test 2" + "="*20)
+            print("="*50)
+            print(f"Testing All 32 Point Groups with {n_trials} Random Rotations")
+            print(f"{'='*70}")
+
+            for label, gen_idx in self.generators.items():
+                with self.subTest(group=label):
+                    # 1. Generate Standard Group
+                    mats = self.qe.get_group_by_generators(gen_idx)
+
+                    # Verify Order (Sanity Check)
+                    # print(f"Testing {label:<4} (Order {len(mats)})")
+
+                    for i in range(n_trials):
+                        # 2. Random Rotation
+                        # qr decomposition of random matrix gives a uniform random rotation
+                        R, _ = np.linalg.qr(np.random.randn(3, 3))
+
+                        # Apply rotation: R * M * R.T
+                        mats_rot = np.einsum('ij,njk,kl->nil', R, mats, R.T)
+
+                        # Clean numerical noise: Force matrices to be perfectly orthogonal
+                        mats_clean = []
+                        for m in mats_rot:
+                            U, S, Vt = np.linalg.svd(m)
+                            # Reconstruct as a perfect rotation matrix (U * Vt)
+                            m_clean = U @ Vt
+                            # Fix determinant sign (ensure it doesn't flip improper/proper)
+                            # (Ideally SVD preserves it, but checking det is safer)
+                            if np.linalg.det(m_clean) * np.linalg.det(m) < 0:
+                                m_clean = -m_clean
+                            mats_clean.append(m_clean)
+                        mats_rot = np.array(mats_clean)
+
+                    # 3. Detect
+                        try:
+                            detected, _, _, _, _ = get_pg_info(mats_rot)
+                        except Exception as e:
+                            self.fail(f"[{label}] Crash on trial {i}: {e}")
+
+                        # 4. Assert
+                        # Note: S6 is often detected as C3i (equivalent)
+                        #       C3h often C6... no, C3h is distinct.
+                        #       Cs can be Cs or C1h (synonyms).
+
+                        expected = label
+                        # Handle common synonyms in output
+                        if label == "S6" and detected == "C3i": detected = "S6"
+                        if label == "C3i" and detected == "S6": detected = "C3i"
+                        if label == "Cs" and detected == "C1h": detected = "Cs"
+
+                        self.assertEqual(detected, expected,
+                                         f"Trial {i}: Expected {expected}, got {detected}. "
+                                         f"\n(Group Order: {len(mats)})")
+
+            print("\nSUCCESS: All 32 groups passed Test 2")
 
 
     unittest.main(verbosity=2)
