@@ -29,10 +29,13 @@ class Xn_from_pulse(Xn_from_signal):
                 raise ValueError("This analysis is for one monochromatic field only.")
         if self.solver == '':
             self.solver = 'full'
-        dim_ = int(1+self.X_order+(self.X_order/2)**2)
-        D = (dim_,int(dim_ -0.25))
+        dim_ = 1+self.X_order+(self.X_order/2)**2
+        D = (int(dim_),int(dim_ -0.25))
         self.out_dim = D[self.X_order%2]
-        self.T0 = Gaussian_centre(self.efield)
+        self.T0 = Gaussian_centre(self.efield)[0]
+        self.sigma = Gaussian_centre(self.efield)[1]
+        if self.samp_mod== "":
+            self.samp_mod="linear"
         return
     
     def build_map(self):
@@ -41,10 +44,10 @@ class Xn_from_pulse(Xn_from_signal):
         I = np.zeros((M,2),dtype=int) 
         j = 0
         I[j,:] = [0,0]
-        for n in range(2,N+1,2):
+        for n in range(2,self.X_order+1,2):
             j += 1
             I[j,:] = [n,floor(n/2)]
-        for n in range(1,N+1):
+        for n in range(1,self.X_order+1):
             for m in range(0,ceil(n/2)):
                 j += 1
                 I[j,:] = [n,m]
@@ -52,9 +55,10 @@ class Xn_from_pulse(Xn_from_signal):
         return I
 
     def get_sampling(self,idir,ifrq):
-        M = 1+2*self.X_order + int(self.X_order*(self.X_order-1)/2) 
+        M = int(1+2*self.X_order + int(self.X_order*(self.X_order-1)/2)) 
         if self.nsamp == -1 or self.nsamp < M:
             self.nsamp = M
+            print(f'Sampling points set to {self.nsamp}')
         T_period = 2.0 * np.pi / self.freqs[ifrq]
         T_range, out_of_bounds = self.update_time_range(T_period)
         if (out_of_bounds):
@@ -87,10 +91,10 @@ class Xn_from_pulse(Xn_from_signal):
         for ii in range(1,len(i_map)):
             i_n,i_m = i_map[ii]
             n = abs(i_n)
-            M[:,ii] = np.exp(-n*(T_i[:]-self.T_0)**2/(2*self.sigma**2)) #sign
-            if (i_n%2 == 0 and i_m == int(i_n/2)):
+            M[:,ii] = np.exp(-n*(T_i[:]-self.T0)**2/(2*self.sigma**2)) #sign
+            if (n%2 == 0 and i_m == int(n/2)):
                 M[:,ii] = M[:,ii]
-            elif (i_m < ceiling(i_n/2)):
+            elif (i_m < ceil(n/2)):
                 if (i_n>0):
                     M[:,ii] *= np.exp(-1j * (n-2*i_m)*W * T_i[:]) 
                 if (i_n<0):
@@ -106,11 +110,11 @@ class Xn_from_pulse(Xn_from_signal):
         #      K = 1 p = 0, omega  =0
         p  = int(n - 2*m)
         factor = 0.5
-        if f > 1e-4:
-            factor *=2**(-n)
+        if self.freqs[f] > 1e-4:
+            factor *=np.power(2,-n,dtype=np.cdouble)
             if p != 0:
                 factor *= 2*factorial(n)/factorial(m)/factorial(n-m)
-        factor *= (-1)**m*np.power(1.0j*efield['amplitude'],n,dtype=np.cdouble)
+        factor *= (-1)**m*np.power(1.0j*self.efield['amplitude'],n,dtype=np.cdouble)
         return 1.0/factor
         
     def output_analysis(self,out,to_file=True):
@@ -119,9 +123,14 @@ class Xn_from_pulse(Xn_from_signal):
             i_n,i_m = i_map[ii]
             if (i_n < 0): continue
             i_p = int(i_n - 2 * i_m)
+            T = 10000.0
             for i_f in range(self.n_runs):
-                    out[ii, i_f, :] *= divide_by_factor(self.efields[i_f],self.freqs[i_f],i_n,i_m) 
+                    out[ii, i_f, :] *= self.divide_by_factor(i_f,i_n,i_m) 
+                    T_period = 2.0 * np.pi / self.freqs[i_f]
+                    Trange, _ = self.update_time_range(T_period)
+                    T = min(T,Trange[0])
             out[ii,:,:]*=self.get_Unit_of_Measure(i_n) 
+            run_info = self.append_runinfo(T)
             if (to_file):
                 output_file = f'o{self.prefix}.YPy-X_order_{i_n}_{i_p}'
                 header = "E[eV] " + " ".join([f"X{i_n}({i_p}w)/Im({d}) X{i_n}({i_p}w)/Re({d})" for d in ('x','y','z')])
@@ -129,7 +138,11 @@ class Xn_from_pulse(Xn_from_signal):
                                 out[ii, :, 1].imag, out[ii, :, 1].real,
                                 out[ii, :, 2].imag, out[ii, :, 2].real))
                 np.savetxt(output_file, values, header=header, delimiter=' ', footer="Pulse analysis results") 
+                outf = open(output_file, "a")
+                outf.writelines(run_info)
+                outf.close()
             else:
+                print(run_info)
                 return (self.freqs, out) 
 
     def reconstruct_signal(self,out,to_file=True):

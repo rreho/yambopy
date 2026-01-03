@@ -10,7 +10,7 @@ import numpy as np
 from yambopy.units import ha2ev,fs2aut, Junit, EFunit,SVCMm12VMm1,AU2VMm1
 from yambopy.nl.external_efield import Divide_by_the_Field
 from tqdm import tqdm
-from scipy.andimage import uniform_filter1d
+from scipy.ndimage import uniform_filter1d
 import sys
 import os
 import itertools

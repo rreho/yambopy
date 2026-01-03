@@ -42,5 +42,6 @@ def Divide_by_the_Field(efield,order):
 def Gaussian_centre(efield):
     ratio=np.pi/efield['freq_range'][0]
     sigma=efield["damping"]/(2.0*(2.0*np.log(2.0))**0.5)
-    return ratio * float(round(1.0 /ratio * sigma *efield["field_peak"]))
+    peak_ = float(1.0 /ratio * sigma *efield["peak"])
+    return ratio * float(round(peak_)),sigma
 

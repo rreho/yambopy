@@ -43,11 +43,27 @@ class YamboNLDB(object):
          efield["name"]       =database.variables['Field_Name_'+str(n)][...].tobytes().decode().strip()
          efield["versor"]     =database.variables['Field_Versor_'+str(n)][:].astype(np.double)
          efield["intensity"]  =database.variables['Field_Intensity_'+str(n)][0].astype(np.double)
-         efield["damping"]    =database.variables['Field_Damping_'+str(n)][0].astype(np.double)
-         efield["freq_range"] =database.variables['Field_Freq_range_'+str(n)][:].astype(np.double)
-         efield["freq_steps"] =database.variables['Field_Freq_steps_'+str(n)][:].astype(np.double)
-         efield["freq_step"]  =database.variables['Field_Freq_step_'+str(n)][0].astype(np.double)
+         try:
+            efield["damping"]    =database.variables['Field_FWHM_'+str(n)][0].astype(np.double)
+         except:      
+            efield["damping"]    =database.variables['Field_Damping_'+str(n)][0].astype(np.double)
+         try:
+             efield["freq_range"] =database.variables['Field_Freq_range_'+str(n)][:].astype(np.double)
+         except:
+             efield["freq_range"] =database.variables['Field_Freq_'+str(n)][:].astype(np.double)
+         try:
+             efield["freq_steps"] =database.variables['Field_Freq_steps_'+str(n)][:].astype(np.double)
+         except:
+             efield["freq_steps"] =1.0
+         try:
+             efield["freq_step"]  =database.variables['Field_Freq_step_'+str(n)][0].astype(np.double)
+         except:
+             efield["freq_step"]  =0.0
          efield["initial_time"]  =database.variables['Field_Initial_time_'+str(n)][0].astype(np.double)
+         try:
+             efield["peak"]  =database.variables['Field_peak_'+str(n)][0].astype(np.double)
+         except:
+             efield["peak"]  =10.0
          #
          # set t_initial according to Yambo 
          #

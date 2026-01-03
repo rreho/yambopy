@@ -122,6 +122,7 @@ from yambopy.nl.hhg_tools import *
 from yambopy.nl.nl_analysis import *
 from yambopy.nl.sin_analysis import *
 from yambopy.nl.freqmix_analysis import *
+from yambopy.nl.pulse_analysis import *
 #doublegrid files
 from yambopy.double_grid.dg_convergence import *
 

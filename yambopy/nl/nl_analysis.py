@@ -66,7 +66,7 @@ class Xn_from_signal(ABC):
         if self.nsamp > 0:
             s+="Sampling points  : "+str(self.nsamp)+"\n"
         if self.T_urange!=[-1, -1]:
-            s+="User time range      : "+str(self.T_urange)+"\n"
+            s+="User time range      : "+str(self.T_urange)+" [au] \n"
         s+="Frequency range: ["+str(self.freqs[0])+","+str(self.freqs[-1])+"] [au] \n"
         if  self.l_out_current:
             s+="Output is set to current."
@@ -97,8 +97,8 @@ class Xn_from_signal(ABC):
     def solve_lin_system(self,mat,samp,init=None):
         mat_dim = int(mat.shape[1])
         out=np.zeros(mat_dim,dtype=np.cdouble)
-        if self.solver=="full" and ((not IsSquare(mat)) or (not IsWellDefined(mat))):
-            print('WARNING: solver changed to least square')
+        if self.solver=="full" and ((not self.IsSquare(mat)) or (not self.IsWellConditioned(mat))):
+            print(f'WARNING: solver changed to least square since square:{self.IsSquare(mat)} and well-conditioned:{self.IsWellConditioned(mat)}')
             self.solver = "lstsq"
         if self.solver=="full":
             out = np.linalg.solve(mat,samp)
@@ -124,8 +124,11 @@ class Xn_from_signal(ABC):
         for i_f in tqdm(range(self.n_runs)):
             for i_d in range(3):
                 samp_time, samp_sig= self.get_sampling(i_d,i_f)
+                print(i_f,i_d,samp_time, samp_sig)
                 matrix = self.define_matrix(samp_time,i_f)
+                print(i_f,i_d,matrix)
                 raw = self.solve_lin_system(matrix,samp_sig)
+                print(i_f,i_d,raw)
                 out[:, i_f, i_d] = raw[:self.out_dim]
         return out
 
@@ -146,11 +149,29 @@ class Xn_from_signal(ABC):
     @abstractmethod
     def reconstruct_signal(self,out,to_file):
         pass
+
+    def append_runinfo(self,T):
+        s = "# Field details:"
+        s+= "# Type field            "+str(self.efield["name"])+"\n"
+        s+= "# Field intensity       "+str(self.efield["intensity"])+"\n"
+        s+= "# Field versor          "+str(self.efield["versor"])+"\n"
+        if self.efield["name"]=='QSSIN':
+            s+= "Centre Gaussian     "+str(self.T0/fs2aut)+"[fs] \n"
+            s+= "Gaussian sigma      "+str(self.sigma/fs2aut)+"[fs] \n"
+        s+= "# Analysis details:"
+        s+="# Max harmonic order   : "+str(self.X_order)+"\n"
+        s+="# Sampling mode        : "+str(self.samp_mod) +"\n"
+        s+="# Solver               : "+str(self.solver)+"\n"
+        s+="# Sampling points      : "+str(self.nsamp)+"\n"
+        s+="# Start sampling time  : "+str(T/fs2aut)+" [fs] \n"
+        return s
+        
+
 ### some maths auxiliary functions
-    def IsSquare(m):
+    def IsSquare(self,m):
         return m.shape[0] == m.shape[1]
 
-    def IsWellConditioned(m): # with this I am trying to avoid inverting a matrix
+    def IsWellConditioned(self,m): # with this I am trying to avoid inverting a matrix
         return np.linalg.cond(m) < 1/sys.float_info.epsilon
 
     def residuals_func(x,M,S_i):
