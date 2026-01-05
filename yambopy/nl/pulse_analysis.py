@@ -74,10 +74,10 @@ class Xn_from_pulse(Xn_from_signal):
         T_range = self.T_urange
         out_of_bounds = False
         if T_range[0] <= 0.0:
-            T_range[0] = self.T0 - T_period/2
+            T_range[0] = self.T0 - self.sigma
         T_range[1] = T_range[0] + T_period
         if T_range[1] > self.time[-1]:
-            T_range[1] = slef.time[-1]
+            T_range[1] = self.time[-1]
             T_range[0] = T_range[1] - T_period
             out_of_bound = True
         return T_range, out_of_bounds
