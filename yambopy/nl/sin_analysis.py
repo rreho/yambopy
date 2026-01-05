@@ -78,9 +78,14 @@ class Xn_from_sine(Xn_from_signal):
 
         def output_analysis(self,out,to_file=True):
             for i_order in range(self.X_order + 1):
+                T = 10000.0
                 for i_f in range(self.n_runs):
                     out[i_order, i_f, :] *= Divide_by_the_Field(self.efields[i_f], i_order)
-                out[i_order,:,:]*=self.get_Unit_of_Measure(i_order) 
+                    T_period = 2.0 * np.pi / self.freqs[i_f]
+                    Trange, _ = self.update_time_range(T_period)
+                    T = min(T,Trange[0])
+                out[i_order,:,:]*=self.get_Unit_of_Measure(i_order)
+                run_info = self.append_runinfo(T)
                 if (to_file):
                     output_file = f'o{self.prefix}.YamboPy-X_probe_order_{i_order}'
                     header = "E[eV] " + " ".join([f"X{i_order}/Im({d}) X{i_order}/Re({d})" for d in ('x','y','z')])
@@ -90,8 +95,12 @@ class Xn_from_sine(Xn_from_signal):
                     values = np.column_stack((self.freqs * ha2ev, out[i_order, :, 0].imag, out[i_order, :, 0].real,
                                       out[i_order, :, 1].imag, out[i_order, :, 1].real,
                                       out[i_order, :, 2].imag, out[i_order, :, 2].real))
-                    np.savetxt(output_file, values, header=header, delimiter=' ', footer="Harmonic analysis results") 
+                    np.savetxt(output_file, values, header=header, delimiter=' ', footer="Harmonic analysis results")
+                    outf = open(output_file, "a")
+                    outf.writelines(run_info)
+                    outf.close()
                 else:
+                    print(run_info)
                     return (self.freqs, out)
 
         def reconstruct_signal(self,out,to_file=True):
