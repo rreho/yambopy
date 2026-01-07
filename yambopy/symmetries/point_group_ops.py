@@ -1,7 +1,7 @@
 """
 MIT License
 
-Copyright (c) 2025 University of Luxembourg. Author : Muralidhar Nalabothula
+Copyright (c) 2025 YamboPy team 
 Copyright (c) 2023 Stephen M. Goodlett, Nathaniel L. Kitzmiller
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, University of Luxembourg 
-# All rights reserved.
 #
 # Authors: MN
 import argparse
