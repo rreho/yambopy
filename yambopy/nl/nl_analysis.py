@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2025, Claudio Attaccalite,
+# Copyright (c) 2023-2026, Claudio Attaccalite,
 #                          Myrta Gruening
 # All rights reserved.
 #
@@ -19,7 +19,7 @@ from abc import ABC,abstractmethod
 # Template class
 #
 class Xn_from_signal(ABC):
-    def __init__(self,nldb,X_order=4,T_range=[-1, -1],l_out_current=False,nsamp=-1,samp_mod='',solver='',tol=1e-10): # note I need to add user opportunity to set time-range  
+    def __init__(self,nldb,X_order=4,T_range=[-1, -1],l_out_current=False,nsamp=-1,samp_mod='',solver='',tol=1e-10,debug_mode=False): 
         self.time = nldb.IO_TIME_points # Time series
         self.T_step =self.time[1] - self.time[0]     # Time step of the simulation
         self.T_deph =12.0/nldb.NL_damping 
@@ -46,6 +46,7 @@ class Xn_from_signal(ABC):
         self.prefix = f'-{nldb.calc}' if nldb.calc != 'SAVE' else ''
         self.out_dim = 0
         self.tol = tol
+        self.debug_mode = debug_mode
         super().__init__()
         
     def __str__(self): 
@@ -124,12 +125,17 @@ class Xn_from_signal(ABC):
         for i_f in tqdm(range(self.n_runs)):
             for i_d in range(3):
                 samp_time, samp_sig= self.get_sampling(i_d,i_f)
-                print(i_f,i_d,samp_time, samp_sig)
                 matrix = self.define_matrix(samp_time,i_f)
-                print(i_f,i_d,matrix)
                 raw = self.solve_lin_system(matrix,samp_sig)
-                print(i_f,i_d,raw)
                 out[:, i_f, i_d] = raw[:self.out_dim]
+                if self.debug_mode:
+                    print(f"Freq #{i_f}, direction: {i_d}:")
+                    print("***Sampling:")
+                    print(samp_time, samp_sig)
+                    print("***Matrix:")
+                    print(matrix)
+                    print("***Solution:")
+                    print(raw)
         return out
 
     def get_Unit_of_Measure(self,i_order): # not sure if this is a general or specific method - let it here for the moment
