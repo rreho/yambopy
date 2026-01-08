@@ -88,6 +88,8 @@ class Xn_from_freqmix(Xn_from_signal):
     def output_analysis(self,out,to_file=True):
         #
         NX,MX = self.X_order[:]
+        T, _ = update_time_range()
+        run_info = self.append_runinfo(T)
         #
         for i_f in range(self.n_runs):
             for i_c,(i_n,i_m) in enumerate(itertools.product(range(-NX, NX+1),range(-MX, MX+1))):
@@ -105,8 +107,12 @@ class Xn_from_freqmix(Xn_from_signal):
                 values = np.column_stack((self.freqs * ha2ev, out[i_c, :, 0].imag, out[i_c, :, 0].real,
                         out[i_c, :, 1].imag, out[i_c, :, 1].real,
                         out[i_c, :, 2].imag, out[i_c, :, 2].real))
-                np.savetxt(output_file, values, header=header, delimiter=' ', footer=f"Frequency mixing analysis with pump frequency {self.pump_freq*ha2ev} eV") 
+                np.savetxt(output_file, values, header=header, delimiter=' ', footer=f"Frequency mixing analysis with pump frequency {self.pump_freq*ha2ev} eV")
+                outf = open(output_file, "a")
+                outf.writelines(run_info)
+                outf.close()
         else:
+            print(run_info)
             return (self.freqs, out)
 
     def reconstruct_signal(self,out,to_file=True):
