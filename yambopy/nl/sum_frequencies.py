@@ -8,7 +8,6 @@ import numpy as np
 import math
 from yambopy.units import ha2ev,fs2aut, SVCMm12VMm1,AU2VMm1
 from yambopy.nl.external_efield import Divide_by_the_Field
-from yambopy.nl.harmonic_analysis import update_T_range
 from scipy.optimize import least_squares
 from tqdm import tqdm
 from scipy.ndimage import uniform_filter1d

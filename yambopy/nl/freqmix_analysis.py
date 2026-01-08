@@ -88,7 +88,7 @@ class Xn_from_freqmix(Xn_from_signal):
     def output_analysis(self,out,to_file=True):
         #
         NX,MX = self.X_order[:]
-        T, _ = update_time_range()
+        T, _ = self.update_time_range()
         run_info = self.append_runinfo(T)
         #
         for i_f in range(self.n_runs):

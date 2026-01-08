@@ -29,6 +29,8 @@ class Xn_from_sine(Xn_from_signal):
             if self.solver == '':
                 self.solver = 'full'
             self.out_dim = self.X_order + 1
+            if self.samp_mod== "":
+                self.samp_mod="linear"
             return
 
         def get_sampling(self,idir,ifrq):
