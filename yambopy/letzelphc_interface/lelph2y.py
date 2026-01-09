@@ -128,7 +128,7 @@ class ConvertElectronPhononDB():
            
         # PARS: modes, qpts, kpts, [bnds / bnds_0 bnds_1], using_q_grid=T, hosting_bare_gkkp=F, hosting_DW=F
 #
-#       This if shold be replaced with a flag in input to produce DBs for the old version of Yambo (<=5.1)
+#       This if shold be replaced with a flag in input to produce DBs for the old version of Yambo (<=5.1),
 #       otherwise it produces wrong DBs for the case bands[0]==1
 #
 #       if self.bands[0] == 1: self.pars = [self.nmodes,self.nqpoints_bz,self.nkpoints_bz,self.nbands1,True,False,False]
