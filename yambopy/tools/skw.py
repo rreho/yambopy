@@ -1,14 +1,25 @@
-#
-# This class is imported from the abipy package: https://github.com/abinit/abipy
-# 
-#
-
-
-# coding: utf-8
 """
+GNU GPLv2 License (Abipy)
+
+abipy is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License version 2 as published by
+the Free Software Foundation
+
+abipy is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License along with abipy.  
+If not, see http://www.gnu.org/licenses/.
+
+SKW interpolation: 
+
 Shankland-Koelling-Wood Fourier interpolation scheme.
 For the theoretical background see :cite:`Euwema1969,Koelling1986,Pickett1988,Madsen2006`.
 """
+#This class is imported from the abipy package: https://github.com/abinit/abipy
+
 import itertools
 import numpy as np
 import scipy
@@ -27,6 +38,7 @@ class SkwInterpolator():
     but the same object can be used to interpolate other quantities. Just set the first dimension to 1.
     """
 
+    @citation("G. K. H. Madsen and D. J. Singh, Elsevier Data Repository, V1, doi: 10.17632/9gx4dy6j9c.1 (2006)")
     def __init__(self, lpratio, kpts, eigens, fermie, nelect, cell, symrel, has_timrev,
                  filter_params=None, verbose=1):
         """
