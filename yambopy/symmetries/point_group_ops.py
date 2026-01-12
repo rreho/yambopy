@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 """
-# Adapated and modified from MolSym package
+# Adapted and modified from MolSym package
 # MolSym: A Python package for handling symmetry in molecular quantum chemistry
 ## Cite the following paper :https://doi.org/10.1063/5.0216738
 
@@ -1858,8 +1858,8 @@ def fix_axis_angle_gauge(axis, nfold):
 
 
 def find_symm_axis(sym_mats):
-    ## find symmmats and nfold degenercy
-    ### incase not found, nfold is returned as None
+    ## find symmmats and nfold degeneracy
+    ### in case not found, nfold is returned as None
     """
     Given a list of symmetry matrices that form a point,
     return their determinents, axis and nfold

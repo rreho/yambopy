@@ -10,7 +10,7 @@ from yambopy.dbs.latticedb import YamboLatticeDB
 from yambopy.tools.citations import citation
 
 class Crystal_Symmetries:
-    @citation("A. TOGO et al., Spglib, Sci. Technol. Adv. Mater. Meth. 4 (2024)")
+    @citation("A. Togo et al., Spglib, Sci. Technol. Adv. Mater. Meth. 4 (2024)")
     def __init__(self, latdb, magnetic_moments=None, tol=1e-5):
         """
         Class to handle  crystal symmetries

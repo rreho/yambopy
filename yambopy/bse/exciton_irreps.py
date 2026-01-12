@@ -281,7 +281,7 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     trace = trace_all_real + 1j * trace_all_imag
     trace_req = trace[req_sym_characters, :].T
     print("====== Exciton representations ======")
-    print("Energy (eV),  degenercy  : representation")
+    print("Energy (eV),  degeneracy  : representation")
     print('-' * 40)
     for i in range(len(trace_req)):
         rep_str_tmp = decompose_rep2irrep(trace_req[i], char_tab, len(little_group),
