@@ -1,4 +1,4 @@
-# Copyright (c) 2025, Muralidhar Nalabothula
+# Copyright (c) 2025, University of Luxembourg 
 # All rights reserved.
 #
 # Author: MN
@@ -24,6 +24,7 @@ except ImportError as e:
     from scipy.spatial import KDTree
 from yambopy.kpoints import build_ktree, find_kpt
 from yambopy.tools.function_profiler import func_profile
+from yambopy.tools.citations import citation
 
 class YamboWFDB:
     """
@@ -425,7 +426,7 @@ class YamboWFDB:
 
         # Add phase due to fractional translation
         Rkvec = sym_red.T @ kvec
-        tau_frac = self.ydb.lat.T @ frac_vec
+        tau_frac = np.linalg.inv(self.ydb.lat.T) @ frac_vec
         kphase = np.exp(-1j * 2 * np.pi * np.dot(Rkvec, tau_frac))
         gphase = kphase * np.exp(-1j * 2 * np.pi * (gvec_rot @ tau_frac))
         wfc_rot *= gphase[None, None, None, :]
@@ -532,9 +533,11 @@ class YamboWFDB:
 
 
     @func_profile
+    @citation("M. Nalabothula et al. arXiv:2511.21540 (2025)")
     def Dmat(self, symm_mat=None, frac_vec=None, time_rev=None):
         """
         Computes the symmetry-adapted matrix elements < Rk | U(R) | k >.
+        Implements Eq. 5 of M Nalabothula et al. arXiv:2511.21540.
 
         Parameters
         ----------
