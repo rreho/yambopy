@@ -117,7 +117,6 @@ Active contributors:
 - José Castelo
 - Jorge Cervantes-Villanueva
 - Myrta Grüning
-- Muralidhar Nalabothula
 - Riccardo Reho
 - Michele Re Fiorentin
 - Ali Esquembre-Kucukalic
@@ -128,6 +127,7 @@ Past contributors:
 - Alexandre Morlet
 - Davide Romanin
 - Daniel Murphy
+- Muralidhar Nalabothula
 - Mike Nico Pionteck
 - Yuncheng Mao
 - Martino Silvetti
