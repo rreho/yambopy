@@ -1,5 +1,5 @@
 ##
-## Authors: MN (FP adapted)
+## Authors: MN (FP adapted, SB optimized)
 ##
 import numpy as np
 import os
@@ -7,6 +7,369 @@ from yambopy.dbs.excitondb import YamboExcitonDB
 from yambopy.bse.exciton_matrix_elements import exciton_X_matelem
 from yambopy.bse.rotate_excitonwf import rotate_exc_wf
 from tqdm import tqdm
+import torch
+
+
+# ---------- your helpers ----------
+def make_kpositive(klist, tol=1e-6):
+    kpos = klist - np.floor(klist)
+    return (kpos + tol) % 1
+
+def find_kindx(tree, kpt_search, tol=1e-5):
+    kpt_search = make_kpositive(kpt_search)
+    dist, idx = tree.query(kpt_search, workers=1)
+    if np.any(dist > tol):
+        raise RuntimeError("Kpoint not found within tolerance")
+    return idx
+
+def scatter_reduced_to_full_torch(vec_red: torch.Tensor,
+                                  keep_idx_t: torch.Tensor,
+                                  full_shape):
+    """
+    vec_red: (nS, ntrans_red) complex
+    returns: (nS, nk, nc, nv)
+    """
+    nS = vec_red.shape[0]
+    nk, nc, nv = map(int, full_shape)
+    out = torch.zeros((nS, nk * nc * nv), dtype=vec_red.dtype, device=vec_red.device)
+    out[:, keep_idx_t] = vec_red
+    return out.view(nS, nk, nc, nv)
+
+# ---------- FULL (non-reduced) GPU kernel, streaming to out slice ----------
+@torch.no_grad()
+def ex_ph_mat_full_gpu_write_slice(
+    wfc_k_q: np.ndarray,       # (nS, nk, nc, nv) at Q+q
+    wfc_k:   np.ndarray,       # (nS, nk, nc, nv) at Q
+    elph_mat: np.ndarray,      # (nmodes, nk, nb, nb) for THIS phonon q
+    qpt_exe: np.ndarray,
+    qpt_ph:  np.ndarray,
+    kpts: np.ndarray,
+    ktree,
+    out_mm: np.ndarray,        # memmap slice parent
+    out_index: tuple,          # (iQpos, iqpos)
+    device="cuda",
+    cdtype=np.complex64,
+    mode_chunk=8,
+    S_block=1024,
+    use_pinned=True,
+):
+    dev = torch.device("cuda" if (device == "cuda" and torch.cuda.is_available()) else "cpu")
+    if cdtype == np.complex64:
+        cplx = torch.complex64
+    elif cdtype == np.complex128:
+        cplx = torch.complex128
+    else:
+        raise ValueError("cdtype must be np.complex64 or np.complex128")
+
+    nmodes = int(elph_mat.shape[0])
+    nS, nk, nc, nv = map(int, wfc_k.shape)
+
+    # k mappings (CPU)
+    idx_k_minus_Q_minus_q = find_kindx(ktree, kpts - qpt_ph[None, :] - qpt_exe[None, :])
+    idx_k_minus_q         = find_kindx(ktree, kpts - qpt_ph[None, :])
+
+    # to torch once
+    A  = torch.as_tensor(wfc_k,   dtype=cplx, device=dev)     # (nS,nk,nc,nv)
+    Aq = torch.as_tensor(wfc_k_q, dtype=cplx, device=dev)     # (nS,nk,nc,nv)
+    AqT_conj = Aq.reshape(nS, -1).conj().transpose(0, 1).contiguous()  # (nk*nc*nv, nS)
+
+    # out view: (nmodes,nS,nS)
+    out_view = out_mm[out_index]
+
+    # elph pinned
+    if use_pinned and dev.type == "cuda":
+        elph_pinned = torch.from_numpy(elph_mat).to(cplx).pin_memory()
+        def get_elph_chunk(m0, m1):
+            return elph_pinned[m0:m1].to(dev, non_blocking=True)
+    else:
+        def get_elph_chunk(m0, m1):
+            return torch.as_tensor(elph_mat[m0:m1], dtype=cplx, device=dev)
+
+    for m0 in range(0, nmodes, mode_chunk):
+        m1 = min(m0 + mode_chunk, nmodes)
+        mch = m1 - m0
+
+        elph_ch = get_elph_chunk(m0, m1)  # (mch,nk,nb,nb)
+        gcc = elph_ch[:, idx_k_minus_q,         nv:, nv:]   # (mch,nk,nc,nc)
+        gvv = elph_ch[:, idx_k_minus_Q_minus_q, :nv, :nv]   # (mch,nk,nv,nv)
+
+        A_e = A[:, idx_k_minus_q, ...].contiguous()         # (nS,nk,nc,nv)
+
+        # tmp_e: (mch,nS,nk,nc,nv)
+        tmp_e = torch.einsum("Skiv,mkci->mSkcv", A_e, gcc)
+        tmp_h = torch.einsum("Skci,mkiv->mSkcv", A,  gvv)
+        tmp_e.sub_(tmp_h)
+        del tmp_h, gcc, gvv, elph_ch
+
+        tmp_flat = tmp_e.reshape(mch, nS, -1)               # (mch,nS,nk*nc*nv)
+        del tmp_e
+
+        for S0 in range(0, nS, S_block):
+            S1 = min(S0 + S_block, nS)
+            out_block = torch.matmul(tmp_flat, AqT_conj[:, S0:S1])  # (mch,nS,Sb)
+            out_view[m0:m1, :, S0:S1] = out_block.detach().cpu().numpy().astype(cdtype, copy=False)
+            del out_block
+
+        del tmp_flat
+        if dev.type == "cuda":
+            torch.cuda.synchronize()
+
+# ---------- REDUCED GPU kernel, streaming to out slice ----------
+@torch.no_grad()
+def ex_ph_mat_reduced_gpu_write_slice(
+    wfc_k_q_red: np.ndarray,   # (nS, ntrans_red) at Q+q
+    wfc_k_red:   np.ndarray,   # (nS, ntrans_red) at Q
+    elph_mat:    np.ndarray,   # (nmodes, nk, nb, nb) for THIS phonon q
+    qpt_exe, qpt_ph, kpts, ktree,
+    keep_idx:    np.ndarray,   # integer indices into flattened (nk*nc*nv)
+    full_shape,                # (nk, nc, nv)
+    out_mm:      np.ndarray,
+    out_index:   tuple,
+    device="cuda",
+    cdtype=np.complex64,
+    mode_chunk=8,
+    S_block=1024,
+    use_pinned=True,
+):
+    dev = torch.device("cuda" if (device == "cuda" and torch.cuda.is_available()) else "cpu")
+    if cdtype == np.complex64:
+        cplx = torch.complex64
+    elif cdtype == np.complex128:
+        cplx = torch.complex128
+    else:
+        raise ValueError("cdtype must be np.complex64 or np.complex128")
+
+    nmodes = int(elph_mat.shape[0])
+    nS = int(wfc_k_red.shape[0])
+    nk, nc, nv = map(int, full_shape)
+
+    idx_k_minus_Q_minus_q = find_kindx(ktree, kpts - qpt_ph[None, :] - qpt_exe[None, :])
+    idx_k_minus_q         = find_kindx(ktree, kpts - qpt_ph[None, :])
+
+    keep_idx = np.asarray(keep_idx, dtype=np.int64)
+    keep_idx_t = torch.as_tensor(keep_idx, dtype=torch.long, device=dev)
+
+    A_red  = torch.as_tensor(wfc_k_red,   dtype=cplx, device=dev)
+    Aq_red = torch.as_tensor(wfc_k_q_red, dtype=cplx, device=dev)
+    AqT_conj = Aq_red.conj().transpose(0, 1).contiguous()          # (ntrans_red,nS)
+
+    A_full = scatter_reduced_to_full_torch(A_red, keep_idx_t, (nk, nc, nv))  # (nS,nk,nc,nv)
+
+    out_view = out_mm[out_index]  # (nmodes,nS,nS)
+
+    if use_pinned and dev.type == "cuda":
+        elph_pinned = torch.from_numpy(elph_mat).to(cplx).pin_memory()
+        def get_elph_chunk(m0, m1):
+            return elph_pinned[m0:m1].to(dev, non_blocking=True)
+    else:
+        def get_elph_chunk(m0, m1):
+            return torch.as_tensor(elph_mat[m0:m1], dtype=cplx, device=dev)
+
+    for m0 in range(0, nmodes, mode_chunk):
+        m1 = min(m0 + mode_chunk, nmodes)
+        mch = m1 - m0
+
+        elph_ch = get_elph_chunk(m0, m1)
+        gcc = elph_ch[:, idx_k_minus_q,         nv:, nv:]
+        gvv = elph_ch[:, idx_k_minus_Q_minus_q, :nv, :nv]
+
+        tmp_e = torch.einsum("Skiv,mkci->mSkcv", A_full, gcc)
+        tmp_h = torch.einsum("Skci,mkiv->mSkcv", A_full, gvv)
+        tmp_e.sub_(tmp_h)
+        del tmp_h, gcc, gvv, elph_ch
+
+        tmp_red = tmp_e.reshape(mch, nS, -1).index_select(dim=2, index=keep_idx_t)
+        del tmp_e
+
+        for S0 in range(0, nS, S_block):
+            S1 = min(S0 + S_block, nS)
+            out_block = torch.matmul(tmp_red, AqT_conj[:, S0:S1])   # (mch,nS,Sb)
+            out_view[m0:m1, :, S0:S1] = out_block.detach().cpu().numpy().astype(cdtype, copy=False)
+            del out_block
+
+        del tmp_red
+        if dev.type == "cuda":
+            torch.cuda.synchronize()
+
+
+# ---------- inference helpers (keeps your public API clean) ----------
+def _infer_keep_idx_and_full_shape(lattice, elphdb, wfdb, BSE_dir):
+    """
+    Tries to infer keep_idx and full_shape without extra user inputs.
+    Priority:
+      1) wfdb.keep_idx / wfdb.full_shape
+      2) elphdb.keep_idx / elphdb.full_shape
+      3) BSE_dir contains a .npz with 'keep_mask' or 'keep_idx' and maybe full_shape
+    """
+    # 1) attributes on wfdb/elphdb
+    for obj in (wfdb, elphdb, lattice):
+        if hasattr(obj, "keep_idx") and hasattr(obj, "full_shape"):
+            return np.asarray(obj.keep_idx, dtype=np.int64), tuple(obj.full_shape)
+
+    # 2) try to find a mask file in BSE_dir
+    if BSE_dir is not None and os.path.isdir(BSE_dir):
+        cand = []
+        for fn in os.listdir(BSE_dir):
+            if fn.endswith(".npz") and ("mask" in fn or "rediag" in fn or "keep" in fn):
+                cand.append(os.path.join(BSE_dir, fn))
+        cand.sort()
+        for fn in cand:
+            try:
+                z = np.load(fn, allow_pickle=True)
+                if "keep_idx" in z:
+                    keep_idx = np.asarray(z["keep_idx"], dtype=np.int64)
+                elif "keep_mask" in z:
+                    keep_idx = np.where(np.asarray(z["keep_mask"]).ravel())[0].astype(np.int64)
+                else:
+                    continue
+
+                if "full_shape" in z:
+                    full_shape = tuple(map(int, z["full_shape"]))
+                    return keep_idx, full_shape
+                # if full_shape not present, we cannot safely infer nc,nv
+            except Exception:
+                pass
+
+    raise RuntimeError(
+        "Reduced exciton vectors detected, but keep_idx/full_shape could not be inferred.\n"
+        "Add attributes wfdb.keep_idx + wfdb.full_shape (nk,nc,nv), or store them in a .npz in BSE_dir "
+        "with keys 'keep_idx' (or 'keep_mask') and 'full_shape'."
+    )
+
+
+def exciton_phonon_matelem_gpu(
+    lattice,
+    elphdb,
+    wfdb,
+    BSE_dir=None,
+    neigs=10,
+    dmat_mode="save",
+    Qrange=None,                 # [start, stop] in wfdb.kBZ indexing
+    exph_file="ws2-Ex-ph.npy",
+    overwrite=False,
+    device="cuda",
+    cdtype=np.complex64,
+    mode_chunk=8,
+    S_block=1024,
+):
+    """
+    Writes/returns Ex-ph matrix elements for all Q in Qrange and all phonon q in elphdb:
+
+      exph[ iQ, iq, nu, S, S' ]  with shape (nQ, nq, nmodes, neigs, neigs)
+
+    Uses:
+      - rotate_Akcv_Q(...) (must exist in your environment)
+      - elphdb.read_iq(iq, convention='standard') -> (ph_eig, elph_mat)
+      - elphdb.qpoints[iq] phonon q-point (reduced coords)
+      - wfdb.kBZ and wfdb.ktree
+      - Dmats: supply/compute according to your dmat_mode workflow outside or inside rotate_Akcv_Q
+    """
+
+    if (not overwrite) and os.path.exists(exph_file):
+        # memory-map existing npy for fast access
+        return np.load(exph_file, mmap_mode="r")
+
+    if Qrange is None:
+        Qrange = [0, wfdb.nkBZ]  # same as your example
+    Q0, Q1 = int(Qrange[0]), int(Qrange[1])
+    Q_indices = list(range(Q0, Q1))
+
+    nq = int(elphdb.nq)
+
+    # Determine nmodes from first q
+    _, elph0 = elphdb.read_iq(0, convention="standard")
+    elph0 = elph0.transpose(1, 0, 2, 4, 3)   # your convention -> (nmodes,nk,nb,nb)
+    nmodes = int(elph0.shape[0])
+
+    nQ = len(Q_indices)
+    nS = int(neigs)
+
+    # create .npy as a memmap with header (no extra conversion step)
+    out_mm = np.lib.format.open_memmap(
+        exph_file, mode="w+", dtype=cdtype, shape=(nQ, nq, nmodes, nS, nS)
+    )
+
+    # Try to infer reduced-space metadata once (only used if needed)
+    keep_idx = None
+    full_shape = None
+    exdbs = []
+    for iQ in tqdm(range(Qrange[0],Qrange[1])):
+        # wfdb.kpoints_indexes[iQ]
+        filename = 'ndb.BS_diago_Q%d' % (lattice.kpoints_indexes[iQ]+1)
+        excdb = YamboExcitonDB.from_db_file(lattice,filename=filename,folder=BSE_dir,\
+                                            Load_WF=True, neigs=neigs)
+        exdbs.append(excdb)
+
+    # get D matrices
+    Dmats = save_or_load_dmat(wfdb,mode=dmat_mode,dmat_file='Dmats.npy')
+    # Main loops
+    for iQ_pos, iQ in enumerate(tqdm(Q_indices, desc="Q")):
+        Q_in = np.asarray(wfdb.kBZ[iQ], dtype=float)
+
+        # Build Ak(Q)
+        # You already have rotate_Akcv_Q in your codebase; keep its behavior unchanged.
+        Ak = rotate_Akcv_Q(wfdb, exdbs, Q_in, Dmats, folder=BSE_dir) 
+        Ak = np.asarray(Ak)
+        Ak = Ak[:nS]
+
+        # determine full vs reduced once
+        is_reduced = (Ak.ndim == 2)   # (nS,ntrans_red)
+        is_full    = (Ak.ndim == 4)   # (nS,nk,nc,nv)
+        if not (is_reduced or is_full):
+            raise ValueError(f"rotate_Akcv_Q returned unexpected shape {Ak.shape}")
+
+        if is_reduced and (keep_idx is None or full_shape is None):
+            keep_idx, full_shape = _infer_keep_idx_and_full_shape(lattice, elphdb, wfdb, BSE_dir)
+
+        for iq in tqdm(range(nq), desc="q", leave=False):
+            ph_eig, elph_mat = elphdb.read_iq(iq, convention="standard")
+            elph_mat = elph_mat.transpose(1, 0, 2, 4, 3)  # -> (nmodes,nk,nb,nb)
+            qpt_ph = np.asarray(elphdb.qpoints[iq], dtype=float)
+
+            # Build Ak(Q+q)
+            Akq = rotate_Akcv_Q(wfdb, exdbs, Q_in + qpt_ph, Dmats, folder=BSE_dir)  # adapt args
+            Akq = np.asarray(Akq)[:nS]
+
+            if is_full:
+                ex_ph_mat_full_gpu_write_slice(
+                    wfc_k_q=Akq,
+                    wfc_k=Ak,
+                    elph_mat=elph_mat,
+                    qpt_exe=Q_in,
+                    qpt_ph=qpt_ph,
+                    kpts=np.asarray(wfdb.kBZ, dtype=float),
+                    ktree=wfdb.ktree,
+                    out_mm=out_mm,
+                    out_index=(iQ_pos, iq),
+                    device=device,
+                    cdtype=cdtype,
+                    mode_chunk=mode_chunk,
+                    S_block=S_block,
+                    use_pinned=True,
+                )
+            else:
+                ex_ph_mat_reduced_gpu_write_slice(
+                    wfc_k_q_red=Akq,
+                    wfc_k_red=Ak,
+                    elph_mat=elph_mat,
+                    qpt_exe=Q_in,
+                    qpt_ph=qpt_ph,
+                    kpts=np.asarray(wfdb.kBZ, dtype=float),
+                    ktree=wfdb.ktree,
+                    keep_idx=keep_idx,
+                    full_shape=full_shape,
+                    out_mm=out_mm,
+                    out_index=(iQ_pos, iq),
+                    device=device,
+                    cdtype=cdtype,
+                    mode_chunk=mode_chunk,
+                    S_block=S_block,
+                    use_pinned=True,
+                )
+
+    out_mm.flush()
+    return np.load(exph_file, mmap_mode="r")
+
 
 def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_dir=None,
                            neigs=-1,dmat_mode='run',save_files=True,exph_file='Ex-ph.npy',overwrite=False):
