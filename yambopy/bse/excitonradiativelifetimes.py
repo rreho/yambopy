@@ -10,6 +10,7 @@ import numpy as np
 from yambopy import YamboLatticeDB,YamboExcitonDB,YamboDipolesDB
 from yambopy.units import kb,autime2s,ha2ev,m_e,speed_of_light
 import os
+from yambopy.tools.citations import citation
 
 def get_exciton_dipole(state, blongdir, ylat, ydip, yexc, _cache={}):
     """

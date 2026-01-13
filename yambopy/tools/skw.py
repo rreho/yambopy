@@ -27,6 +27,7 @@ import time
 from collections import deque
 from monty.termcolor import cprint
 from monty.collections import dict2namedtuple
+from yambopy.tools.citations import citation
 
 class SkwInterpolator():
     """
