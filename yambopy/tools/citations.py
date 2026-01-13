@@ -73,7 +73,7 @@ def print_citations():
     print("to acknowledge the work done by the Authors.")
     # Always print yambopy citation in the start.
     print("=========================================================")
-    print("1) Paleari, F., et al. Yambopy. Zenodo (2025). doi: 10.5281/zenodo.15012963")
+    print("1) F. Paleari, et al. Yambopy. Zenodo (2025). doi: 10.5281/zenodo.15012963")
     for i, ref in enumerate(sorted(_CITATIONS_USED), start=1):
         print(f"{i+1}) {ref}")
     print("=========================================================")

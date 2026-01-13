@@ -39,7 +39,7 @@ class SkwInterpolator():
     but the same object can be used to interpolate other quantities. Just set the first dimension to 1.
     """
 
-    @citation("G. K. H. Madsen and D. J. Singh, Elsevier Data Repository, V1, doi: 10.17632/9gx4dy6j9c.1 (2006)")
+    @citation("SKW interpolation from AbiPy: X. Gonze et al., Comput. Phys. Commun. 248, 107042 (2020)")
     def __init__(self, lpratio, kpts, eigens, fermie, nelect, cell, symrel, has_timrev,
                  filter_params=None, verbose=1):
         """
