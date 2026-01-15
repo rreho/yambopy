@@ -1,6 +1,6 @@
 
 
-# `Xn_from_signal`: documentation (version 1.0)
+# `Xn_from_signal`: documentation (version 1.1)
 
 #### Myrta Grüning, Claudio Attaccalite, Mike Pointeck, Anna Romani, Mao Yuncheng
 
@@ -49,7 +49,7 @@ The code consists of the abstract class, `Xn_from_signal`, and three subclasses 
 2. `Xn_from_freqmix`: two monochromatic electric fields
 3. `Xn_from_pulse`: a pulse-shaped electric field
 
-The main method in the abstract class `Xn_from_signal` is `perform_analysis` defining the sequence of operations to be performed. This is shown in the diagram below. First, defaults are set for each implementation (`set_defaults`). Then a double loop is entered on field frequencies and directions. For each implementation, the time-dependent signal is sampled (`get_sampling`) and the sampled-signal $P_k$ (`samp_sig`) together with the sampling times $\{t_k\}$ (`samp_time`) is returned. Next, for each implementation, the elements of the matrix $M_{kj}$ (`matrix`) is defined (`define_matrix`). Finally, the linear system is solved (`solve_lin_system`, common to all implementation) and the output passed to the `out` array.  The latter is the input of `output_analysis` and `reconstruct_signal` that are implemented in each subclass.
+The main method in the abstract class `Xn_from_signal` is `perform_analysis` defining the sequence of operations to be performed. This is shown in the diagram below. First, defaults are set for each implementation (`set_defaults`). Then a loop is entered on field frequencies. For each implementation, the time range `range`is returned for a given frequency (`set_sampling`). Internally, this method also set the number of sampling points `nsamp`in case it is not user-defined. A second loop in entered on the field directions. The time-dependent signal is sampled (`get_sampling`, common to all implementations) and the sampled-signal $P_k$ (`samp_sig`) together with the sampling times $\{t_k\}$ (`samp_time`) is returned. Next, for each implementation, the elements of the matrix $M_{kj}$ (`matrix`) is defined (`define_matrix`). Finally, the linear system is solved (`solve_lin_system`, common to all implementation) and the output passed to the `out` array.  The latter is the input of `output_analysis` and `reconstruct_signal` that are implemented in each subclass.
 
 ~~~mermaid
 sequenceDiagram
@@ -57,13 +57,16 @@ sequenceDiagram
     participant Impl as Subclass (implements abstract hooks)
 
 Analyzer->>Impl: set_defaults()
-loop for each frequency i_f and direction i_d
-    Analyzer->>Impl: get_sampling(i_d, i_f)
-    Impl-->>Analyzer: (samp_time, samp_sig)
-    Analyzer->>Impl: define_matrix(samp_time, i_f)
-    Impl-->>Analyzer: matrix
-    Analyzer->>Analyzer: solve_lin_system(matrix, samp_sig)
-    Analyzer->>Analyzer: out[:, i_f, i_d] = raw[:out_dim]
+loop for each frequency i_f
+	Analyzer->>Impl: set_sampling(i_f)
+	Impl-->>Analyzer: range
+	loop for each direction i_d
+    	Analyzer->>Analyzer: get_sampling(range, i_d, i_f)
+    	Analyzer->>Impl: define_matrix(samp_time, i_f)
+    	Impl-->>Analyzer: matrix
+    	Analyzer->>Analyzer: solve_lin_system(matrix, samp_sig)
+    	Analyzer->>Analyzer: out[:, i_f, i_d] = raw[:out_dim]
+    end
 end
 ~~~
 ### 1.3 Abstract class diagram 
@@ -105,7 +108,7 @@ classDiagram
 
         %% --- Abstract hooks ---
         #set_defaults()
-        #get_sampling(idir, ifrq)
+        #set_sampling(ifrq)
         #define_matrix(samp, ifrq)
         #update_time_range()
         #get_Unit_of_Measure(i_order)   
@@ -116,6 +119,7 @@ classDiagram
         +solve_lin_system(mat, samp, init=None) np.ndarray
         +perform_analysis() np.ndarray
         +get_Unit_of_Measure(i_order) float
+        +get_sampling(range, idir, ifrq)
     }
 
     %% Auxiliary (module-level) functions for completeness
