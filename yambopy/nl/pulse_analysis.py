@@ -54,7 +54,7 @@ class Xn_from_pulse(Xn_from_signal):
                 I[j+L[self.X_order%2],:] = [-n,m]
         return I
 
-    def get_sampling(self,idir,ifrq):
+    def set_sampling(self,ifrq):
         M = int(1+2*self.X_order + int(self.X_order*(self.X_order-1)/2)) 
         if self.nsamp == -1 or self.nsamp < M:
             self.nsamp = M
@@ -64,11 +64,7 @@ class Xn_from_pulse(Xn_from_signal):
         if (out_of_bounds):
             print(f'User range redifined for frequency {self.freqs[ifrq]* ha2ev:.3e} [eV]')
         print(f"Time range: {T_range[0] / fs2aut:.3f} - {T_range[1] / fs2aut:.3f} [fs]")
-        i_t_start = int(np.round(T_range[0]/self.T_step)) 
-        i_deltaT  = int(np.round(T_period/self.T_step)/self.nsamp)
-        T_i = np.array([(i_t_start + i_deltaT * i) * self.T_step - self.efield["initial_time"] for i in range(self.nsamp)])
-        S_i = np.array([self.polarization[ifrq][idir,i_t_start + i_deltaT * i] for i in range(self.nsamp)]) 
-        return T_i,S_i
+        return T_range
         
     def update_time_range(self,T_period): 
         T_range = self.T_urange

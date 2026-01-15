@@ -80,8 +80,12 @@ class Xn_from_signal(ABC):
         pass
 
     @abstractmethod
-    def get_sampling(self,idir,ifrq):
-        pass
+    def set_sampling(self,idir,ifrq): 
+       pass
+   
+    @abstractmethod
+    def get_sampling(self): 
+       pass
     
     @abstractmethod
     def define_matrix(self,samp,ifrq):
@@ -94,6 +98,25 @@ class Xn_from_signal(ABC):
     @abstractmethod
     def get_Unit_of_Measure(self,i_order):
         pass
+
+    def get_sampling(self,T_range,idir,ifrq): # subtract self.efield["Initial_time"] from T_i CHECK!!!! 
+        #
+        i_t_start = int(np.round( T_range[0] / self.T_step)) 
+        i_deltaT  = int(np.round((T_range[1]-T_range[0])/self.T_step)/self.nsamp)
+        if self.samp_mod=='linear':
+            i_t = i_t_start + i_deltaT * np.arange(self.nsamp)
+        elif self.samp_mod=='log':
+            T_i = np.geomspace(i_t_start * self.T_step, T_range[1], self.nsamp, endpoint=False)
+            i_t = np.array(np.round(T_i/self.T_step),dtype=int)
+        elif self.samp_mod=='random':
+            i_t = np.random.uniform(i_t_start,int(np.round(t / self.T_step)), self.nsamp)
+        T_i = i_t*self.T_step - self.efield["initial_time"] 
+        if self.l_out_current:
+            S_i = np.array([self.current[ifrq][idir,i] for i in i_t])
+        else:
+            S_i = np.array([self.polarization[ifrq][idir,i] for i in i_t]) 
+        return T_i,S_i
+    
     
     def solve_lin_system(self,mat,samp,init=None):
         mat_dim = int(mat.shape[1])
@@ -123,8 +146,9 @@ class Xn_from_signal(ABC):
         _ = self.set_defaults()
         out = np.zeros((self.out_dim, self.n_runs, 3), dtype=np.cdouble) 
         for i_f in tqdm(range(self.n_runs)):
+            T_r = self.set_sampling(i_f)
             for i_d in range(3):
-                samp_time, samp_sig= self.get_sampling(i_d,i_f)
+                samp_time, samp_sig= self.get_sampling(T_r,i_d,i_f)
                 matrix = self.define_matrix(samp_time,i_f)
                 raw = self.solve_lin_system(matrix,samp_sig)
                 out[:, i_f, i_d] = raw[:self.out_dim]
@@ -183,3 +207,25 @@ class Xn_from_signal(ABC):
     def residuals_func(x,M,S_i):
         x_cmplx=x[0:int(x.size/2)] + 1j * x[int(x.size/2):x.size]
         return np.linalg.norm(np.dot(M, x_cmplx) - S_i)
+#==============================
+
+
+
+    def get_sampling(self,idir,ifrq):
+        #
+        i_t_start = int(np.round(T_range[0]/self.T_step)) 
+        i_deltaT  = int(np.round(T_period/self.T_step)/self.nsamp)
+        T_i = np.array([(i_t_start + i_deltaT * i) * self.T_step - self.efield["initial_time"] for i in range(self.nsamp)])
+        if self.l_out_current:
+            S_i = np.array([self.current[ifrq][idir,i_t_start + i_deltaT * i] for i in range(self.nsamp)]) # **CURRENT
+        else:
+            S_i = np.array([self.polarization[ifrq][idir,i_t_start + i_deltaT * i] for i in range(self.nsamp)]) 
+        return T_i,S_i
+
+    def get_sampling(self,idir,ifrq):
+        #
+        i_t_start = int(np.round(T_range[0]/self.T_step)) 
+        i_deltaT  = int(np.round(T_period/self.T_step)/self.nsamp)
+        T_i = np.array([(i_t_start + i_deltaT * i) * self.T_step - self.efield["initial_time"] for i in range(self.nsamp)])
+        S_i = np.array([self.polarization[ifrq][idir,i_t_start + i_deltaT * i] for i in range(self.nsamp)]) 
+        return T_i,S_i

@@ -54,26 +54,13 @@ class Xn_from_freqmix(Xn_from_signal):
             T_range[1]=self.time[-1]
         return T_range
     #    
-    def get_sampling(self,idir,ifrq):
+    def set_sampling(self,ifrq):
         samp_order = self.out_dim
         if self.nsamp == -1 or self.nsamp < samp_order:
             self.nsamp = int(samp_order**2)
         #
         T_range = self.update_time_range()
-        i_t_start = int(np.round( T_range[0] / self.T_step)) 
-        i_deltaT  = int(np.round((T_range[1]-T_range[0])/self.T_step)/self.nsamp)
-        if self.samp_mod=='linear':
-            T_i = (i_t_start + i_deltaT * np.arange(self.nsamp))*self.T_step
-            P_i = self.polarization[ifrq][idir,i_t_start + i_deltaT * np.arange(self.nsamp)]
-        elif self.samp_mod=='log':
-            T_i = np.geomspace(i_t_start * self.T_step, T_range[1], self.nsamp, endpoint=False)
-            i_t = np.array(np.round(T_i/self.T_step),dtype=int)
-            T_i = i_t*self.T_step
-            P_i = np.array([self.polarization[ifrq][idir,i] for i in i_t])
-        elif self.samp_mod=='random':
-            T_i = np.random.uniform(i_t_start * self.T_step, T_range[1], self.nsamp)
-            P_i = np.array([self.polarization[ifrq][idir,int(np.round(t / self.T_step))] for t in T_i])
-        return T_i,P_i
+        return T_range
 
     def define_matrix(self,T_i,ifrq):
         NX,MX = self.X_order[:]

@@ -33,7 +33,7 @@ class Xn_from_sine(Xn_from_signal):
                 self.samp_mod="linear"
             return
 
-        def get_sampling(self,idir,ifrq):
+        def set_sampling(self,ifrq):
             samp_order = 2*self.X_order + 1
             if self.nsamp == -1:
                 self.nsamp = samp_order
@@ -42,14 +42,7 @@ class Xn_from_sine(Xn_from_signal):
             if (out_of_bounds):
                 print(f'User range redifined for frequency {self.freqs[ifrq]* ha2ev:.3e} [eV]')
             print(f"Time range: {T_range[0] / fs2aut:.3f} - {T_range[1] / fs2aut:.3f} [fs]")
-            i_t_start = int(np.round(T_range[0]/self.T_step)) 
-            i_deltaT  = int(np.round(T_period/self.T_step)/self.nsamp)
-            T_i = np.array([(i_t_start + i_deltaT * i) * self.T_step - self.efield["initial_time"] for i in range(self.nsamp)])
-            if self.l_out_current:
-                S_i = np.array([self.current[ifrq][idir,i_t_start + i_deltaT * i] for i in range(self.nsamp)]) # **CURRENT
-            else:
-                S_i = np.array([self.polarization[ifrq][idir,i_t_start + i_deltaT * i] for i in range(self.nsamp)]) 
-            return T_i,S_i
+            return T_range
         
         def update_time_range(self,T_period): # not sure if this is a general or specific method - let it here for the moment
             T_range = self.T_urange
