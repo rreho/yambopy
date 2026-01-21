@@ -7,6 +7,7 @@
 # This file is part of the yambopy project
 #
 import numpy as np
+from netCDF4 import Dataset
 from yambopy import YamboLatticeDB,YamboExcitonDB,YamboDipolesDB
 from yambopy.units import ha2ev
 import os
@@ -112,14 +113,19 @@ def exc_dipoles_pol(lattice_path,dipoles_path=None,bse_path=None,save_files=True
     ylat = YamboLatticeDB.from_db_file(filename=lattice_path+'/ns.db1')
     # Load full BSE database at Q=0
     yexc = YamboExcitonDB.from_db_file(ylat,filename=bse_path+'/ndb.BS_diago_Q1')
+    
     # Read dipoles in bands range | don't project | don't expand
     # bands range is fixed by BSE calculation | these are dipoles for EMISSION
-    ydip = YamboDipolesDB.from_db_file(ylat,filename=f'{dipoles_path}/ndb.dipoles',\
-                                         bands_range=yexc.bs_bands,project=False,expand=False)
- 
+    try: 
+        ydip = YamboDipolesDB.from_db_file(ylat,filename=f'{dipoles_path}/ndb.dipoles',bands_range=yexc.bs_bands,project=False,expand=False)
+        dipoles = ydip.dipoles
+    except: # Fallback in case of db fuckery (like dip_bands_ordered)
+        print("[WARNING] Fallback to correctly read dipoles in case of dip_bands_ordered issues with dipoles database")
+        dipoles = quick_read_dipoles(f'{dipoles_path}/ndb.dipoles',yexc.bs_bands,ylat.nbandsv)
+
     # Expand dipoles
     rot_mats = ylat.sym_car[ylat.kmap[:,1], ...]
-    dip_expanded = np.einsum('kij,kjcv->kicv',rot_mats,ydip.dipoles[ylat.kmap[:,0],...],
+    dip_expanded = np.einsum('kij,kjcv->kicv',rot_mats,dipoles[ylat.kmap[:,0],...],
                              optimize=True)
     time_rev_s = (ylat.kmap[:, 1] >= ylat.sym_car.shape[0]/(int(ylat.time_rev)+1))
     dip_expanded[time_rev_s] = dip_expanded[time_rev_s].conj()
@@ -129,7 +135,7 @@ def exc_dipoles_pol(lattice_path,dipoles_path=None,bse_path=None,save_files=True
     # Since we have dipoles for emission, we do not conjugate BS_wfc
     # Then the results are directly the exciton dipoles for emission
     dip_exc = np.einsum('nkcv,kicv->in',BS_wfc,dip_expanded,
-                        optimize=True).astype(dtype=ydip.dipoles.dtype)
+                        optimize=True).astype(dtype=dipoles.dtype)
 
     if save_files:
         if dip_file[-4:]!='.npy': dip_file = dip_file+'.npy'
@@ -137,3 +143,38 @@ def exc_dipoles_pol(lattice_path,dipoles_path=None,bse_path=None,save_files=True
         np.save(dip_file,dip_exc)
 
     return dip_exc
+
+def quick_read_dipoles(filename,bands_range,nbandsv,dip_type='iR'):
+    """
+    Quickly read unprojected, unexpanded dipoles without worrying
+    for compatibility with other classes
+
+    :: bands_range is mandatory, as well as nbandsv
+
+    """
+    from yambopy.tools.types import CmplxType
+    with Dataset(filename) as database:
+
+        nq_ibz, nq_bz, nk_ibz, nk_bz = database.variables['HEAD_R_LATT'][:].astype(int)
+        spin = database.variables['SPIN_VARS'][0].astype(int)
+
+        # We assume the not_band_ordered case:
+        # We read dipoles[i_v:f_c,i_v:f_c] 
+
+        min_band = min(bands_range)
+        max_band = max(bands_range)
+        nbands   = max_band-min_band+1
+
+        i_v = bands_range[0]-1
+        f_c = bands_range[1]
+        n_v_included = nbandsv-i_v
+
+        dipoles = database[f'DIP_{dip_type}'][:,:,i_v:f_c,i_v:f_c,:].data # Read as nk,nv,nc,ir
+        dipoles = dipoles.view(dtype=CmplxType(dipoles)).reshape((spin,nk_ibz,nbands,nbands,3))
+
+    if spin==1: dipoles = np.squeeze(dipoles,axis=0)
+    dipoles = np.swapaxes(dipoles,spin,spin+2) # Swap indices
+    
+    dipoles = dipoles[...,n_v_included:,:n_v_included] # cv only
+
+    return dipoles
