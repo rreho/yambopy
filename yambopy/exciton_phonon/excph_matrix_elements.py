@@ -55,6 +55,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
             with Dataset(exph_file_path, 'r') as f:
                 G_tmp = f.variables['G'][:]
                 exph_mat_loaded = G_tmp[...,0] + 1j*G_tmp[...,1]
+                # If it was saved with nQ=1, G might be 4D or 5D depending on how it was saved.
+                # Here we return it as is.
         else:
             data = np.load(exph_file_path)
             exph_mat_loaded = data['G']
@@ -107,19 +109,18 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
                 
                 # Exph matrix elements
                 # exph_mat shape: [nQ, nq, nmodes, nexc_in, nexc_out]
-                if exph_mat.ndim == 4: data_to_save = exph_mat[np.newaxis, ...]
-                else:                  data_to_save = exph_mat
+                if exph_mat.ndim == 5: dims_G = ['Q_init', 'q_phonon']
+                else:                  dims_G = ['q_phonon']
 
-                dims_G = ['Q_init', 'q_phonon']
-                for i, dim in enumerate(data_to_save.shape[2:]):
+                for i, dim in enumerate(exph_mat.shape[len(dims_G):]):
                     dim_name = f'dim_G_{i}'
                     f.createDimension(dim_name, dim)
                     dims_G.append(dim_name)
                 dims_G.append('complex')
                 
                 G_var = f.createVariable('G', 'f8', dims_G)
-                G_var[..., 0] = data_to_save.real
-                G_var[..., 1] = data_to_save.imag
+                G_var[..., 0] = exph_mat.real
+                G_var[..., 1] = exph_mat.imag
                 
                 # Q_init
                 Q_init_var = f.createVariable('Q_init', 'f8', ('Q_init', 'Q_coords'))
