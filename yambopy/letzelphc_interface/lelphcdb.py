@@ -1,4 +1,5 @@
 import numpy as np
+import h5py
 from netCDF4 import Dataset
 from yambopy.tools.string import marquee
 from yambopy.units import ha2ev
@@ -287,6 +288,24 @@ class LetzElphElectronPhononDB():
 
         ry2ev = ha2ev/2.
         self.gkkp_bare = descreen_el_ph(self.gkkp,self.ph_energies/ry2ev,self.ph_eigenvectors,Z,Zval,masses=atomic_masses)
+
+    def write_h5(self,filename):
+        """
+        Write the electron-phonon matrix elements gkkp in hdf5 file with energies given in Hartree.
+        Multiply by 0,5 (Ry to Hartree).
+        """
+        if not self.div_by_energies:
+            print("[WARNING] div_by_energies is False. gkkp will not be in Hartree units as expected.")
+
+        with h5py.File(filename, 'w') as f:
+            if hasattr(self, 'gkkp'):
+                f.create_dataset('gkkp', data=self.gkkp * 0.5)
+            else:
+                 print("[WARNING] gkkp not loaded. Nothing to save.")
+
+            f.create_dataset('qpoints', data=self.qpoints)
+            f.create_dataset('kpoints', data=self.kpoints)
+            f.create_dataset('ph_energies', data=self.ph_energies)
 
     def __str__(self):
 

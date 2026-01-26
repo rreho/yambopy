@@ -3,6 +3,7 @@
 ##
 import numpy as np
 import os
+import h5py
 from yambopy.dbs.excitondb import YamboExcitonDB
 from yambopy.bse.exciton_matrix_elements import exciton_X_matelem
 from yambopy.bse.rotate_excitonwf import rotate_exc_wf
@@ -45,11 +46,17 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     """
 
     # Check if we just need to load
-    exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
+    if exph_file.endswith('.h5'): exph_file_path = exph_file
+    else: exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
+
     if os.path.exists(exph_file_path) and overwrite==False:
         print(f'Loading EXCPH matrices from {exph_file_path}...')
-        data = np.load(exph_file_path)
-        exph_mat_loaded = data['G']
+        if exph_file_path.endswith('.h5'):
+            with h5py.File(exph_file_path, 'r') as f:
+                exph_mat_loaded = f['G'][:]
+        else:
+            data = np.load(exph_file_path)
+            exph_mat_loaded = data['G']
         return exph_mat_loaded
 
     # Load exc dbs
@@ -77,9 +84,22 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
     
     if save_files:
-        exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
-        print(f'Excph coupling file saved to {exph_file_path}')
-        np.savez(exph_file_path, G=exph_mat, Q_init=np.array(Q_points), q_phonon=elphdb.qpoints)
+        if exph_file.endswith('.h5'):
+            exph_file_path = exph_file
+            print(f'Excph coupling file saved to {exph_file_path}')
+            with h5py.File(exph_file_path, 'w') as f:
+                f.create_dataset('G', data=exph_mat)
+                f.create_dataset('Q_init', data=np.array(Q_points))
+                f.create_dataset('q_phonon', data=elphdb.qpoints)
+                if hasattr(elphdb, 'gkkp'):
+                    # Save gkkp in Hartree
+                    if not elphdb.div_by_energies:
+                        print("[WARNING] div_by_energies is False. gkkp will not be in Hartree units as expected.")
+                    f.create_dataset('gkkp', data=elphdb.gkkp * 0.5)
+        else:
+            exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
+            print(f'Excph coupling file saved to {exph_file_path}')
+            np.savez(exph_file_path, G=exph_mat, Q_init=np.array(Q_points), q_phonon=elphdb.qpoints)
     
     return exph_mat
 
