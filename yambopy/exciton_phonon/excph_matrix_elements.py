@@ -107,16 +107,19 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
                 
                 # Exph matrix elements
                 # exph_mat shape: [nQ, nq, nmodes, nexc_in, nexc_out]
+                if exph_mat.ndim == 4: data_to_save = exph_mat[np.newaxis, ...]
+                else:                  data_to_save = exph_mat
+
                 dims_G = ['Q_init', 'q_phonon']
-                for i, dim in enumerate(exph_mat.shape[2:]):
+                for i, dim in enumerate(data_to_save.shape[2:]):
                     dim_name = f'dim_G_{i}'
                     f.createDimension(dim_name, dim)
                     dims_G.append(dim_name)
                 dims_G.append('complex')
                 
                 G_var = f.createVariable('G', 'f8', dims_G)
-                G_var[..., 0] = exph_mat.real
-                G_var[..., 1] = exph_mat.imag
+                G_var[..., 0] = data_to_save.real
+                G_var[..., 1] = data_to_save.imag
                 
                 # Q_init
                 Q_init_var = f.createVariable('Q_init', 'f8', ('Q_init', 'Q_coords'))
@@ -126,22 +129,6 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
                 q_ph_var = f.createVariable('q_phonon', 'f8', ('q_phonon', 'q_coords'))
                 q_ph_var[:] = elphdb.qpoints
                 
-                if hasattr(elphdb, 'gkkp'):
-                    # Save gkkp in Hartree
-                    if not elphdb.div_by_energies:
-                        print("[WARNING] div_by_energies is False. gkkp will not be in Hartree units as expected.")
-                    
-                    # gkkp shape: [nq, nk, nm, ns, nb1, nb2]
-                    f.createDimension('nk', elphdb.nk)
-                    f.createDimension('nm', elphdb.nm)
-                    f.createDimension('ns', elphdb.ns)
-                    f.createDimension('nb1', elphdb.nb1)
-                    f.createDimension('nb2', elphdb.nb2)
-                    
-                    gkkp_var = f.createVariable('gkkp', 'f8', ('q_phonon', 'nk', 'nm', 'ns', 'nb1', 'nb2', 'complex'))
-                    gkkp_hartree = elphdb.gkkp * 0.5
-                    gkkp_var[..., 0] = gkkp_hartree.real
-                    gkkp_var[..., 1] = gkkp_hartree.imag
         else:
             exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
             print(f'Excph coupling file saved to {exph_file_path}')
