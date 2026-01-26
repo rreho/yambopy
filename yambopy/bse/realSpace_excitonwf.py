@@ -1,4 +1,6 @@
-##
+# Copyright (c) 2025, University of Luxembourg 
+# All rights reserved.
+#
 # Authors: MN
 ##
 ### Compute real space exction wavefunction when hole/electron is fixed.
