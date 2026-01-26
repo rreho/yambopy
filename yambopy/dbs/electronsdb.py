@@ -360,9 +360,9 @@ class YamboElectronsDB():
         """
         Plot this bandstructure on Matpltolib ax
         """
-        bands_kpoints, bands_indexes, path_car = get_path(self.car_kpoints,self.rlat,path)
+        bands_kpoints, bands_indexes, path_car = get_path(self.car_kpoints,self.rlat,self.sym_car,path)
         bands_highsym_qpts = path_car.kpoints
-        self.get_fermi()
+        #self.get_fermi()
 
         #calculate distances
         bands_distances = [0]

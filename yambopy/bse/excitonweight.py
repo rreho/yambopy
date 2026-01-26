@@ -253,7 +253,7 @@ class YamboExcitonWeight(object):
         t_v_c = np.array(t_v_c)
 
         #get_path is provided by savedb
-        bands_kpoints, bands_indexes, path_car = get_path(kpts,self.rlat,None,path)
+        bands_kpoints, bands_indexes, path_car = get_path(kpts,self.rlat,self.sym_car,path)
 
         #calculate distances
         bands_distances = [0]

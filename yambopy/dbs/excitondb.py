@@ -438,7 +438,7 @@ class YamboExcitonDB(object):
 
         car_kpoints = self.lattice.car_kpoints
         rlat        = self.lattice.rlat
-        bands_kpoints, band_indexes, path_car = get_path(car_kpoints,rlat,None,path,debug=debug) # None means the kpoints are already expanded
+        bands_kpoints, band_indexes, path_car = get_path(car_kpoints,rlat,self.lattice.sym_car,path,debug=debug) # None means the kpoints are already expanded
 
         if debug:
             import matplotlib.pyplot as plt
@@ -498,7 +498,7 @@ class YamboExcitonDB(object):
         # Expansion of IBZ kpoints to Path kpoints
         rep = list(range(-1,2))
         kpoints_rep, kpoints_idx_rep = replicate_red_kmesh(kpoints,repx=rep,repy=rep,repz=rep)
-        band_indexes = get_path(kpoints_rep,rlat,None,path)[1]
+        band_indexes = get_path(kpoints_rep,rlat,self.lattice.sym_car,path)[1]
         band_kpoints = np.array(kpoints_rep[band_indexes])
         band_indexes = kpoints_idx_rep[band_indexes]
 
@@ -1611,7 +1611,7 @@ class YamboExcitonDB(object):
         #THESE THREE LINES FROM THE NOPOL CASE
         car_kpoints = self.lattice.car_kpoints
         rlat        = self.lattice.rlat
-        bands_kpoints, band_indexes, path_car = get_path(car_kpoints,rlat,None,path,debug=debug) # None means the kpoints are already expanded
+        bands_kpoints, band_indexes, path_car = get_path(car_kpoints,rlat,self.lattice.sym_car,path,debug=debug) # None means the kpoints are already expanded
         
         if debug:
             for i,k in zip(band_indexes,band_kpoints):

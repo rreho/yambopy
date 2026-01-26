@@ -183,7 +183,8 @@ class ExcitonDispersion():
 
         rep = list(range(-1,2))
         qpoints_rep, qpoints_idx_rep = replicate_red_kmesh(qpoints,repx=rep,repy=rep,repz=rep)
-        exc_indexes = get_path(qpoints_rep,qpath)[1] #indices are second output
+        qpoints_car=red_car(qpoints_rep,self.rlat)
+        exc_indexes = get_path(qpoints_car,qpoints_rep,self.lattice.sym_car,qpath)[1] #indices are second output
         exc_qpoints  = np.array(qpoints_rep[exc_indexes])
         exc_indexes = qpoints_idx_rep[exc_indexes]
         
