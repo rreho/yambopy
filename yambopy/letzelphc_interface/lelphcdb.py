@@ -1,5 +1,4 @@
 import numpy as np
-import h5py
 from netCDF4 import Dataset
 from yambopy.tools.string import marquee
 from yambopy.units import ha2ev
@@ -290,23 +289,40 @@ class LetzElphElectronPhononDB():
         ry2ev = ha2ev/2.
         self.gkkp_bare = descreen_el_ph(self.gkkp,self.ph_energies/ry2ev,self.ph_eigenvectors,Z,Zval,masses=atomic_masses)
 
-    def write_h5(self,filename):
+    def write_nc(self,filename):
         """
-        Write the electron-phonon matrix elements gkkp in hdf5 file with energies given in Hartree.
+        Write the electron-phonon matrix elements gkkp in netCDF4 file with energies given in Hartree.
         Multiply by 0,5 (Ry to Hartree).
         """
         if not self.div_by_energies:
             print("[WARNING] div_by_energies is False. gkkp will not be in Hartree units as expected.")
 
-        with h5py.File(filename, 'w') as f:
+        with Dataset(filename, 'w', format='NETCDF4') as f:
+            f.createDimension('complex', 2)
+            f.createDimension('nq', self.nq)
+            f.createDimension('nk', self.nk)
+            f.createDimension('nm', self.nm)
+            f.createDimension('ns', self.ns)
+            f.createDimension('nb1', self.nb1)
+            f.createDimension('nb2', self.nb2)
+            f.createDimension('coords', 3)
+
             if hasattr(self, 'gkkp'):
-                f.create_dataset('gkkp', data=self.gkkp * 0.5)
+                gkkp_var = f.createVariable('gkkp', 'f8', ('nq', 'nk', 'nm', 'ns', 'nb1', 'nb2', 'complex'))
+                gkkp_hartree = self.gkkp * 0.5
+                gkkp_var[..., 0] = gkkp_hartree.real
+                gkkp_var[..., 1] = gkkp_hartree.imag
             else:
                  print("[WARNING] gkkp not loaded. Nothing to save.")
 
-            f.create_dataset('qpoints', data=self.qpoints)
-            f.create_dataset('kpoints', data=self.kpoints)
-            f.create_dataset('ph_energies', data=self.ph_energies)
+            q_var = f.createVariable('qpoints', 'f8', ('nq', 'coords'))
+            q_var[:] = self.qpoints
+            
+            k_var = f.createVariable('kpoints', 'f8', ('nk', 'coords'))
+            k_var[:] = self.kpoints
+            
+            e_var = f.createVariable('ph_energies', 'f8', ('nq', 'nm'))
+            e_var[:] = self.ph_energies
 
     def __str__(self):
 
