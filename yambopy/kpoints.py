@@ -305,7 +305,7 @@ def generate_kpoint_grid(nk1,nk2,nk3,sym_and_trev,IBZ=True,eps=1.0e-5):
             if equiv[ik] == ik:
                 for i_s in range(Nsym):
                     # Apply symmetry operations
-                    xkr = np.dot(sym_red[i_s,:,:], xkg[:,ik])
+                    xkr = np.dot(sym_red[i_s,:,:], xkg[ik,:])
                     # Bring back in 1st BZ
                     xkr -= np.round(xkr)
                     # Take opposite if symmetry is composed with TR
@@ -343,8 +343,8 @@ def generate_kpoint_grid(nk1,nk2,nk3,sym_and_trev,IBZ=True,eps=1.0e-5):
     # Filter unique k-points
     unique_kpoints = (equiv == np.arange(Nk))
     # Bring back unique points into first BZ
-    xk = xkg[:,unique_kpoints] - np.round(xkg[:,unique_kpoints])
+    xk = xkg[unique_kpoints,:] - np.round(xkg[unique_kpoints,:])
     wk = wkk[unique_kpoints] / np.sum(wkk[unique_kpoints])  # Normalize weights
     nks = len(xk[0])
 
-    return nks, xk.T, wk
+    return nks, xk, wk
