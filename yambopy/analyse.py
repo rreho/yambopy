@@ -186,7 +186,7 @@ class YamboAnalyser():
                 #get data from json file
                 jsonfile = list(self.jsonfiles.values())[0]
                 lat = YamboLatticeDB.from_dict(jsonfile['lattice'])
-                kpoints, bands_indexes, path_car = get_path(lat.car_kpoints,lat.rlat,None,path_kpoints)  
+                kpoints, bands_indexes, path_car = get_path(lat.car_kpoints,lat.rlat,lat.sym_car,path_kpoints)  
                 bands_e0 = bands_e0[bands_indexes]
                 bands_e  = bands_e[bands_indexes] 
 
