@@ -231,7 +231,7 @@ class Matdyn(object):
             raise ValueError('Unit %s not known'%unit)
 
         if n==0:
-            raise ValueError('Error phonon modes start from 1')
+            raise ValueError('Error! Phonon modes start from 1')
 
         return self.eig[iq][n-1]*factor
 
