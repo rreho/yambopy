@@ -176,6 +176,98 @@ class YamboExcitonDB(object):
 
         return cls(lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol,q_cutoff=q_cutoff,car_qpoint=car_qpoint,table=table,eigenvectors=eigenvectors)
 
+    @staticmethod
+    def save_excitons_nc(exdbs, filename):
+        """
+        Consolidate multiple YamboExcitonDB objects (for different Q) into one netCDF file
+        """
+        if not exdbs: return
+        nq = len(exdbs)
+        nexcs = exdbs[0].nexcitons
+        ntrans = exdbs[0].ntransitions
+        
+        with Dataset(filename, 'w', format='NETCDF4') as f:
+            f.createDimension('nq', nq)
+            f.createDimension('nexcs', nexcs)
+            f.createDimension('ntrans', ntrans)
+            f.createDimension('dim3', 3)
+            f.createDimension('complex', 2)
+            
+            # Energies
+            energies_var = f.createVariable('eigenvalues', 'f8', ('nq', 'nexcs', 'complex'))
+            for i, db in enumerate(exdbs):
+                energies_var[i, :, 0] = db.eigenvalues.real
+                energies_var[i, :, 1] = db.eigenvalues.imag
+            
+            # Residuals
+            l_res_var = f.createVariable('l_residual', 'f8', ('nq', 'nexcs', 'complex'))
+            r_res_var = f.createVariable('r_residual', 'f8', ('nq', 'nexcs', 'complex'))
+            for i, db in enumerate(exdbs):
+                l_res_var[i, :, 0] = db.l_residual.real
+                l_res_var[i, :, 1] = db.l_residual.imag
+                r_res_var[i, :, 0] = db.r_residual.real
+                r_res_var[i, :, 1] = db.r_residual.imag
+            
+            # Q-points
+            qpts_var = f.createVariable('car_qpoints', 'f8', ('nq', 'dim3'))
+            for i, db in enumerate(exdbs):
+                if db.car_qpoint is not None:
+                    qpts_var[i, :] = db.car_qpoint
+            
+            # Table (same for all Q usually, but let's save one)
+            table_var = f.createVariable('table', 'i4', ('ntrans', 5))
+            table_var[:] = exdbs[0].table
+            
+            # Eigenvectors (optional if present)
+            if exdbs[0].eigenvectors is not None:
+                eigvec_var = f.createVariable('eigenvectors', 'f8', ('nq', 'nexcs', ntrans, 'complex'))
+                for i, db in enumerate(exdbs):
+                    if db.eigenvectors is not None:
+                        eigvec_var[i, :, :, 0] = db.eigenvectors.real
+                        eigvec_var[i, :, :, 1] = db.eigenvectors.imag
+            
+            # Metadata
+            f.spin_pol = exdbs[0].spin_pol
+
+    @classmethod
+    def load_excitons_nc(cls, lattice, filename):
+        """
+        Load consolidated excitons from a single netCDF file
+        Returns a list of YamboExcitonDB objects
+        """
+        exdbs = []
+        with Dataset(filename, 'r') as f:
+            nq = f.dimensions['nq'].size
+            nexcs = f.dimensions['nexcs'].size
+            ntrans = f.dimensions['ntrans'].size
+            spin_pol = f.spin_pol
+            
+            eig_tmp = f.variables['eigenvalues'][:]
+            eigenvalues_all = eig_tmp[..., 0] + 1j*eig_tmp[..., 1]
+            
+            l_res_tmp = f.variables['l_residual'][:]
+            l_residual_all = l_res_tmp[..., 0] + 1j*l_res_tmp[..., 1]
+            
+            r_res_tmp = f.variables['r_residual'][:]
+            r_residual_all = r_res_tmp[..., 0] + 1j*r_res_tmp[..., 1]
+            
+            car_qpoints = f.variables['car_qpoints'][:]
+            table = f.variables['table'][:]
+            
+            eigenvectors_all = None
+            if 'eigenvectors' in f.variables:
+                eiv_tmp = f.variables['eigenvectors'][:]
+                eigenvectors_all = eiv_tmp[..., 0] + 1j*eiv_tmp[..., 1]
+            
+            for i in range(nq):
+                eigenvectors = None
+                if eigenvectors_all is not None: eigenvectors = eigenvectors_all[i]
+                
+                db = cls(lattice, str(i+1), eigenvalues_all[i], l_residual_all[i], r_residual_all[i],
+                         spin_pol=spin_pol, car_qpoint=car_qpoints[i], table=table, eigenvectors=eigenvectors)
+                exdbs.append(db)
+        return exdbs
+
     @property
     def unique_vbands(self):
         return np.unique(self.table[:,1]-1)

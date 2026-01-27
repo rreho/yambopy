@@ -127,6 +127,66 @@ class YamboLatticeDB(object):
         """ write a json file with the lattice information """
         JsonDumper(self.as_dict(),filename)
 
+    @classmethod
+    def from_nc_file(cls, filename):
+        """ Initialize YamboLattice from a netcdf file """
+        if not os.path.isfile(filename):
+            raise FileNotFoundError("error opening %s in YamboLatticeDB"%filename)
+
+        with Dataset(filename, 'r') as f:
+            args = dict(
+                lat                  = f.variables['lat'][:],
+                alat                 = f.variables['alat'][:],
+                sym_car              = f.variables['sym_car'][:],
+                iku_kpoints          = f.variables['iku_kpoints'][:],
+                car_atomic_positions = f.variables['car_atomic_positions'][:],
+                atomic_numbers       = f.variables['atomic_numbers'][:],
+                time_rev             = getattr(f, 'time_rev', None),
+                spinor_components    = getattr(f, 'spinor_components', None),
+                nelectrons           = getattr(f, 'nelectrons', None),
+                mag_syms             = getattr(f, 'mag_syms', None)
+            )
+
+        return cls(**args)
+
+    def save_nc(self,filename):
+        """ write a netcdf file with the lattice information """
+        with Dataset(filename, 'w', format='NETCDF4') as f:
+            f.createDimension('dim3', 3)
+            f.createDimension('nsym', self.nsym)
+            f.createDimension('natoms', len(self.atomic_numbers))
+            f.createDimension('nkpoints', self.nkpoints)
+            
+            # Lattice vectors
+            lat_var = f.createVariable('lat', 'f8', ('dim3', 'dim3'))
+            lat_var[:] = self.lat
+            
+            # Alat
+            alat_var = f.createVariable('alat', 'f8', ('dim3'))
+            alat_var[:] = self.alat
+            
+            # Symmetries
+            sym_var = f.createVariable('sym_car', 'f8', ('nsym', 'dim3', 'dim3'))
+            sym_var[:] = self.sym_car
+            
+            # Atomic positions (cartesian)
+            apos_var = f.createVariable('car_atomic_positions', 'f8', ('natoms', 'dim3'))
+            apos_var[:] = self.car_atomic_positions
+            
+            # Atomic numbers
+            anum_var = f.createVariable('atomic_numbers', 'i4', ('natoms'))
+            anum_var[:] = self.atomic_numbers
+
+            # K-points (iku)
+            kpts_var = f.createVariable('iku_kpoints', 'f8', ('nkpoints', 'dim3'))
+            kpts_var[:] = self.iku_kpoints
+            
+            # Other info
+            f.time_rev = int(self.time_rev)
+            if self.spinor_components is not None: f.spinor_components = int(self.spinor_components)
+            if self.nelectrons is not None: f.nelectrons = int(self.nelectrons)
+            if self.mag_syms is not None: f.mag_syms = int(self.mag_syms)
+
     @property
     def iku_kpoints(self):
         return self._iku_kpoints

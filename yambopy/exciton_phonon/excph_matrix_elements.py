@@ -10,7 +10,8 @@ from yambopy.bse.rotate_excitonwf import rotate_exc_wf
 from tqdm import tqdm
 
 def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_dir=None,
-                           neigs=-1,dmat_mode='run',save_files=True,exph_file='Ex-ph.npy',overwrite=False):
+                           neigs=-1,dmat_mode='run',save_files=True,exph_file='Ex-ph.npy',overwrite=False,
+                           save_excitons=False,save_lattice=False):
     """
     This function calculates the exciton-phonon matrix elements
 
@@ -43,6 +44,10 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
         If True, the matrix elements will be saved in .npz file `exph_file` with metadata. Default is True.
     overwrite : bool, optional
         If False and `exph_file` is found, the matrix elements will be loaded from file. Default is False.
+    save_excitons : bool, optional
+        If True, save all BSE eigenvectors and energies for each Q in a single `excitons.nc` file. Default is False.
+    save_lattice : bool, optional
+        If True, save lattice and symmetry information in a single `lattice.nc` file. Default is False.
     """
 
     # Check if we just need to load
@@ -64,20 +69,25 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
 
     # Load exc dbs
     exdbs = []
-    for ik in range(wfdb.nkpoints):
-        filename = 'ndb.BS_diago_Q%d' % (ik+1)
-        excdb = YamboExcitonDB.from_db_file(latdb,filename=filename,folder=BSE_dir,\
-                                            Load_WF=True, neigs=neigs)
-        exdbs.append(excdb)
-        #
-        # NM : Add a sanity check to avoid a disasterous consequence
-        # if the user gives wrong bse band indices.
-        min_bnd_bse = np.min(excdb.unique_vbands)
-        max_bnd_bse = np.max(excdb.unique_cbands)+1
-        assert (wfdb.min_bnd == min_bnd_bse) and ((wfdb.min_bnd + wfdb.nbands) == max_bnd_bse), \
-            print("Error: BSE bands mismatch. Given bands range : [%d, %d]. " %(
-                wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands) +
-                "Bse band range found (expected) : [%d %d]" %( min_bnd_bse,max_bnd_bse))
+    excitons_nc_path = os.path.join(BSE_dir, 'excitons.nc')
+    if os.path.exists(excitons_nc_path):
+        print(f'Loading excitons from {excitons_nc_path}...')
+        exdbs = YamboExcitonDB.load_excitons_nc(latdb, excitons_nc_path)
+    else:
+        for ik in range(wfdb.nkpoints):
+            filename = 'ndb.BS_diago_Q%d' % (ik+1)
+            excdb = YamboExcitonDB.from_db_file(latdb,filename=filename,folder=BSE_dir,\
+                                                Load_WF=True, neigs=neigs)
+            exdbs.append(excdb)
+            #
+            # NM : Add a sanity check to avoid a disasterous consequence
+            # if the user gives wrong bse band indices.
+            min_bnd_bse = np.min(excdb.unique_vbands)
+            max_bnd_bse = np.max(excdb.unique_cbands)+1
+            assert (wfdb.min_bnd == min_bnd_bse) and ((wfdb.min_bnd + wfdb.nbands) == max_bnd_bse), \
+                print("Error: BSE bands mismatch. Given bands range : [%d, %d]. " %(
+                    wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands) +
+                    "Bse band range found (expected) : [%d %d]" %( min_bnd_bse,max_bnd_bse))
 
     # get D matrices
     Dmats = save_or_load_dmat(wfdb,mode=dmat_mode,dmat_file='Dmats.npy')
@@ -95,6 +105,14 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     if len(exph_mat)<2: exph_mat = exph_mat[0] # single Q-point calculation (suppress axis)
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
     
+    if save_excitons:
+        print('Saving excitons to excitons.nc...')
+        YamboExcitonDB.save_excitons_nc(exdbs, 'excitons.nc')
+    
+    if save_lattice:
+        print('Saving lattice to lattice.nc...')
+        latdb.save_nc('lattice.nc')
+
     if save_files:
         if exph_file.endswith('.nc'):
             exph_file_path = exph_file
