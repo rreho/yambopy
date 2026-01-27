@@ -8,6 +8,7 @@ from yambopy.dbs.excitondb import YamboExcitonDB
 from yambopy.bse.exciton_matrix_elements import exciton_X_matelem
 from yambopy.bse.rotate_excitonwf import rotate_exc_wf
 from tqdm import tqdm
+from yambopy.lattice import red_car
 
 def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_dir=None,
                            neigs=-1,dmat_mode='run',save_files=True,exph_file='Ex-ph.npy',overwrite=False,
@@ -111,7 +112,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         print('Expanding and saving excitons for the full BZ to excitons.nc...')
         full_exdbs = []
         for iQ in tqdm(range(wfdb.nkBZ)):
-            Qpt = wfdb.kBZ[iQ]
+            Qpt = wfdb.kBZ[iQ] # reduced
+            #Qpt_car = red_car(Qpt, latdb.rlat)
             # Get rotated Akcv
             Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats)
             
@@ -126,7 +128,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
             
             full_exdb = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
                                        ibz_db.l_residual, ibz_db.r_residual,
-                                       spin_pol=ibz_db.spin_pol, car_qpoint=Qpt,
+                                       spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
                                        table=ibz_db.table, eigenvectors=eigenvectors_rot)
             full_exdbs.append(full_exdb)
 

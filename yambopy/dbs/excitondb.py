@@ -69,7 +69,7 @@ class YamboExcitonDB(object):
         Exciton eigenvectors are arranged as eigenvectors[i_exc, i_kvc]
         Transitions are unpacked in table[ i_k, i_v, i_c, i_s_c, i_s_v ] (last two are spin indices)
     """
-    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None,q_cutoff=None,table=None,eigenvectors=None):
+    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None, red_qpoint=None,q_cutoff=None,table=None,eigenvectors=None):
         if not isinstance(lattice,YamboLatticeDB):
             raise ValueError('Invalid type for lattice argument. It must be YamboLatticeDB')
 
@@ -80,6 +80,7 @@ class YamboExcitonDB(object):
         self.r_residual = r_residual
         #optional
         self.car_qpoint = car_qpoint
+        self.red_qpoint = red_qpoint
         self.q_cutoff = q_cutoff
         self.table = table
         if table is not None:
@@ -210,10 +211,10 @@ class YamboExcitonDB(object):
                 r_res_var[i, :, 1] = db.r_residual.imag
             
             # Q-points
-            qpts_var = f.createVariable('car_qpoints', 'f8', ('nq', 'dim3'))
+            qpts_var = f.createVariable('red_qpoints', 'f8', ('nq', 'dim3'))
             for i, db in enumerate(exdbs):
                 if db.car_qpoint is not None:
-                    qpts_var[i, :] = db.car_qpoint
+                    qpts_var[i, :] = db.red_qpoint
             
             # Table (same for all Q usually, but let's save one)
             table_var = f.createVariable('table', 'i4', ('ntrans', 'table_cols'))
