@@ -197,8 +197,8 @@ class YamboExcitonDB(object):
             # Energies
             energies_var = f.createVariable('eigenvalues', 'f8', ('nq', 'nexcs', 'complex'))
             for i, db in enumerate(exdbs):
-                energies_var[i, :, 0] = db.eigenvalues.real
-                energies_var[i, :, 1] = db.eigenvalues.imag
+                energies_var[i, :, 0] = db.eigenvalues.real/ha2ev
+                energies_var[i, :, 1] = db.eigenvalues.imag/ha2ev
             
             # Residuals
             l_res_var = f.createVariable('l_residual', 'f8', ('nq', 'nexcs', 'complex'))
@@ -228,6 +228,7 @@ class YamboExcitonDB(object):
                         eigvec_var[i, :, :, 1] = db.eigenvectors.imag
             
             # Metadata
+            f.units = 'Hartree'
             f.spin_pol = exdbs[0].spin_pol
 
     @classmethod
@@ -242,6 +243,7 @@ class YamboExcitonDB(object):
             nexcs = f.dimensions['nexcs'].size
             ntrans = f.dimensions['ntrans'].size
             spin_pol = f.spin_pol
+            #units = f.units
             
             eig_tmp = f.variables['eigenvalues'][:]
             eigenvalues_all = eig_tmp[..., 0] + 1j*eig_tmp[..., 1]
