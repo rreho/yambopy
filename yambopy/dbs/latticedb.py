@@ -180,6 +180,14 @@ class YamboLatticeDB(object):
             # K-points (iku)
             kpts_var = f.createVariable('iku_kpoints', 'f8', ('nkpoints', 'dim3'))
             kpts_var[:] = self.iku_kpoints
+
+            # K-points (car)
+            car_kpts_var = f.createVariable('car_kpoints', 'f8', ('nkpoints', 'dim3'))
+            car_kpts_var[:] = self.car_kpoints
+
+            # K-points (red)
+            red_kpts_var = f.createVariable('red_kpoints', 'f8', ('nkpoints', 'dim3'))
+            red_kpts_var[:] = self.red_kpoints
             
             # Other info
             f.time_rev = int(self.time_rev)
