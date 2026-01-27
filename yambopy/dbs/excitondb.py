@@ -190,6 +190,7 @@ class YamboExcitonDB(object):
             f.createDimension('nq', nq)
             f.createDimension('nexcs', nexcs)
             f.createDimension('ntrans', ntrans)
+            f.createDimension('table_cols', 5)
             f.createDimension('dim3', 3)
             f.createDimension('complex', 2)
             
@@ -215,12 +216,12 @@ class YamboExcitonDB(object):
                     qpts_var[i, :] = db.car_qpoint
             
             # Table (same for all Q usually, but let's save one)
-            table_var = f.createVariable('table', 'i4', ('ntrans', 5))
+            table_var = f.createVariable('table', 'i4', ('ntrans', 'table_cols'))
             table_var[:] = exdbs[0].table
             
             # Eigenvectors (optional if present)
             if exdbs[0].eigenvectors is not None:
-                eigvec_var = f.createVariable('eigenvectors', 'f8', ('nq', 'nexcs', ntrans, 'complex'))
+                eigvec_var = f.createVariable('eigenvectors', 'f8', ('nq', 'nexcs', 'ntrans', 'complex'))
                 for i, db in enumerate(exdbs):
                     if db.eigenvectors is not None:
                         eigvec_var[i, :, :, 0] = db.eigenvectors.real
