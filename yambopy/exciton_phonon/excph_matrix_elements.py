@@ -9,7 +9,7 @@ from yambopy.bse.exciton_matrix_elements import exciton_X_matelem
 from yambopy.bse.rotate_excitonwf import rotate_exc_wf
 from tqdm import tqdm
 
-def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_dir=None,
+def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_dir=None,
                            neigs=-1,dmat_mode='run',save_files=True,exph_file='Ex-ph.npy',overwrite=False,
                            save_excitons=False,save_lattice=False):
     """
@@ -33,9 +33,9 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
         The name of the folder which contains the BSE calculation. Default is 'bse'.
     BSE_Lin_dir : str, optional
         The name of the folder which contains the BSE Q=0 calculation (for optical spectra). Default is BSE_dir.
-    Qrange : int list, optional
-        Exciton Qpoint index range [iQ_initial, iQ_final] (python counting). Default is [0,0] (Gamma point only).
-        Note that the indexing is in full BZ and not in iBZ. See wfc.kBZ to see the kpoints in full BZ
+    Qrange : int list or 'full', optional
+        Exciton Qpoint index range [iQ_initial, iQ_final] (python counting). 
+        If 'full', it covers all k-points in the FBZ. Default is [0,1] (Gamma point only).
     neigs : int, optional
         Number of excitonic states included in calculation. Default is -1 (all).
     dmat_mode : str, optional
@@ -45,10 +45,12 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     overwrite : bool, optional
         If False and `exph_file` is found, the matrix elements will be loaded from file. Default is False.
     save_excitons : bool, optional
-        If True, save all BSE eigenvectors and energies for each Q in a single `excitons.nc` file. Default is False.
+        If True, save all BSE eigenvectors and energies for the full BZ in a single `excitons.nc` file. Default is False.
     save_lattice : bool, optional
         If True, save lattice and symmetry information in a single `lattice.nc` file. Default is False.
     """
+    if Qrange is None: Qrange = [0,1]
+    if Qrange == 'full': Qrange = [0, wfdb.nkBZ]
 
     # Check if we just need to load
     if exph_file.endswith('.nc'): exph_file_path = exph_file
@@ -106,8 +108,29 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
     
     if save_excitons:
-        print('Saving excitons to excitons.nc...')
-        YamboExcitonDB.save_excitons_nc(exdbs, 'excitons.nc')
+        print('Expanding and saving excitons for the full BZ to excitons.nc...')
+        full_exdbs = []
+        for iQ in tqdm(range(wfdb.nkBZ)):
+            Qpt = wfdb.kBZ[iQ]
+            # Get rotated Akcv
+            Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats)
+            
+            # Identify IBZ index
+            idx_BZQ = wfdb.kptBZidx(Qpt)
+            iQ_iBZ = latdb.kpoints_indexes[idx_BZQ]
+            ibz_db = exdbs[iQ_iBZ]
+            
+            # Create rotated YamboExcitonDB
+            # Flatten Ak_rot back to eigenvectors format
+            eigenvectors_rot = ibz_db.flatten_Akcv(Ak_rot)
+            
+            full_exdb = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
+                                       ibz_db.l_residual, ibz_db.r_residual,
+                                       spin_pol=ibz_db.spin_pol, car_qpoint=Qpt,
+                                       table=ibz_db.table, eigenvectors=eigenvectors_rot)
+            full_exdbs.append(full_exdb)
+
+        YamboExcitonDB.save_excitons_nc(full_exdbs, 'excitons.nc')
     
     if save_lattice:
         print('Saving lattice to lattice.nc...')

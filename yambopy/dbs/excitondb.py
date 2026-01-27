@@ -396,6 +396,36 @@ class YamboExcitonDB(object):
         #
         self.Akcv = eig_wfcs_returned
         return self.Akcv
+
+    def flatten_Akcv(self, Akcv):
+        """
+        Inverse of get_Akcv: (neigs,nblks,nspin,nk,nc,nv) -> (neigs,ntransitions)
+        """
+        neigs = Akcv.shape[0]
+        nblks = Akcv.shape[1]
+        nspin = Akcv.shape[2]
+        nk = Akcv.shape[3]
+        nc = Akcv.shape[4]
+        nv = Akcv.shape[5]
+        
+        table_len = nspin*nk*nv*nc
+        v_min = np.min(self.table[:,1])
+        c_min = np.min(self.table[:,2])
+        bs_table0 = self.table[:,0]-1
+        bs_table1 = self.table[:,1] - v_min
+        bs_table2 = self.table[:,2] - c_min
+        bs_table3 = self.table[:,3]-1
+        
+        sort_idx = bs_table0*nc*nv + bs_table2*nv + bs_table1 + nk*nc*nv*bs_table3
+        
+        eigenvectors = np.zeros((neigs, self.ntransitions), dtype=Akcv.dtype)
+        Akcv_flat = Akcv.reshape(neigs, nblks, -1)
+        
+        eigenvectors[:, :table_len] = Akcv_flat[:, 0, np.argsort(sort_idx)]
+        if nblks == 2:
+            eigenvectors[:, table_len:] = Akcv_flat[:, 1, np.argsort(sort_idx)]
+            
+        return eigenvectors
     
     def real_wf_to_cube(self, iexe, wfdb, fixed_postion=[0,0,0], supercell=[1,1,1], degen_tol=1e-2,
                         wfcCutoffRy=-1, fix_particle='h', phase=False, block_size=256):
