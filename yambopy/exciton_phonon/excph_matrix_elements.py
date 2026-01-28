@@ -99,7 +99,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
     Dmats = save_or_load_dmat(wfdb,mode=dmat_mode,dmat_file='Dmats.npy')
 
     # if save_dipoles:
-    #     dipoles_path = os.path.join(BSE_dir, 'ndb.dipoles')
+    dipoles_path = os.path.join(BSE_dir, 'ndb.dipoles')
     #     if not os.path.exists(dipoles_path):
     #          dipoles_path = 'ndb.dipoles'
     #     if os.path.exists(dipoles_path):
