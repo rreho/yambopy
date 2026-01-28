@@ -335,6 +335,47 @@ class YamboDipolesDB():
         self.dipoles[:,:,indexv:indexv+nbandsv,indexc:indexc+nbandsc] = factor*dip_expanded.transpose(0,1,3,2).conj()
         return self.dipoles, kpts
 
+    def save_nc(self, filename):
+        """
+        Save dipoles to a netCDF file
+        """
+        with Dataset(filename, 'w', format='NETCDF4') as f:
+            # Dimensions
+            f.createDimension('complex', 2)
+            f.createDimension('dim3', 3)
+            
+            # Check if dipoles are expanded (nkBZ vs nk_ibz)
+            if self.dipoles.ndim == 4: # (nk, 3, nb1, nb2) - usually expanded or spin=1
+                nk, pol, nb1, nb2 = self.dipoles.shape
+                f.createDimension('nk', nk)
+                f.createDimension('npol', pol)
+                f.createDimension('nb1', nb1)
+                f.createDimension('nb2', nb2)
+                
+                dip_var = f.createVariable('dipoles', 'f8', ('nk', 'npol', 'nb1', 'nb2', 'complex'))
+                dip_var[..., 0] = self.dipoles.real
+                dip_var[..., 1] = self.dipoles.imag
+                
+            elif self.dipoles.ndim == 5: # (nspin, nk, 3, nb1, nb2)
+                nspin, nk, pol, nb1, nb2 = self.dipoles.shape
+                f.createDimension('nspin', nspin)
+                f.createDimension('nk', nk)
+                f.createDimension('npol', pol)
+                f.createDimension('nb1', nb1)
+                f.createDimension('nb2', nb2)
+                
+                dip_var = f.createVariable('dipoles', 'f8', ('nspin', 'nk', 'npol', 'nb1', 'nb2', 'complex'))
+                dip_var[..., 0] = self.dipoles.real
+                dip_var[..., 1] = self.dipoles.imag
+            
+            # Metadata
+            f.dip_type = self.dip_type
+            f.min_band = int(self.min_band)
+            f.max_band = int(self.max_band)
+            f.indexv = int(self.indexv)
+            f.indexc = int(self.indexc)
+            f.expanded = int(self.expand)
+
     def plot(self,ax,kpoint=0,dir=0,func=abs2):
         return ax.matshow(func(self.dipoles[kpoint,dir]))
 
