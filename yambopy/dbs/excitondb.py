@@ -194,7 +194,7 @@ class YamboExcitonDB(object):
             f.createDimension('nexcs', nexcs)
             f.createDimension('ntrans', ntrans)
             f.createDimension('table_cols', 5)
-            f.createDimension('dim3', 3)
+            f.createDimension('cart', 3)
             f.createDimension('complex', 2)
             
             # Energies
@@ -213,7 +213,7 @@ class YamboExcitonDB(object):
                 r_res_var[i, :, 1] = db.r_residual.imag
             
             # Q-points
-            qpts_var = f.createVariable('red_qpoints', 'f8', ('nq', 'dim3'))
+            qpts_var = f.createVariable('red_qpoints', 'f8', ('nq', 'cart'))
             for i, db in enumerate(exdbs):
                 if db.red_qpoint is not None:
                     qpts_var[i, :] = db.red_qpoint
@@ -231,16 +231,18 @@ class YamboExcitonDB(object):
                         eigvec_var[i, :, :, 1] = db.eigenvectors.imag
             
             # Exciton Dipoles (optional if present)
+            tmp_exc_dipoles = np.moveaxis(db.exc_dipoles,1,2)
             if exdbs[0].exc_dipoles is not None:
-                exc_dip_var = f.createVariable('exc_dipoles', 'f8', ('nq', 'dim3', 'nexcs', 'complex'))
+                exc_dip_var = f.createVariable('exc_dipoles', 'f8', ('nq', 'nexcs', 'cart', 'complex'))
                 for i, db in enumerate(exdbs):
                     if db.exc_dipoles is not None:
-                        exc_dip_var[i, :, :, 0] = db.exc_dipoles.real
-                        exc_dip_var[i, :, :, 1] = db.exc_dipoles.imag
+                        exc_dip_var[i, :, :, 0] = tmp_exc_dipoles.real
+                        exc_dip_var[i, :, :, 1] = tmp_exc_dipoles.imag
             
             # Electronic Dipoles (optional if present)
+            tmp_electronic_dipoles = db.electronic_dipoles.transpose(0,1,3,4,2,5)
             if exdbs[0].electronic_dipoles is not None:
-                # Shape: (nq, nk, dim3, nc, nv, complex)
+                # Shape: (nq, nk, cart, nc, nv, complex)
                 # nk is obtained from table
                 nk = exdbs[0].nkpoints
                 nc = exdbs[0].ncbands
@@ -249,11 +251,11 @@ class YamboExcitonDB(object):
                 if 'nc' not in f.dimensions: f.createDimension('nc', nc)
                 if 'nv' not in f.dimensions: f.createDimension('nv', nv)
                 
-                dip_var = f.createVariable('dipoles', 'f8', ('nq', 'nk', 'dim3', 'nc', 'nv', 'complex'))
+                dip_var = f.createVariable('dipoles', 'f8', ('nq', 'nk', 'cart', 'nc', 'nv', 'complex'))
                 for i, db in enumerate(exdbs):
                     if db.electronic_dipoles is not None:
-                        dip_var[i, ..., 0] = db.electronic_dipoles.real
-                        dip_var[i, ..., 1] = db.electronic_dipoles.imag
+                        dip_var[i, ..., 0] = tmp_electronic_dipoles.real
+                        dip_var[i, ..., 1] = tmp_electronic_dipoles.imag
             
             # Metadata
             f.units = 'Hartree'
