@@ -141,16 +141,32 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              # ydip for Gamma only
              ydip_gamma = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, 
                                                       bands_range=gamma_db.bs_bands, 
-                                                      project=False, expand=True)
+                                                      project=False, expand=False)
+             
+             # Expand dipoles manually to full BZ (without square matrix reshaping)
+             rot_mats = latdb.sym_car[latdb.kmap[:, 1], ...]
+             dip_expanded = np.einsum('kij,kjcv->kicv', rot_mats, ydip_gamma.dipoles[latdb.kmap[:, 0]], optimize=True)
+             time_rev_s = (latdb.kmap[:, 1] >= len(latdb.sym_car) / (1 + int(latdb.time_rev)))
+             dip_expanded[time_rev_s] = dip_expanded[time_rev_s].conj()
              
              BS_wfc = gamma_db.get_Akcv() # [nexcs, nblks, nspin, nk, nc, nv]
              if BS_wfc.shape[1] == 1 and BS_wfc.shape[2] == 1: # TDA, no spin
                  BS_wfc = np.squeeze(BS_wfc, axis=(1, 2)) # [nexcs, nk, nc, nv]
-                 # ydip_gamma.dipoles shape: [nkBZ, 3, nc, nv]
+                 # dip_expanded shape: [nkBZ, 3, nc, nv]
                  # Expand BS_wfc to full BZ if needed
-                 if BS_wfc.shape[1] != ydip_gamma.dipoles.shape[0]:
+                 if BS_wfc.shape[1] != dip_expanded.shape[0]:
                      BS_wfc = BS_wfc[:, latdb.kmap[:, 0], ...]
-                 exc_dipoles_0 = np.einsum('nkcv,kicv->in', BS_wfc, ydip_gamma.dipoles, optimize=True) / latdb.nkpoints
+                 
+                 # Sanity check for dimensions
+                 if BS_wfc.shape[2:] != dip_expanded.shape[2:]:
+                     print(f'[WARNING] Dimension mismatch: BS_wfc {BS_wfc.shape[2:]} vs Dipoles {dip_expanded.shape[2:]}. Slicing may be required.')
+                     # Use the minimum common dimensions
+                     nc_min = min(BS_wfc.shape[2], dip_expanded.shape[2])
+                     nv_min = min(BS_wfc.shape[3], dip_expanded.shape[3])
+                     BS_wfc = BS_wfc[..., :nc_min, :nv_min]
+                     dip_expanded = dip_expanded[..., :nc_min, :nv_min]
+
+                 exc_dipoles_0 = np.einsum('nkcv,kicv->in', BS_wfc, dip_expanded, optimize=True) / latdb.nkpoints
                  # result shape: [3, nexcs]
              else:
                  print('[WARNING] Exciton dipoles calculation only supported for TDA and no-spin-pol. Skipping.')
