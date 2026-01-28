@@ -214,7 +214,7 @@ class YamboExcitonDB(object):
             # Q-points
             qpts_var = f.createVariable('red_qpoints', 'f8', ('nq', 'dim3'))
             for i, db in enumerate(exdbs):
-                if db.car_qpoint is not None:
+                if db.red_qpoint is not None:
                     qpts_var[i, :] = db.red_qpoint
             
             # Table (same for all Q usually, but let's save one)
