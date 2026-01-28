@@ -335,13 +335,66 @@ class YamboDipolesDB():
         self.dipoles[:,:,indexv:indexv+nbandsv,indexc:indexc+nbandsc] = factor*dip_expanded.transpose(0,1,3,2).conj()
         return self.dipoles, kpts
 
+    @classmethod
+    def from_nc_file(cls, lattice, filename):
+        """
+        Load dipoles from a netCDF file
+        """
+        if not os.path.isfile(filename):
+            raise FileNotFoundError(f"error opening {filename} in YamboDipolesDB")
+
+        with Dataset(filename, 'r') as f:
+            dip_tmp = f.variables['dipoles'][:]
+            dipoles = dip_tmp[..., 0] + 1j*dip_tmp[..., 1]
+            
+            # shape: (nq, nspin, nk, nc, nv, 3)
+            # YamboDipolesDB internal expects (nspin, nk, 3, nc, nv) or (nk, 3, nc, nv)
+            # We take the first Q-point if multiple are present for initialization
+            dip = dipoles[0] # (nspin, nk, nc, nv, 3)
+            
+            # Move cartesian axis back: (nspin, nk, 3, nc, nv)
+            dip = np.moveaxis(dip, -1, 2)
+            
+            spin = f.dimensions['nspin'].size
+            nk_bz = f.dimensions['nk'].size
+            nc = f.dimensions['nc'].size
+            nv = f.dimensions['nv'].size
+            
+            # Check for physical normalization and restore internal state
+            dip_units = getattr(f, 'dipole_units', '')
+            if 'physical' in dip_units:
+                dip *= nk_bz
+
+            if dip.shape[0] == 1:
+                dip = np.squeeze(dip, axis=0)
+
+            # Metadata
+            dip_type = getattr(f, 'dip_type', 'iR')
+            min_band = getattr(f, 'min_band', 1)
+            max_band = getattr(f, 'max_band', 1)
+            indexv = getattr(f, 'indexv', 0)
+            indexc = getattr(f, 'indexc', 0)
+            expand = bool(getattr(f, 'expanded', True))
+            
+            # These might be approximate if not explicitly saved
+            nq_ibz = 1
+            nq_bz = f.dimensions['nq'].size
+            nk_ibz = lattice.ibz_nkpoints if hasattr(lattice, 'ibz_nkpoints') else nk_bz
+            
+            nbands = max_band - min_band + 1
+            bands_range = [min_band, max_band]
+            
+            return cls(lattice, nq_ibz, nq_bz, nk_ibz, nk_bz, spin, min_band, max_band, indexv, indexc, 
+                       bands_range, nbands, nv, nc, True, dip, dip_type=dip_type, field_dir=[1,1,1], project=False, polarization_mode=None, expand=expand)
+
     def save_nc(self, filename, nq=1):
         """
         Save dipoles to a netCDF file
         """
         # Prepare dipoles with the right shape: (nq, nspin, nk, nc, nv, 3)
         # Standard internal shape is (nspin, nk, 3, nc, nv) or (nk, 3, nc, nv)
-        dip = self.dipoles
+        # Apply physical normalization (1/Nk)
+        dip = self.dipoles / self.nk_bz
         if dip.ndim == 4: # (nk, 3, nc, nv)
             dip = dip[None, ...] # (nspin=1, nk, 3, nc, nv)
         
@@ -384,6 +437,7 @@ class YamboDipolesDB():
             f.indexv = int(self.indexv)
             f.indexc = int(self.indexc)
             f.expanded = int(self.expand)
+            f.dipole_units = 'atomic units (physical, 1/Nk normalization)'
 
     def plot(self,ax,kpoint=0,dir=0,func=abs2):
         return ax.matshow(func(self.dipoles[kpoint,dir]))

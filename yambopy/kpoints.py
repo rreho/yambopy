@@ -62,8 +62,9 @@ def expand_kpoints(car_kpoints,sym_car,rlat,atol=1.e-6):
                 continue
 
     #calculate the weights of each of the kpoints in the irreducible brillouin zone
+    nkpoints_ibz = len(car_kpoints)
     nkpoints_full = len(kpoints_full)
-    weights = np.zeros([nkpoints_full])
+    weights = np.zeros([nkpoints_ibz])
     for nk in kpoints_full_i:
         weights[nk] = float(len(kpoints_full_i[nk]))/nkpoints_full
 

@@ -105,8 +105,9 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         if os.path.exists(dipoles_path):
              print(f'Loading dipoles from {dipoles_path}...')
              # Load dipoles, don't project, expand to FBZ
-             dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, project=False, expand=True)
-             print('Saving expanded dipoles to dipoles.nc...')
+             bse_bands = [wfdb.min_bnd + 1, wfdb.min_bnd + wfdb.nbands]
+             dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=True)
+             print(f'Saving expanded dipoles to dipoles.nc (bands: {bse_bands})...')
              nq = Qrange[1] - Qrange[0]
              dipdb.save_nc('dipoles.nc', nq=nq)
         else:
@@ -149,6 +150,9 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              time_rev_s = (latdb.kmap[:, 1] >= len(latdb.sym_car) / (1 + int(latdb.time_rev)))
              dip_expanded[time_rev_s] = dip_expanded[time_rev_s].conj()
              
+             # Apply physical normalization (1/Nk)
+             dip_expanded /= latdb.nkpoints
+
              BS_wfc = gamma_db.get_Akcv() # [nexcs, nblks, nspin, nk, nc, nv]
              if BS_wfc.shape[1] == 1 and BS_wfc.shape[2] == 1: # TDA, no spin
                  BS_wfc = np.squeeze(BS_wfc, axis=(1, 2)) # [nexcs, nk, nc, nv]
@@ -166,7 +170,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
                      BS_wfc = BS_wfc[..., :nc_min, :nv_min]
                      dip_expanded = dip_expanded[..., :nc_min, :nv_min]
 
-                 exc_dipoles_0 = np.einsum('nkcv,kicv->in', BS_wfc, dip_expanded, optimize=True) / latdb.nkpoints
+                 exc_dipoles_0 = np.einsum('nkcv,kicv->in', BS_wfc, dip_expanded, optimize=True)
                  # result shape: [3, nexcs]
              else:
                  print('[WARNING] Exciton dipoles calculation only supported for TDA and no-spin-pol. Skipping.')
@@ -202,7 +206,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
                                        ibz_db.l_residual, ibz_db.r_residual,
                                        spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
                                        table=ibz_db.table, eigenvectors=eigenvectors_rot,
-                                       dipoles=exc_dipoles_Q)
+                                       exc_dipoles=exc_dipoles_Q,
+                                       electronic_dipoles=dip_expanded if save_dipoles else None)
             full_exdbs.append(full_exdb)
 
         YamboExcitonDB.save_excitons_nc(full_exdbs, 'excitons.nc')
@@ -326,10 +331,15 @@ def save_or_load_dmat(wfdb, mode='run', dmat_file='Dmats.npy'):
 
 def rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=None):
     '''
-    Qpt reduced coordinates in BZ or whatever
+    Qpt reduced coordinates in BZ
     '''
     latdb = wfdb.ydb
     idx_BZQ = wfdb.kptBZidx(Qpt)
+    
+    # If exdbs is already expanded to FBZ, just return the wavefunction
+    if len(exdbs) == wfdb.nkBZ and folder is None:
+        return exdbs[idx_BZQ].get_Akcv()
+
     iQ_isymm = latdb.symmetry_indexes[idx_BZQ]
     iQ_iBZ = latdb.kpoints_indexes[idx_BZQ]
     trev  = (iQ_isymm >= len(latdb.sym_car) / (1 + int(np.rint(latdb.time_rev))))

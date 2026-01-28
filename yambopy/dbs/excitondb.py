@@ -69,7 +69,7 @@ class YamboExcitonDB(object):
         Exciton eigenvectors are arranged as eigenvectors[i_exc, i_kvc]
         Transitions are unpacked in table[ i_k, i_v, i_c, i_s_c, i_s_v ] (last two are spin indices)
     """
-    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None, red_qpoint=None,q_cutoff=None,table=None,eigenvectors=None,dipoles=None):
+    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None, red_qpoint=None,q_cutoff=None,table=None,eigenvectors=None,exc_dipoles=None,electronic_dipoles=None):
         if not isinstance(lattice,YamboLatticeDB):
             raise ValueError('Invalid type for lattice argument. It must be YamboLatticeDB')
 
@@ -87,7 +87,8 @@ class YamboExcitonDB(object):
             self.bs_bands = np.array([np.min(self.table[:,1]),np.max(self.table[:,2])]) # set range of bse bands
         self.eigenvectors = eigenvectors
         self.spin_pol = spin_pol
-        self.dipoles = dipoles
+        self.exc_dipoles = exc_dipoles
+        self.electronic_dipoles = electronic_dipoles
 
     @classmethod
     def from_db_file(cls,lattice,filename='ndb.BS_diago_Q1',folder='.',Load_WF=True, neigs=-1):
@@ -229,17 +230,35 @@ class YamboExcitonDB(object):
                         eigvec_var[i, :, :, 0] = db.eigenvectors.real
                         eigvec_var[i, :, :, 1] = db.eigenvectors.imag
             
-            # Dipoles (optional if present)
-            if exdbs[0].dipoles is not None:
-                dip_var = f.createVariable('dipoles', 'f8', ('nq', 'dim3', 'nexcs', 'complex'))
+            # Exciton Dipoles (optional if present)
+            if exdbs[0].exc_dipoles is not None:
+                exc_dip_var = f.createVariable('exc_dipoles', 'f8', ('nq', 'dim3', 'nexcs', 'complex'))
                 for i, db in enumerate(exdbs):
-                    if db.dipoles is not None:
-                        dip_var[i, :, :, 0] = db.dipoles.real
-                        dip_var[i, :, :, 1] = db.dipoles.imag
+                    if db.exc_dipoles is not None:
+                        exc_dip_var[i, :, :, 0] = db.exc_dipoles.real
+                        exc_dip_var[i, :, :, 1] = db.exc_dipoles.imag
+            
+            # Electronic Dipoles (optional if present)
+            if exdbs[0].electronic_dipoles is not None:
+                # Shape: (nq, nk, dim3, nc, nv, complex)
+                # nk is obtained from table
+                nk = exdbs[0].nkpoints
+                nc = exdbs[0].ncbands
+                nv = exdbs[0].nvbands
+                if 'nk' not in f.dimensions: f.createDimension('nk', nk)
+                if 'nc' not in f.dimensions: f.createDimension('nc', nc)
+                if 'nv' not in f.dimensions: f.createDimension('nv', nv)
+                
+                dip_var = f.createVariable('dipoles', 'f8', ('nq', 'nk', 'dim3', 'nc', 'nv', 'complex'))
+                for i, db in enumerate(exdbs):
+                    if db.electronic_dipoles is not None:
+                        dip_var[i, ..., 0] = db.electronic_dipoles.real
+                        dip_var[i, ..., 1] = db.electronic_dipoles.imag
             
             # Metadata
             f.units = 'Hartree'
             f.spin_pol = exdbs[0].spin_pol
+            f.dipole_units = 'atomic units (physical, 1/Nk normalization)'
 
     @classmethod
     def load_excitons_nc(cls, lattice, filename):
@@ -256,7 +275,12 @@ class YamboExcitonDB(object):
             #units = f.units
             
             eig_tmp = f.variables['eigenvalues'][:]
-            eigenvalues_all = eig_tmp[..., 0] + 1j*eig_tmp[..., 1]
+            # Convert back to eV if saved in Hartree
+            units = getattr(f, 'units', 'eV')
+            if units == 'Hartree':
+                eigenvalues_all = (eig_tmp[..., 0] + 1j*eig_tmp[..., 1]) * ha2ev
+            else:
+                eigenvalues_all = eig_tmp[..., 0] + 1j*eig_tmp[..., 1]
             
             l_res_tmp = f.variables['l_residual'][:]
             l_residual_all = l_res_tmp[..., 0] + 1j*l_res_tmp[..., 1]
@@ -272,20 +296,32 @@ class YamboExcitonDB(object):
                 eiv_tmp = f.variables['eigenvectors'][:]
                 eigenvectors_all = eiv_tmp[..., 0] + 1j*eiv_tmp[..., 1]
 
-            dipoles_all = None
-            if 'dipoles' in f.variables:
+            exc_dipoles_all = None
+            if 'exc_dipoles' in f.variables:
+                exc_dip_tmp = f.variables['exc_dipoles'][:]
+                exc_dipoles_all = exc_dip_tmp[..., 0] + 1j*exc_dip_tmp[..., 1]
+            elif 'dipoles' in f.variables and f.variables['dipoles'].ndim == 4: # Backward compatibility
+                exc_dip_tmp = f.variables['dipoles'][:]
+                exc_dipoles_all = exc_dip_tmp[..., 0] + 1j*exc_dip_tmp[..., 1]
+
+            electronic_dipoles_all = None
+            if 'dipoles' in f.variables and f.variables['dipoles'].ndim == 6: # New format
                 dip_tmp = f.variables['dipoles'][:]
-                dipoles_all = dip_tmp[..., 0] + 1j*dip_tmp[..., 1]
+                electronic_dipoles_all = dip_tmp[..., 0] + 1j*dip_tmp[..., 1]
             
             for i in range(nq):
                 eigenvectors = None
                 if eigenvectors_all is not None: eigenvectors = eigenvectors_all[i]
                 
-                dipoles = None
-                if dipoles_all is not None: dipoles = dipoles_all[i]
+                exc_dipoles = None
+                if exc_dipoles_all is not None: exc_dipoles = exc_dipoles_all[i]
+                
+                electronic_dipoles = None
+                if electronic_dipoles_all is not None: electronic_dipoles = electronic_dipoles_all[i]
                 
                 db = cls(lattice, str(i+1), eigenvalues_all[i], l_residual_all[i], r_residual_all[i],
-                         spin_pol=spin_pol, red_qpoint=red_qpoints[i], table=table, eigenvectors=eigenvectors, dipoles=dipoles)
+                         spin_pol=spin_pol, red_qpoint=red_qpoints[i], table=table, eigenvectors=eigenvectors, 
+                         exc_dipoles=exc_dipoles, electronic_dipoles=electronic_dipoles)
                 exdbs.append(db)
         return exdbs
 

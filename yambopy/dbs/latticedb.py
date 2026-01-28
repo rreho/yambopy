@@ -154,6 +154,10 @@ class YamboLatticeDB(object):
                 y.weights_ibz = f.variables['weights_ibz'][:]
                 y.symmetry_indexes = f.variables['symmetry_indexes'][:]
                 y.kpoints_indexes = f.variables['kpoints_indexes'][:]
+                y.BZ_to_IBZ_indexes = y.kpoints_indexes
+                y.IBZ_to_BZ_indexes = {}
+                for ibz_index in np.unique(y.kpoints_indexes):
+                    y.IBZ_to_BZ_indexes[ibz_index] = np.where(y.kpoints_indexes == ibz_index)[0]
                 kmap = np.zeros((y.nkpoints, 2), dtype=int)
                 kmap[:, 0] = y.kpoints_indexes
                 kmap[:, 1] = y.symmetry_indexes
