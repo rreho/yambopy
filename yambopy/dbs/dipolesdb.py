@@ -335,39 +335,48 @@ class YamboDipolesDB():
         self.dipoles[:,:,indexv:indexv+nbandsv,indexc:indexc+nbandsc] = factor*dip_expanded.transpose(0,1,3,2).conj()
         return self.dipoles, kpts
 
-    def save_nc(self, filename):
+    def save_nc(self, filename, nq=1):
         """
         Save dipoles to a netCDF file
         """
+        # Prepare dipoles with the right shape: (nq, nspin, nk, nc, nv, 3)
+        # Standard internal shape is (nspin, nk, 3, nc, nv) or (nk, 3, nc, nv)
+        dip = self.dipoles
+        if dip.ndim == 4: # (nk, 3, nc, nv)
+            dip = dip[None, ...] # (nspin=1, nk, 3, nc, nv)
+        
+        # Move cartesian dimension to the end: (nspin, nk, nc, nv, 3)
+        # Current dip: (nspin, nk, 3, nc, nv)
+        dip = np.moveaxis(dip, 2, -1)
+        
+        # Add nq dimension: (nq, nspin, nk, nc, nv, 3)
+        dip_nq = np.repeat(dip[None, ...], nq, axis=0)
+        
+        nq, nspin, nk, nc, nv, pol = dip_nq.shape
+        ntrans = nk * nc * nv
+
         with Dataset(filename, 'w', format='NETCDF4') as f:
             # Dimensions
             f.createDimension('complex', 2)
             f.createDimension('dim3', 3)
+            f.createDimension('nq', nq)
+            f.createDimension('nspin', nspin)
+            f.createDimension('nk', nk)
+            f.createDimension('nc', nc)
+            f.createDimension('nv', nv)
+            f.createDimension('ntrans', ntrans)
+
+            # (nq, nspin, nk, nc, nv, 3)
+            dip_var = f.createVariable('dipoles', 'f8', ('nq', 'nspin', 'nk', 'nc', 'nv', 'dim3', 'complex'))
+            dip_var[..., 0] = dip_nq.real
+            dip_var[..., 1] = dip_nq.imag
             
-            # Check if dipoles are expanded (nkBZ vs nk_ibz)
-            if self.dipoles.ndim == 4: # (nk, 3, nb1, nb2) - usually expanded or spin=1
-                nk, pol, nb1, nb2 = self.dipoles.shape
-                f.createDimension('nk', nk)
-                f.createDimension('npol', pol)
-                f.createDimension('nb1', nb1)
-                f.createDimension('nb2', nb2)
-                
-                dip_var = f.createVariable('dipoles', 'f8', ('nk', 'npol', 'nb1', 'nb2', 'complex'))
-                dip_var[..., 0] = self.dipoles.real
-                dip_var[..., 1] = self.dipoles.imag
-                
-            elif self.dipoles.ndim == 5: # (nspin, nk, 3, nb1, nb2)
-                nspin, nk, pol, nb1, nb2 = self.dipoles.shape
-                f.createDimension('nspin', nspin)
-                f.createDimension('nk', nk)
-                f.createDimension('npol', pol)
-                f.createDimension('nb1', nb1)
-                f.createDimension('nb2', nb2)
-                
-                dip_var = f.createVariable('dipoles', 'f8', ('nspin', 'nk', 'npol', 'nb1', 'nb2', 'complex'))
-                dip_var[..., 0] = self.dipoles.real
-                dip_var[..., 1] = self.dipoles.imag
-            
+            # (nq, nspin, ntrans, 3)
+            dip_flat = dip_nq.reshape(nq, nspin, ntrans, 3)
+            dip_flat_var = f.createVariable('dipoles_flat', 'f8', ('nq', 'nspin', 'ntrans', 'dim3', 'complex'))
+            dip_flat_var[..., 0] = dip_flat.real
+            dip_flat_var[..., 1] = dip_flat.imag
+
             # Metadata
             f.dip_type = self.dip_type
             f.min_band = int(self.min_band)

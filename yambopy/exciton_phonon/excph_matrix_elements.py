@@ -107,7 +107,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              # Load dipoles, don't project, expand to FBZ
              dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, project=False, expand=True)
              print('Saving expanded dipoles to dipoles.nc...')
-             dipdb.save_nc('dipoles.nc')
+             nq = Qrange[1] - Qrange[0]
+             dipdb.save_nc('dipoles.nc', nq=nq)
         else:
              print('[WARNING] ndb.dipoles not found. Dipoles will not be saved.')
              save_dipoles = False
@@ -129,8 +130,12 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         # Compute exciton dipoles at Q=0 if possible
         exc_dipoles_0 = None
         if save_dipoles:
-             iQ_gamma_ibz = latdb.kpoints_indexes[wfdb.kptBZidx(np.zeros(3))]
-             gamma_db = exdbs[iQ_gamma_ibz]
+             idx_gamma_bz = wfdb.kptBZidx(np.zeros(3))
+             if len(exdbs) == wfdb.nkBZ: # FBZ list
+                 gamma_db = exdbs[idx_gamma_bz]
+             else: # IBZ list
+                 iQ_gamma_ibz = latdb.kpoints_indexes[idx_gamma_bz]
+                 gamma_db = exdbs[iQ_gamma_ibz]
              
              # Compute exciton dipoles at Gamma: D_S = sum_{kcv} A_{kcv} d_{kcv}
              # ydip for Gamma only
@@ -142,7 +147,10 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              if BS_wfc.shape[1] == 1 and BS_wfc.shape[2] == 1: # TDA, no spin
                  BS_wfc = np.squeeze(BS_wfc, axis=(1, 2)) # [nexcs, nk, nc, nv]
                  # ydip_gamma.dipoles shape: [nkBZ, 3, nc, nv]
-                 exc_dipoles_0 = np.einsum('nkcv,kicv->in', BS_wfc, ydip_gamma.dipoles, optimize=True)
+                 # Expand BS_wfc to full BZ if needed
+                 if BS_wfc.shape[1] != ydip_gamma.dipoles.shape[0]:
+                     BS_wfc = BS_wfc[:, latdb.kmap[:, 0], ...]
+                 exc_dipoles_0 = np.einsum('nkcv,kicv->in', BS_wfc, ydip_gamma.dipoles, optimize=True) / latdb.nkpoints
                  # result shape: [3, nexcs]
              else:
                  print('[WARNING] Exciton dipoles calculation only supported for TDA and no-spin-pol. Skipping.')
@@ -170,6 +178,9 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
                 rot_mat = latdb.sym_car[isym]
                 # Rotate the vector components
                 exc_dipoles_Q = np.einsum('ij,jn->in', rot_mat, exc_dipoles_0)
+                # Time reversal conjugation
+                if isym >= len(latdb.sym_car) / (1 + int(latdb.time_rev)):
+                    exc_dipoles_Q = exc_dipoles_Q.conj()
             
             full_exdb = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
                                        ibz_db.l_residual, ibz_db.r_residual,

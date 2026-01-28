@@ -146,8 +146,20 @@ class YamboLatticeDB(object):
                 nelectrons           = getattr(f, 'nelectrons', None),
                 mag_syms             = getattr(f, 'mag_syms', None)
             )
+            y = cls(**args)
+            
+            # Load expansion metadata if present
+            if 'ibz_kpoints' in f.variables:
+                y.ibz_kpoints = f.variables['ibz_kpoints'][:]
+                y.weights_ibz = f.variables['weights_ibz'][:]
+                y.symmetry_indexes = f.variables['symmetry_indexes'][:]
+                y.kpoints_indexes = f.variables['kpoints_indexes'][:]
+                kmap = np.zeros((y.nkpoints, 2), dtype=int)
+                kmap[:, 0] = y.kpoints_indexes
+                kmap[:, 1] = y.symmetry_indexes
+                y.kmap = kmap
 
-        return cls(**args)
+        return y
 
     def save_nc(self,filename):
         """ write a netcdf file with the lattice information """
@@ -189,6 +201,21 @@ class YamboLatticeDB(object):
             red_kpts_var = f.createVariable('red_kpoints', 'f8', ('nkpoints', 'dim3'))
             red_kpts_var[:] = self.red_kpoints
             
+            # Expansion metadata (optional)
+            if hasattr(self, 'ibz_kpoints'):
+                f.createDimension('nk_ibz', len(self.ibz_kpoints))
+                ibz_kpts_var = f.createVariable('ibz_kpoints', 'f8', ('nk_ibz', 'dim3'))
+                ibz_kpts_var[:] = self.ibz_kpoints
+                
+                weights_var = f.createVariable('weights_ibz', 'f8', ('nk_ibz'))
+                weights_var[:] = self.weights_ibz
+                
+                sym_idx_var = f.createVariable('symmetry_indexes', 'i4', ('nkpoints'))
+                sym_idx_var[:] = self.symmetry_indexes
+                
+                kpt_idx_var = f.createVariable('kpoints_indexes', 'i4', ('nkpoints'))
+                kpt_idx_var[:] = self.kpoints_indexes
+
             # Other info
             f.time_rev = int(self.time_rev)
             if self.spinor_components is not None: f.spinor_components = int(self.spinor_components)

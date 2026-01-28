@@ -264,7 +264,7 @@ class YamboExcitonDB(object):
             r_res_tmp = f.variables['r_residual'][:]
             r_residual_all = r_res_tmp[..., 0] + 1j*r_res_tmp[..., 1]
             
-            car_qpoints = f.variables['car_qpoints'][:]
+            red_qpoints = f.variables['red_qpoints'][:]
             table = f.variables['table'][:]
             
             eigenvectors_all = None
@@ -285,7 +285,7 @@ class YamboExcitonDB(object):
                 if dipoles_all is not None: dipoles = dipoles_all[i]
                 
                 db = cls(lattice, str(i+1), eigenvalues_all[i], l_residual_all[i], r_residual_all[i],
-                         spin_pol=spin_pol, car_qpoint=car_qpoints[i], table=table, eigenvectors=eigenvectors, dipoles=dipoles)
+                         spin_pol=spin_pol, red_qpoint=red_qpoints[i], table=table, eigenvectors=eigenvectors, dipoles=dipoles)
                 exdbs.append(db)
         return exdbs
 
