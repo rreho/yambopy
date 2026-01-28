@@ -5,6 +5,7 @@ import numpy as np
 import os
 from netCDF4 import Dataset
 from yambopy.dbs.excitondb import YamboExcitonDB
+from yambopy.dbs.dipolesdb import YamboDipolesDB
 from yambopy.bse.exciton_matrix_elements import exciton_X_matelem
 from yambopy.bse.rotate_excitonwf import rotate_exc_wf
 from tqdm import tqdm
@@ -12,7 +13,7 @@ from yambopy.lattice import red_car
 
 def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_dir=None,
                            neigs=-1,dmat_mode='run',save_files=True,exph_file='Ex-ph.npy',overwrite=False,
-                           save_excitons=False,save_lattice=False):
+                           save_excitons=False,save_lattice=False,save_dipoles=False):
     """
     This function calculates the exciton-phonon matrix elements
 
@@ -49,6 +50,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         If True, save all BSE eigenvectors and energies for the full BZ in a single `excitons.nc` file. Default is False.
     save_lattice : bool, optional
         If True, save lattice and symmetry information in a single `lattice.nc` file. Default is False.
+    save_dipoles : bool, optional
+        If True, save expanded dipoles in `dipoles.nc` and exciton dipoles in `excitons.nc`. Default is False.
     """
     if Qrange is None: Qrange = [0,1]
     if Qrange == 'full': Qrange = [0, wfdb.nkBZ]
@@ -95,6 +98,20 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
     # get D matrices
     Dmats = save_or_load_dmat(wfdb,mode=dmat_mode,dmat_file='Dmats.npy')
 
+    if save_dipoles:
+        dipoles_path = os.path.join(BSE_dir, 'ndb.dipoles')
+        if not os.path.exists(dipoles_path):
+             dipoles_path = 'ndb.dipoles'
+        if os.path.exists(dipoles_path):
+             print(f'Loading dipoles from {dipoles_path}...')
+             # Load dipoles, don't project, expand to FBZ
+             dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, project=False, expand=True)
+             print('Saving expanded dipoles to dipoles.nc...')
+             dipdb.save_nc('dipoles.nc')
+        else:
+             print('[WARNING] ndb.dipoles not found. Dipoles will not be saved.')
+             save_dipoles = False
+
     # Calculation
     print('Calculating EXCPH matrix elements...')
     exph_mat = []
@@ -109,11 +126,31 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
     
     if save_excitons:
+        # Compute exciton dipoles at Q=0 if possible
+        exc_dipoles_0 = None
+        if save_dipoles:
+             iQ_gamma_ibz = latdb.kpoints_indexes[wfdb.kptBZidx(np.zeros(3))]
+             gamma_db = exdbs[iQ_gamma_ibz]
+             
+             # Compute exciton dipoles at Gamma: D_S = sum_{kcv} A_{kcv} d_{kcv}
+             # ydip for Gamma only
+             ydip_gamma = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, 
+                                                      bands_range=gamma_db.bs_bands, 
+                                                      project=False, expand=True)
+             
+             BS_wfc = gamma_db.get_Akcv() # [nexcs, nblks, nspin, nk, nc, nv]
+             if BS_wfc.shape[1] == 1 and BS_wfc.shape[2] == 1: # TDA, no spin
+                 BS_wfc = np.squeeze(BS_wfc, axis=(1, 2)) # [nexcs, nk, nc, nv]
+                 # ydip_gamma.dipoles shape: [nkBZ, 3, nc, nv]
+                 exc_dipoles_0 = np.einsum('nkcv,kicv->in', BS_wfc, ydip_gamma.dipoles, optimize=True)
+                 # result shape: [3, nexcs]
+             else:
+                 print('[WARNING] Exciton dipoles calculation only supported for TDA and no-spin-pol. Skipping.')
+
         print('Expanding and saving excitons for the full BZ to excitons.nc...')
         full_exdbs = []
         for iQ in tqdm(range(wfdb.nkBZ)):
             Qpt = wfdb.kBZ[iQ] # reduced
-            #Qpt_car = red_car(Qpt, latdb.rlat)
             # Get rotated Akcv
             Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats)
             
@@ -126,10 +163,19 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
             # Flatten Ak_rot back to eigenvectors format
             eigenvectors_rot = ibz_db.flatten_Akcv(Ak_rot)
             
+            # Rotate exc_dipoles_0 if present
+            exc_dipoles_Q = None
+            if exc_dipoles_0 is not None:
+                isym = latdb.symmetry_indexes[idx_BZQ]
+                rot_mat = latdb.sym_car[isym]
+                # Rotate the vector components
+                exc_dipoles_Q = np.einsum('ij,jn->in', rot_mat, exc_dipoles_0)
+            
             full_exdb = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
                                        ibz_db.l_residual, ibz_db.r_residual,
                                        spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
-                                       table=ibz_db.table, eigenvectors=eigenvectors_rot)
+                                       table=ibz_db.table, eigenvectors=eigenvectors_rot,
+                                       dipoles=exc_dipoles_Q)
             full_exdbs.append(full_exdb)
 
         YamboExcitonDB.save_excitons_nc(full_exdbs, 'excitons.nc')

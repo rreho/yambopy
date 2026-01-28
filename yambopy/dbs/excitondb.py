@@ -69,7 +69,7 @@ class YamboExcitonDB(object):
         Exciton eigenvectors are arranged as eigenvectors[i_exc, i_kvc]
         Transitions are unpacked in table[ i_k, i_v, i_c, i_s_c, i_s_v ] (last two are spin indices)
     """
-    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None, red_qpoint=None,q_cutoff=None,table=None,eigenvectors=None):
+    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None, red_qpoint=None,q_cutoff=None,table=None,eigenvectors=None,dipoles=None):
         if not isinstance(lattice,YamboLatticeDB):
             raise ValueError('Invalid type for lattice argument. It must be YamboLatticeDB')
 
@@ -87,6 +87,7 @@ class YamboExcitonDB(object):
             self.bs_bands = np.array([np.min(self.table[:,1]),np.max(self.table[:,2])]) # set range of bse bands
         self.eigenvectors = eigenvectors
         self.spin_pol = spin_pol
+        self.dipoles = dipoles
 
     @classmethod
     def from_db_file(cls,lattice,filename='ndb.BS_diago_Q1',folder='.',Load_WF=True, neigs=-1):
@@ -228,6 +229,14 @@ class YamboExcitonDB(object):
                         eigvec_var[i, :, :, 0] = db.eigenvectors.real
                         eigvec_var[i, :, :, 1] = db.eigenvectors.imag
             
+            # Dipoles (optional if present)
+            if exdbs[0].dipoles is not None:
+                dip_var = f.createVariable('dipoles', 'f8', ('nq', 'dim3', 'nexcs', 'complex'))
+                for i, db in enumerate(exdbs):
+                    if db.dipoles is not None:
+                        dip_var[i, :, :, 0] = db.dipoles.real
+                        dip_var[i, :, :, 1] = db.dipoles.imag
+            
             # Metadata
             f.units = 'Hartree'
             f.spin_pol = exdbs[0].spin_pol
@@ -262,13 +271,21 @@ class YamboExcitonDB(object):
             if 'eigenvectors' in f.variables:
                 eiv_tmp = f.variables['eigenvectors'][:]
                 eigenvectors_all = eiv_tmp[..., 0] + 1j*eiv_tmp[..., 1]
+
+            dipoles_all = None
+            if 'dipoles' in f.variables:
+                dip_tmp = f.variables['dipoles'][:]
+                dipoles_all = dip_tmp[..., 0] + 1j*dip_tmp[..., 1]
             
             for i in range(nq):
                 eigenvectors = None
                 if eigenvectors_all is not None: eigenvectors = eigenvectors_all[i]
                 
+                dipoles = None
+                if dipoles_all is not None: dipoles = dipoles_all[i]
+                
                 db = cls(lattice, str(i+1), eigenvalues_all[i], l_residual_all[i], r_residual_all[i],
-                         spin_pol=spin_pol, car_qpoint=car_qpoints[i], table=table, eigenvectors=eigenvectors)
+                         spin_pol=spin_pol, car_qpoint=car_qpoints[i], table=table, eigenvectors=eigenvectors, dipoles=dipoles)
                 exdbs.append(db)
         return exdbs
 
