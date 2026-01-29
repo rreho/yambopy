@@ -411,7 +411,7 @@ class YamboDipolesDB():
         with Dataset(filename, 'w', format='NETCDF4') as f:
             # Dimensions
             f.createDimension('complex', 2)
-            f.createDimension('dim3', 3)
+            f.createDimension('cart', 3)
             f.createDimension('nq', nq)
             f.createDimension('nspin', nspin)
             f.createDimension('nk', nk)
@@ -420,13 +420,13 @@ class YamboDipolesDB():
             f.createDimension('ntrans', ntrans)
 
             # (nq, nspin, nk, nc, nv, 3)
-            dip_var = f.createVariable('dipoles', 'f8', ('nq', 'nspin', 'nk', 'nc', 'nv', 'dim3', 'complex'))
+            dip_var = f.createVariable('dipoles', 'f8', ('nq', 'nspin', 'nk', 'nc', 'nv', 'cart', 'complex'))
             dip_var[..., 0] = dip_nq.real
             dip_var[..., 1] = dip_nq.imag
             
             # (nq, nspin, ntrans, 3)
             dip_flat = dip_nq.reshape(nq, nspin, ntrans, 3)
-            dip_flat_var = f.createVariable('dipoles_flat', 'f8', ('nq', 'nspin', 'ntrans', 'dim3', 'complex'))
+            dip_flat_var = f.createVariable('dipoles_flat', 'f8', ('nq', 'nspin', 'ntrans', 'cart', 'complex'))
             dip_flat_var[..., 0] = dip_flat.real
             dip_flat_var[..., 1] = dip_flat.imag
 
