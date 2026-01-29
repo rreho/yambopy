@@ -224,15 +224,15 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
             with Dataset(exph_file_path, 'w', format='NETCDF4') as f:
                 # Dimensions
                 f.createDimension('complex', 2)
-                f.createDimension('q_phonon', elphdb.nq)
+                f.createDimension('Q_out', elphdb.nq)
                 f.createDimension('q_coords', 3)
                 f.createDimension('Q_init', len(Q_points))
                 f.createDimension('Q_coords', 3)
                 
                 # Exph matrix elements
                 # exph_mat shape: [nQ, nq, nmodes, nexc_in, nexc_out]
-                if exph_mat.ndim == 5: dims_G = ['Q_init', 'q_phonon']
-                else:                  dims_G = ['q_phonon']
+            if exph_mat.ndim == 5: dims_G = ['Q_init', 'Q_out']
+                else:                  dims_G = ['Q_out']
 
                 for i, dim in enumerate(exph_mat.shape[len(dims_G):]):
                     dim_name = f'dim_G_{i}'
@@ -248,14 +248,14 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
                 Q_init_var = f.createVariable('Q_init', 'f8', ('Q_init', 'Q_coords'))
                 Q_init_var[:] = np.array(Q_points)
                 
-                # q_phonon
-                q_ph_var = f.createVariable('q_phonon', 'f8', ('q_phonon', 'q_coords'))
-                q_ph_var[:] = elphdb.qpoints
+                # Q_out
+                Q_out_var = f.createVariable('Q_out', 'f8', ('Q_out', 'Q_coords'))
+                Q_out_var[:] = np.array(Q_points) + elphdb.qpoints
                 
         else:
             exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
             print(f'Excph coupling file saved to {exph_file_path}')
-            np.savez(exph_file_path, G=exph_mat, Q_init=np.array(Q_points), q_phonon=elphdb.qpoints)
+            np.savez(exph_file_path, G=exph_mat, Q_init=np.array(Q_points), Q_out=np.array(Q_points)+elphdb.qpoints)
     
     return exph_mat
 
