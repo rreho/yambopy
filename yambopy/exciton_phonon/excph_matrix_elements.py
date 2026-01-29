@@ -231,8 +231,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
                 
                 # Exph matrix elements
                 # exph_mat shape: [nQ, nq, nmodes, nexc_in, nexc_out]
-            if exph_mat.ndim == 5: dims_G = ['Q_init', 'Q_out']
-                else:                  dims_G = ['Q_out']
+                if exph_mat.ndim == 5: dims_G = ['Q_init', 'Q_out'] 
+                else:   dims_G = ['Q_out']
 
                 for i, dim in enumerate(exph_mat.shape[len(dims_G):]):
                     dim_name = f'dim_G_{i}'
