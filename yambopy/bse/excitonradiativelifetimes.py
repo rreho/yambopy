@@ -10,7 +10,7 @@ import numpy as np
 from yambopy import YamboLatticeDB,YamboExcitonDB,YamboDipolesDB
 from yambopy.units import kb,autime2s,ha2ev,m_e,speed_of_light
 import os
-
+from yambopy.tools.citations import citation
 
 def get_exciton_dipole(state, blongdir, ylat, ydip, yexc, _cache={}):
     """
@@ -59,7 +59,7 @@ def get_exciton_dipole(state, blongdir, ylat, ydip, yexc, _cache={}):
     return dip_exc_squared / ylat.nkpoints
 
 
-
+@citation("H.-Y. Chen et al. Phys. Rev. B 100, 075135 (2019)")
 def get_radiative_lifetime_3D_iso(T,state,ylat,ydip,yexc,Meff,eps):
     """
         Function to compute the radiative lifetime tau_S(T) of a single exciton state for *isotropic* 3D materials.
@@ -93,7 +93,7 @@ def get_radiative_lifetime_3D_iso(T,state,ylat,ydip,yexc,Meff,eps):
     
     return 1/(prefactor*dipole_factor*T_factor)
 
-
+@citation("H.-Y. Chen et al. Phys. Rev. B 100, 075135 (2019)")
 def get_radiative_lifetime_3D_aniso(T,state,ylat,ydip,yexc,Meff,eps):
     """
         Function to compute the radiative lifetime tau_S(T) of a single exciton state for *anisotropic* (uniaxial) 3D materials.
@@ -134,8 +134,7 @@ def get_radiative_lifetime_3D_aniso(T,state,ylat,ydip,yexc,Meff,eps):
     
     return 1/(prefactor*dipole_factor*T_factor)  # seconds
 
-
-
+@citation("H.-Y. Chen et al. Phys. Rev. B 100, 075135 (2019)")
 def get_radiative_lifetime_2D(T,state,ylat,ydip,yexc,Meff,eps=1):
     """
         Function to compute the radiative lifetime tau_S(T) of a single exciton state for 2D materials.
@@ -170,7 +169,7 @@ def get_radiative_lifetime_2D(T,state,ylat,ydip,yexc,Meff,eps=1):
 
     return 1/(prefactor*gamma0_factor*T_factor)   # seconds
 
-
+@citation("H.-Y. Chen et al. Phys. Rev. B 100, 075135 (2019)")
 def get_radiative_lifetime_1D(T,state,ylat,ydip,yexc,Meff,eps=1):
     """
         Function to compute the radiative lifetime tau_S(T) of a single exciton state for 1D materials.
@@ -205,7 +204,7 @@ def get_radiative_lifetime_1D(T,state,ylat,ydip,yexc,Meff,eps=1):
     
     return 1/(prefactor*gamma0_factor*T_factor)   # seconds
 
-
+@citation("H.-Y. Chen et al. Phys. Rev. B 100, 075135 (2019)")
 def get_radiative_lifetime_0D(state,ylat,ydip,yexc,eps=1):
     """
         Function to compute the radiative lifetime tau_S(T) of a single exciton state for 0D materials.
