@@ -469,7 +469,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              # Load dipoles, don't project, expand to FBZ
              # Use the bands from the first exciton DB in the list
              bse_bands = exdbs[0].bs_bands
-             dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=True)
+             print(bse_bands)
+             dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=True,debug=True)
              print(f'Saving expanded dipoles to dipoles.nc (bands: {bse_bands})...')
              nq = Qrange[1] - Qrange[0]
              dipdb.save_nc('dipoles.nc', nq=nq)
@@ -505,6 +506,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              
              # Compute exciton dipoles at Gamma: D_S = sum_{kcv} A_{kcv} d_{kcv}
              # ydip for Gamma only
+             print(gamma_db.bs_bands)
              ydip_gamma = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, 
                                                       bands_range=bse_bands, 
                                                       project=False, expand=False,debug=True)

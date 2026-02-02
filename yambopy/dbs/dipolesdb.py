@@ -185,9 +185,9 @@ class YamboDipolesDB():
 
                 if not dip_bands_ordered: # Yambo calculation with DipBandsALl
                     nbandsv = lattice.nbandsv-min_band+1
-                    nbandsc = max_band-nbandsv
-                    indexv  = nbandsv-1
-                    indexc  = nbandsv
+                    nbandsc = max_band-lattice.nbandsv
+                    indexv  = lattice.nbandsv-1
+                    indexc  = lattice.nbandsv
                     nbands1, nbands2 = [nbands, nbands]
                     start_idx_v, start_idx_c = [bands_range[0]-1,bands_range[0]-1]
                     end_idx_v, end_idx_c = [bands_range[1], bands_range[1]]
@@ -208,9 +208,9 @@ class YamboDipolesDB():
 
                 if not dip_bands_ordered: # Yambo calculation with DipBandsAll
                     nbandsv = lattice.nbandsv-min_band+1
-                    nbandsc = max_band-nbandsv
-                    indexv  = nbandsv-1
-                    indexc  = nbandsv
+                    nbandsc = max_band-lattice.nbandsv
+                    indexv  = lattice.nbandsv-1
+                    indexc  = lattice.nbandsv
                     nbands1, nbands2 = [nbands, nbands]
                     start_idx_v, start_idx_c = [0,0]
                     end_idx_v, end_idx_c = [nbands, nbands]
