@@ -142,8 +142,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              # Compute exciton dipoles at Gamma: D_S = sum_{kcv} A_{kcv} d_{kcv}
              # ydip for Gamma only
              ydip_gamma = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, 
-                                                      bands_range=gamma_db.bs_bands, 
-                                                      project=False, expand=False)
+                                                      bands_range=bse_bands, 
+                                                      project=False, expand=False,debug=True)
              
              # Expand dipoles manually to full BZ (without square matrix reshaping)
              rot_mats = latdb.sym_car[latdb.kmap[:, 1], ...]
@@ -178,7 +178,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
 
         print('Expanding and saving excitons for the full BZ to excitons.nc...')
         full_exdbs = []
-        for iQ in tqdm(range(wfdb.nkBZ)):
+        for iQ in tqdm(range(wfdb.nkBZ), desc='Save excitons to full BZ in excitons.nc '):
             Qpt = wfdb.kBZ[iQ] # reduced
             # Get rotated Akcv
             Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats)
