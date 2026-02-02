@@ -23,7 +23,7 @@ class LetzElphElectronPhononDB():
     """
     Python class to read the electron-phonon matrix elements from LetzElPhC.
 
-    About LetzElPhC: https://gitlab.com/lumen-code/LetzElPhC
+    About LetzElPhC: https://github.com/yambo-code/LetzElPhC
     
     By default it reads the full database g(q,k,m,s,b1,b2) including phonon energies.
     
@@ -37,14 +37,14 @@ class LetzElphElectronPhononDB():
     
       :: lph.kpoints         #kpoints in cryst. coords. (BZ)
       :: lph.qpoints         #qpoints in crist. coords. (BZ)
-      :: lph.ph_energies     #Phonon energies (eV)      
+      :: lph.ph_energies     #Phonon energies (eV)
       :: lph.ph_eigenvectors #Phonon modes
       :: lph.gkkp            #El-ph matrix elements (by default normalised with ph. energies) [!!!! RYDBERG UNITS !!!!]:
       :: lph.gkkp_sq         #Couplings (square)
 
     Formats:
     - modes[iq][il][iat][ix]
-    - gkkp[iq][ik][il][is][ib1][ib2]              
+    - gkkp[iq][ik][il][is][ib1][ib2]
     """
 
     def __init__(self,filename,read_all=True,div_by_energies=True,verbose=False):
@@ -111,7 +111,7 @@ class LetzElphElectronPhononDB():
         warn = False
         for Q in indices[0]:
             for M in indices[1]:
-                if Q==0 and M in [0,1,2]: 
+                if Q==0 and M in [0,1,2]:
                     self.ph_energies[Q,M]=0.
                 else:
                     warn = True
@@ -182,6 +182,7 @@ class LetzElphElectronPhononDB():
         bands_range : list, optional
             Specifies the range of bands to read. The start index follows Python indexing (starting from 0),
             and the end index is excluded. If not provided, it defaults to the minimum and maximum bands available.
+            Please note that the bands range should be inbetween the ones used in letelphc inputfile.
         database : Dataset, optional
             If provided, the function will use this open dataset instead of opening the file again.
         convention : str, optional
@@ -287,6 +288,41 @@ class LetzElphElectronPhononDB():
 
         ry2ev = ha2ev/2.
         self.gkkp_bare = descreen_el_ph(self.gkkp,self.ph_energies/ry2ev,self.ph_eigenvectors,Z,Zval,masses=atomic_masses)
+
+    def write_nc(self,filename):
+        """
+        Write the electron-phonon matrix elements gkkp in netCDF4 file with energies given in Hartree.
+        Multiply by 0,5 (Ry to Hartree).
+        """
+        if not self.div_by_energies:
+            print("[WARNING] div_by_energies is False. gkkp will not be in Hartree units as expected.")
+
+        with Dataset(filename, 'w', format='NETCDF4') as f:
+            f.createDimension('complex', 2)
+            f.createDimension('nq', self.nq)
+            f.createDimension('nk', self.nk)
+            f.createDimension('nm', self.nm)
+            f.createDimension('ns', self.ns)
+            f.createDimension('nb1', self.nb1)
+            f.createDimension('nb2', self.nb2)
+            f.createDimension('coords', 3)
+
+            if hasattr(self, 'gkkp'):
+                gkkp_var = f.createVariable('gkkp', 'f8', ('nq', 'nk', 'nm', 'ns', 'nb1', 'nb2', 'complex'))
+                gkkp_hartree = self.gkkp * 0.5
+                gkkp_var[..., 0] = gkkp_hartree.real
+                gkkp_var[..., 1] = gkkp_hartree.imag
+            else:
+                 print("[WARNING] gkkp not loaded. Nothing to save.")
+
+            q_var = f.createVariable('qpoints', 'f8', ('nq', 'coords'))
+            q_var[:] = self.qpoints
+            
+            k_var = f.createVariable('kpoints', 'f8', ('nk', 'coords'))
+            k_var[:] = self.kpoints
+            
+            e_var = f.createVariable('ph_energies', 'f8', ('nq', 'nm'))
+            e_var[:] = self.ph_energies
 
     def __str__(self):
 

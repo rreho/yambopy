@@ -127,6 +127,105 @@ class YamboLatticeDB(object):
         """ write a json file with the lattice information """
         JsonDumper(self.as_dict(),filename)
 
+    @classmethod
+    def from_nc_file(cls, filename):
+        """ Initialize YamboLattice from a netcdf file """
+        if not os.path.isfile(filename):
+            raise FileNotFoundError("error opening %s in YamboLatticeDB"%filename)
+
+        with Dataset(filename, 'r') as f:
+            args = dict(
+                lat                  = f.variables['lat'][:],
+                alat                 = f.variables['alat'][:],
+                sym_car              = f.variables['sym_car'][:],
+                iku_kpoints          = f.variables['iku_kpoints'][:],
+                car_atomic_positions = f.variables['car_atomic_positions'][:],
+                atomic_numbers       = f.variables['atomic_numbers'][:],
+                time_rev             = getattr(f, 'time_rev', None),
+                spinor_components    = getattr(f, 'spinor_components', None),
+                nelectrons           = getattr(f, 'nelectrons', None),
+                mag_syms             = getattr(f, 'mag_syms', None)
+            )
+            y = cls(**args)
+            
+            # Load expansion metadata if present
+            if 'ibz_kpoints' in f.variables:
+                y.ibz_kpoints = f.variables['ibz_kpoints'][:]
+                y.weights_ibz = f.variables['weights_ibz'][:]
+                y.symmetry_indexes = f.variables['symmetry_indexes'][:]
+                y.kpoints_indexes = f.variables['kpoints_indexes'][:]
+                y.BZ_to_IBZ_indexes = y.kpoints_indexes
+                y.IBZ_to_BZ_indexes = {}
+                for ibz_index in np.unique(y.kpoints_indexes):
+                    y.IBZ_to_BZ_indexes[ibz_index] = np.where(y.kpoints_indexes == ibz_index)[0]
+                kmap = np.zeros((y.nkpoints, 2), dtype=int)
+                kmap[:, 0] = y.kpoints_indexes
+                kmap[:, 1] = y.symmetry_indexes
+                y.kmap = kmap
+
+        return y
+
+    def save_nc(self,filename):
+        """ write a netcdf file with the lattice information """
+        with Dataset(filename, 'w', format='NETCDF4') as f:
+            f.createDimension('dim3', 3)
+            f.createDimension('nsym', self.nsym)
+            f.createDimension('natoms', len(self.atomic_numbers))
+            f.createDimension('nkpoints', self.nkpoints)
+            
+            # Lattice vectors
+            lat_var = f.createVariable('lat', 'f8', ('dim3', 'dim3'))
+            lat_var[:] = self.lat
+            
+            # Alat
+            alat_var = f.createVariable('alat', 'f8', ('dim3'))
+            alat_var[:] = self.alat
+            
+            # Symmetries
+            sym_var = f.createVariable('sym_car', 'f8', ('nsym', 'dim3', 'dim3'))
+            sym_var[:] = self.sym_car
+            
+            # Atomic positions (cartesian)
+            apos_var = f.createVariable('car_atomic_positions', 'f8', ('natoms', 'dim3'))
+            apos_var[:] = self.car_atomic_positions
+            
+            # Atomic numbers
+            anum_var = f.createVariable('atomic_numbers', 'i4', ('natoms'))
+            anum_var[:] = self.atomic_numbers
+
+            # K-points (iku)
+            kpts_var = f.createVariable('iku_kpoints', 'f8', ('nkpoints', 'dim3'))
+            kpts_var[:] = self.iku_kpoints
+
+            # K-points (car)
+            car_kpts_var = f.createVariable('car_kpoints', 'f8', ('nkpoints', 'dim3'))
+            car_kpts_var[:] = self.car_kpoints
+
+            # K-points (red)
+            red_kpts_var = f.createVariable('red_kpoints', 'f8', ('nkpoints', 'dim3'))
+            red_kpts_var[:] = self.red_kpoints
+            
+            # Expansion metadata (optional)
+            if hasattr(self, 'ibz_kpoints'):
+                f.createDimension('nk_ibz', len(self.ibz_kpoints))
+                ibz_kpts_var = f.createVariable('ibz_kpoints', 'f8', ('nk_ibz', 'dim3'))
+                ibz_kpts_var[:] = self.ibz_kpoints
+                
+                weights_var = f.createVariable('weights_ibz', 'f8', ('nk_ibz'))
+                weights_var[:] = self.weights_ibz
+                
+                sym_idx_var = f.createVariable('symmetry_indexes', 'i4', ('nkpoints'))
+                sym_idx_var[:] = self.symmetry_indexes
+                
+                kpt_idx_var = f.createVariable('kpoints_indexes', 'i4', ('nkpoints'))
+                kpt_idx_var[:] = self.kpoints_indexes
+
+            # Other info
+            f.time_rev = int(self.time_rev)
+            if self.spinor_components is not None: f.spinor_components = int(self.spinor_components)
+            if self.nelectrons is not None: f.nelectrons = int(self.nelectrons)
+            if self.mag_syms is not None: f.mag_syms = int(self.mag_syms)
+
     @property
     def iku_kpoints(self):
         return self._iku_kpoints

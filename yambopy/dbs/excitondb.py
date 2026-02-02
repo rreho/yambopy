@@ -69,7 +69,7 @@ class YamboExcitonDB(object):
         Exciton eigenvectors are arranged as eigenvectors[i_exc, i_kvc]
         Transitions are unpacked in table[ i_k, i_v, i_c, i_s_c, i_s_v ] (last two are spin indices)
     """
-    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None,q_cutoff=None,table=None,eigenvectors=None):
+    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None, red_qpoint=None,q_cutoff=None,table=None,eigenvectors=None,exc_dipoles=None,electronic_dipoles=None):
         if not isinstance(lattice,YamboLatticeDB):
             raise ValueError('Invalid type for lattice argument. It must be YamboLatticeDB')
 
@@ -80,12 +80,15 @@ class YamboExcitonDB(object):
         self.r_residual = r_residual
         #optional
         self.car_qpoint = car_qpoint
+        self.red_qpoint = red_qpoint
         self.q_cutoff = q_cutoff
         self.table = table
         if table is not None:
             self.bs_bands = np.array([np.min(self.table[:,1]),np.max(self.table[:,2])]) # set range of bse bands
         self.eigenvectors = eigenvectors
         self.spin_pol = spin_pol
+        self.exc_dipoles = exc_dipoles
+        self.electronic_dipoles = electronic_dipoles
 
     @classmethod
     def from_db_file(cls,lattice,filename='ndb.BS_diago_Q1',folder='.',Load_WF=True, neigs=-1):
@@ -106,9 +109,17 @@ class YamboExcitonDB(object):
         with Dataset(path_filename) as database:
             #energies
             eig =  database.variables['BS_Energies'][...].data*ha2ev
+            is_coupling = database.variables['COUPLING'][...].data
             eigenvalues = eig[:,0]+eig[:,1]*I
             neig_full = len(eigenvalues)
-            if neigs < 0 or neigs > neig_full: neigs = neig_full
+            ## in the case of Coupling, we override partial loading. This is because, the energies are 
+            ## not ordered, so it really does not make sense.
+            if is_coupling and neigs >0:
+                print("Warning : In the coupling case, all the states are read, overriding user input")
+            #
+            if neigs < 0 or neigs > neig_full or is_coupling:
+                neigs = neig_full
+            #
             eigenvalues = eigenvalues[:neigs]
 
             if 'BS_left_Residuals' in list(database.variables.keys()):
@@ -167,6 +178,226 @@ class YamboExcitonDB(object):
                 q_cutoff = np.abs(bare_qpg[0,int(Qpt)-1])
 
         return cls(lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol,q_cutoff=q_cutoff,car_qpoint=car_qpoint,table=table,eigenvectors=eigenvectors)
+
+    @staticmethod
+    def save_excitons_nc(exdbs, filename):
+        """
+        Consolidate multiple YamboExcitonDB objects (for different Q) into one netCDF file
+        """
+        if not exdbs: return
+        nq = len(exdbs)
+        nexcs = exdbs[0].nexcitons
+        ntrans = exdbs[0].ntransitions
+        
+        with Dataset(filename, 'w', format='NETCDF4') as f:
+            f.createDimension('nq', nq)
+            f.createDimension('nexcs', nexcs)
+            f.createDimension('ntrans', ntrans)
+            f.createDimension('table_cols', 5)
+            f.createDimension('cart', 3)
+            f.createDimension('complex', 2)
+            
+            # Additional dimensions for Akcv
+            Akcv_0 = exdbs[0].get_Akcv()
+            if Akcv_0 is not None:
+                nblks = Akcv_0.shape[1]
+                nspin = Akcv_0.shape[2]
+                nk = Akcv_0.shape[3]
+                nc = Akcv_0.shape[4]
+                nv = Akcv_0.shape[5]
+                f.createDimension('nblks', nblks)
+                f.createDimension('nspin', nspin)
+                f.createDimension('nk', nk)
+                f.createDimension('nc', nc)
+                f.createDimension('nv', nv)
+                
+                # Eigenvectors (6D Akcv)
+                eigvec_var = f.createVariable('eigenvectors', 'f8', ('nq', 'nexcs', 'nblks', 'nspin', 'nk', 'nc', 'nv', 'complex'))
+                for i, db in enumerate(exdbs):
+                    Akcv = db.get_Akcv()
+                    if Akcv is not None:
+                        eigvec_var[i, ..., 0] = Akcv.real
+                        eigvec_var[i, ..., 1] = Akcv.imag
+            else:
+                # Fallback if no Akcv is available (e.g. no eigenvectors loaded)
+                # We can still create nspin dimension if needed for dipoles
+                nspin = 1
+                if exdbs[0].spin_pol == 'pol': nspin = 2
+                f.createDimension('nspin', nspin)
+                # We need nk, nc, nv for dipoles too if present
+                if exdbs[0].electronic_dipoles is not None:
+                    dip_0 = exdbs[0].electronic_dipoles
+                    # (nspin, nk, 3, nc, nv) or (nk, 3, nc, nv)
+                    if dip_0.ndim == 5:
+                        nk, nc, nv = dip_0.shape[1], dip_0.shape[3], dip_0.shape[4]
+                    else:
+                        nk, nc, nv = dip_0.shape[0], dip_0.shape[2], dip_0.shape[3]
+                    f.createDimension('nk', nk)
+                    f.createDimension('nc', nc)
+                    f.createDimension('nv', nv)
+
+            # Energies
+            energies_var = f.createVariable('eigenvalues', 'f8', ('nq', 'nexcs', 'complex'))
+            for i, db in enumerate(exdbs):
+                energies_var[i, :, 0] = db.eigenvalues.real/ha2ev
+                energies_var[i, :, 1] = db.eigenvalues.imag/ha2ev
+            
+            # Residuals
+            l_res_var = f.createVariable('l_residual', 'f8', ('nq', 'nexcs', 'complex'))
+            r_res_var = f.createVariable('r_residual', 'f8', ('nq', 'nexcs', 'complex'))
+            for i, db in enumerate(exdbs):
+                l_res_var[i, :, 0] = db.l_residual.real
+                l_res_var[i, :, 1] = db.l_residual.imag
+                r_res_var[i, :, 0] = db.r_residual.real
+                r_res_var[i, :, 1] = db.r_residual.imag
+            
+            # Q-points
+            qpts_var = f.createVariable('red_qpoints', 'f8', ('nq', 'cart'))
+            for i, db in enumerate(exdbs):
+                if db.red_qpoint is not None:
+                    qpts_var[i, :] = db.red_qpoint
+            
+            # Table (same for all Q usually, but let's save one)
+            table_var = f.createVariable('table', 'i4', ('ntrans', 'table_cols'))
+            table_var[:] = exdbs[0].table
+            
+            # Eigenvectors (flattened)
+            if exdbs[0].eigenvectors is not None:
+                eigvec_flat_var = f.createVariable('eigenvectors_flat', 'f8', ('nq', 'nexcs', 'ntrans', 'complex'))
+                for i, db in enumerate(exdbs):
+                    if db.eigenvectors is not None:
+                        eigvec_flat_var[i, :, :, 0] = db.eigenvectors.real
+                        eigvec_flat_var[i, :, :, 1] = db.eigenvectors.imag
+            
+            # Exciton Dipoles
+            if exdbs[0].exc_dipoles is not None:
+                exc_dip_var = f.createVariable('exc_dipoles', 'f8', ('nq', 'nexcs', 'cart', 'complex'))
+                for i, db in enumerate(exdbs):
+                    if db.exc_dipoles is not None:
+                        # db.exc_dipoles shape: (3, nexcs) -> (nexcs, 3)
+                        exc_dip_var[i, :, :, 0] = db.exc_dipoles.T.real
+                        exc_dip_var[i, :, :, 1] = db.exc_dipoles.T.imag
+            
+            # Electronic Dipoles
+            if exdbs[0].electronic_dipoles is not None:
+                # 6D Dipoles (nspin, nk, cart, nc, nv) -> (nspin, nk, nc, nv, cart)
+                dip_var = f.createVariable('dipoles', 'f8', ('nq', 'nspin', 'nk', 'nc', 'nv', 'cart', 'complex'))
+                
+                # Flat Dipoles following BSE table
+                dip_flat_var = f.createVariable('dipoles_flat', 'f8', ('nq', 'ntrans', 'cart', 'complex'))
+                
+                # Precompute sorting indices for flattening according to table
+                v_min = np.min(exdbs[0].table[:,1])
+                c_min = np.min(exdbs[0].table[:,2])
+                bs_table0 = exdbs[0].table[:,0]-1 # k-index
+                bs_table1 = exdbs[0].table[:,1] - v_min # v-index
+                bs_table2 = exdbs[0].table[:,2] - c_min # c-index
+                bs_table3 = exdbs[0].table[:,3]-1 # spin-index
+                # Flattened index in (nspin, nk, nc, nv)
+                flat_idx = bs_table3*(nk*nc*nv) + bs_table0*(nc*nv) + bs_table2*nv + bs_table1
+
+                for i, db in enumerate(exdbs):
+                    if db.electronic_dipoles is not None:
+                        # (nspin, nk, cart, nc, nv) -> (nspin, nk, nc, nv, cart)
+                        # or (nk, cart, nc, nv) if nspin=1
+                        dip_in = db.electronic_dipoles
+                        if dip_in.ndim == 4: dip_in = dip_in[None, ...] # add spin
+                        
+                        dip_6d = dip_in.transpose(0, 1, 3, 4, 2)
+                        dip_var[i, ..., 0] = dip_6d.real
+                        dip_var[i, ..., 1] = dip_6d.imag
+                        
+                        # Flattening
+                        # dip_6d is (nspin, nk, nc, nv, cart)
+                        dip_6d_reshaped = dip_6d.reshape(-1, 3) # (nspin*nk*nc*nv, 3)
+                        dip_flat = dip_6d_reshaped[flat_idx]
+                        dip_flat_var[i, :, :, 0] = dip_flat.real
+                        dip_flat_var[i, :, :, 1] = dip_flat.imag
+            
+            # Metadata
+            f.units = 'Hartree'
+            f.spin_pol = exdbs[0].spin_pol
+            f.dipole_units = 'atomic units (physical, 1/Nk normalization)'
+
+    @classmethod
+    def load_excitons_nc(cls, lattice, filename):
+        """
+        Load consolidated excitons from a single netCDF file
+        Returns a list of YamboExcitonDB objects
+        """
+        exdbs = []
+        with Dataset(filename, 'r') as f:
+            nq = f.dimensions['nq'].size
+            nexcs = f.dimensions['nexcs'].size
+            ntrans = f.dimensions['ntrans'].size
+            spin_pol = f.spin_pol
+            #units = f.units
+            
+            eig_tmp = f.variables['eigenvalues'][:]
+            # Convert back to eV if saved in Hartree
+            units = getattr(f, 'units', 'eV')
+            if units == 'Hartree':
+                eigenvalues_all = (eig_tmp[..., 0] + 1j*eig_tmp[..., 1]) * ha2ev
+            else:
+                eigenvalues_all = eig_tmp[..., 0] + 1j*eig_tmp[..., 1]
+            
+            l_res_tmp = f.variables['l_residual'][:]
+            l_residual_all = l_res_tmp[..., 0] + 1j*l_res_tmp[..., 1]
+            
+            r_res_tmp = f.variables['r_residual'][:]
+            r_residual_all = r_res_tmp[..., 0] + 1j*r_res_tmp[..., 1]
+            
+            red_qpoints = f.variables['red_qpoints'][:]
+            table = f.variables['table'][:]
+            
+            # Load eigenvectors (prefer flat for internal DB representation)
+            eigenvectors_all = None
+            if 'eigenvectors_flat' in f.variables:
+                eiv_tmp = f.variables['eigenvectors_flat'][:]
+                eigenvectors_all = eiv_tmp[..., 0] + 1j*eiv_tmp[..., 1]
+            elif 'eigenvectors' in f.variables and f.variables['eigenvectors'].ndim == 4:
+                eiv_tmp = f.variables['eigenvectors'][:]
+                eigenvectors_all = eiv_tmp[..., 0] + 1j*eiv_tmp[..., 1]
+
+            exc_dipoles_all = None
+            if 'exc_dipoles' in f.variables:
+                exc_dip_tmp = f.variables['exc_dipoles'][:]
+                # (nq, nexcs, 3) -> (nq, 3, nexcs)
+                exc_dipoles_all = np.moveaxis(exc_dip_tmp[..., 0] + 1j*exc_dip_tmp[..., 1], -1, -2)
+            elif 'dipoles' in f.variables and f.variables['dipoles'].ndim == 4: # Backward compatibility
+                exc_dip_tmp = f.variables['dipoles'][:]
+                exc_dipoles_all = exc_dip_tmp[..., 0] + 1j*exc_dip_tmp[..., 1]
+
+            electronic_dipoles_all = None
+            if 'dipoles' in f.variables:
+                dip_tmp = f.variables['dipoles'][:]
+                dip_c = dip_tmp[..., 0] + 1j*dip_tmp[..., 1]
+                if dip_c.ndim == 5: # (nq, nk, nc, nv, cart) - OLD FORMAT
+                    # (nq, nk, nc, nv, cart) -> (nq, nk, 3, nc, nv)
+                    electronic_dipoles_all = np.moveaxis(dip_c, -1, -3)
+                elif dip_c.ndim == 6: # (nq, nspin, nk, nc, nv, cart) - NEW FORMAT
+                    # (nq, nspin, nk, nc, nv, cart) -> (nq, nspin, nk, 3, nc, nv)
+                    dip_6d = np.moveaxis(dip_c, -1, -3)
+                    if dip_6d.shape[1] == 1: # squeeze nspin=1
+                        electronic_dipoles_all = np.squeeze(dip_6d, axis=1)
+                    else:
+                        electronic_dipoles_all = dip_6d
+            
+            for i in range(nq):
+                eigenvectors = None
+                if eigenvectors_all is not None: eigenvectors = eigenvectors_all[i]
+                
+                exc_dipoles = None
+                if exc_dipoles_all is not None: exc_dipoles = exc_dipoles_all[i]
+                
+                electronic_dipoles = None
+                if electronic_dipoles_all is not None: electronic_dipoles = electronic_dipoles_all[i]
+                
+                db = cls(lattice, str(i+1), eigenvalues_all[i], l_residual_all[i], r_residual_all[i],
+                         spin_pol=spin_pol, red_qpoint=red_qpoints[i], table=table, eigenvectors=eigenvectors, 
+                         exc_dipoles=exc_dipoles, electronic_dipoles=electronic_dipoles)
+                exdbs.append(db)
+        return exdbs
 
     @property
     def unique_vbands(self):
@@ -235,17 +466,21 @@ class YamboExcitonDB(object):
         intensities = self.get_intensities()
 
         #get sorted energies
-        sort_e, sort_i = self.get_sorted()     
+        sort_e, sort_i = self.get_sorted()
 
         #write excitons sorted by energy
-        with open('%s_E.dat'%prefix, 'w') as f:
-            for e,n in sort_e:
-                f.write("%3d %12.8lf %12.8e\n"%(n+1,e,intensities[n])) 
+        se_arr = np.array(sort_e)
+        n_idx = se_arr[:, 1].astype(int)
+        data_e = np.column_stack((se_arr[:, 0], intensities[n_idx], n_idx + 1))
+        np.savetxt('%s_E.dat'%prefix, data_e, fmt='%16.8f %20.8e %10d',
+                   header='    E [ev]             Strength           Index')
 
         #write excitons sorted by intensities
-        with open('%s_I.dat'%prefix,'w') as f:
-            for i,n in sort_i:
-                f.write("%3d %12.8lf %12.8e\n"%(n+1,eig[n],i)) 
+        si_arr = np.array(sort_i)
+        n_idx = si_arr[:, 1].astype(int)
+        data_i = np.column_stack((eig[n_idx], np.abs(si_arr[:, 0]), n_idx + 1))
+        np.savetxt('%s_I.dat'%prefix, data_i, fmt='%16.8f %20.8e %10d',
+                   header='    E [ev]             Strength           Index')
 
     def get_Akcv(self):
         """
@@ -291,6 +526,36 @@ class YamboExcitonDB(object):
         #
         self.Akcv = eig_wfcs_returned
         return self.Akcv
+
+    def flatten_Akcv(self, Akcv):
+        """
+        Inverse of get_Akcv: (neigs,nblks,nspin,nk,nc,nv) -> (neigs,ntransitions)
+        """
+        neigs = Akcv.shape[0]
+        nblks = Akcv.shape[1]
+        nspin = Akcv.shape[2]
+        nk = Akcv.shape[3]
+        nc = Akcv.shape[4]
+        nv = Akcv.shape[5]
+        
+        table_len = nspin*nk*nv*nc
+        v_min = np.min(self.table[:,1])
+        c_min = np.min(self.table[:,2])
+        bs_table0 = self.table[:,0]-1
+        bs_table1 = self.table[:,1] - v_min
+        bs_table2 = self.table[:,2] - c_min
+        bs_table3 = self.table[:,3]-1
+        
+        sort_idx = bs_table0*nc*nv + bs_table2*nv + bs_table1 + nk*nc*nv*bs_table3
+        
+        eigenvectors = np.zeros((neigs, self.ntransitions), dtype=Akcv.dtype)
+        Akcv_flat = Akcv.reshape(neigs, nblks, -1)
+        
+        eigenvectors[:, :table_len] = Akcv_flat[:, 0, np.argsort(sort_idx)]
+        if nblks == 2:
+            eigenvectors[:, table_len:] = Akcv_flat[:, 1, np.argsort(sort_idx)]
+            
+        return eigenvectors
     
     def real_wf_to_cube(self, iexe, wfdb, fixed_postion=[0,0,0], supercell=[1,1,1], degen_tol=1e-2,
                         wfcCutoffRy=-1, fix_particle='h', phase=False, block_size=256):
@@ -377,7 +642,7 @@ class YamboExcitonDB(object):
         """
         get the intensities of the excitons
         """
-        intensities = self.l_residual*self.r_residual
+        intensities = np.abs(self.l_residual*self.r_residual)
         intensities /= np.max(intensities)
         return intensities
 
