@@ -64,8 +64,9 @@ def ex_ph_mat_full_gpu_write_slice(
         raise ValueError("cdtype must be np.complex64 or np.complex128")
 
     nmodes = int(elph_mat.shape[0])
-    nS, nk, nc, nv = map(int, wfc_k.shape)
-
+    nS,_,_, nk, nc, nv = wfc_k.shape
+    wfc_k=wfc_k.reshape(nS,nk,nc,nv)
+    wfc_k_q =wfc_k_q.reshape(nS,nk,nc,nv)
     # k mappings (CPU)
     idx_k_minus_Q_minus_q = find_kindx(ktree, kpts - qpt_ph[None, :] - qpt_exe[None, :])
     idx_k_minus_q         = find_kindx(ktree, kpts - qpt_ph[None, :])
@@ -92,9 +93,8 @@ def ex_ph_mat_full_gpu_write_slice(
         mch = m1 - m0
 
         elph_ch = get_elph_chunk(m0, m1)  # (mch,nk,nb,nb)
-        gcc = elph_ch[:, idx_k_minus_q,         nv:, nv:]   # (mch,nk,nc,nc)
-        gvv = elph_ch[:, idx_k_minus_Q_minus_q, :nv, :nv]   # (mch,nk,nv,nv)
-
+        gcc = elph_ch[:, idx_k_minus_q,    0,     nv:, nv:]   # (mch,nk,nc,nc)
+        gvv = elph_ch[:, idx_k_minus_Q_minus_q, 0, :nv, :nv]   # (mch,nk,nv,nv)
         A_e = A[:, idx_k_minus_q, ...].contiguous()         # (nS,nk,nc,nv)
 
         # tmp_e: (mch,nS,nk,nc,nv)
@@ -208,29 +208,29 @@ def _infer_keep_idx_and_full_shape(lattice, elphdb, wfdb, BSE_dir):
         if hasattr(obj, "keep_idx") and hasattr(obj, "full_shape"):
             return np.asarray(obj.keep_idx, dtype=np.int64), tuple(obj.full_shape)
 
-    # 2) try to find a mask file in BSE_dir
-    if BSE_dir is not None and os.path.isdir(BSE_dir):
-        cand = []
-        for fn in os.listdir(BSE_dir):
-            if fn.endswith(".npz") and ("mask" in fn or "rediag" in fn or "keep" in fn):
-                cand.append(os.path.join(BSE_dir, fn))
-        cand.sort()
-        for fn in cand:
-            try:
-                z = np.load(fn, allow_pickle=True)
-                if "keep_idx" in z:
-                    keep_idx = np.asarray(z["keep_idx"], dtype=np.int64)
-                elif "keep_mask" in z:
-                    keep_idx = np.where(np.asarray(z["keep_mask"]).ravel())[0].astype(np.int64)
-                else:
-                    continue
+    # # 2) try to find a mask file in BSE_dir
+    # if BSE_dir is not None and os.path.isdir(BSE_dir):
+    #     cand = []
+    #     for fn in os.listdir(BSE_dir):
+    #         if fn.endswith(".npz") and ("mask" in fn or "rediag" in fn or "keep" in fn):
+    #             cand.append(os.path.join(BSE_dir, fn))
+    #     cand.sort()
+    #     for fn in cand:
+    #         try:
+    #             z = np.load(fn, allow_pickle=True)
+    #             if "keep_idx" in z:
+    #                 keep_idx = np.asarray(z["keep_idx"], dtype=np.int64)
+    #             elif "keep_mask" in z:
+    #                 keep_idx = np.where(np.asarray(z["keep_mask"]).ravel())[0].astype(np.int64)
+    #             else:
+    #                 continue
 
-                if "full_shape" in z:
-                    full_shape = tuple(map(int, z["full_shape"]))
-                    return keep_idx, full_shape
-                # if full_shape not present, we cannot safely infer nc,nv
-            except Exception:
-                pass
+    #             if "full_shape" in z:
+    #                 full_shape = tuple(map(int, z["full_shape"]))
+    #                 return keep_idx, full_shape
+    #             # if full_shape not present, we cannot safely infer nc,nv
+    #         except Exception:
+    #             pass
 
     raise RuntimeError(
         "Reduced exciton vectors detected, but keep_idx/full_shape could not be inferred.\n"
@@ -307,22 +307,20 @@ def exciton_phonon_matelem_gpu(
     # Main loops
     for iQ_pos, iQ in enumerate(tqdm(Q_indices, desc="Q")):
         Q_in = np.asarray(wfdb.kBZ[iQ], dtype=float)
-
         # Build Ak(Q)
         # You already have rotate_Akcv_Q in your codebase; keep its behavior unchanged.
-        Ak = rotate_Akcv_Q(wfdb, exdbs, Q_in, Dmats, folder=BSE_dir) 
+        Ak = rotate_Akcv_Q(wfdb, exdbs, Q_in, Dmats, folder=BSE_dir)
         Ak = np.asarray(Ak)
         Ak = Ak[:nS]
 
         # determine full vs reduced once
-        is_reduced = (Ak.ndim == 2)   # (nS,ntrans_red)
-        is_full    = (Ak.ndim == 4)   # (nS,nk,nc,nv)
+        is_reduced = (Ak.ndim == 4)   # (nS,ntrans_red)
+        is_full    = (Ak.ndim == 6)   # (nS,1,1,nk,nc,nv)
         if not (is_reduced or is_full):
             raise ValueError(f"rotate_Akcv_Q returned unexpected shape {Ak.shape}")
 
         if is_reduced and (keep_idx is None or full_shape is None):
             keep_idx, full_shape = _infer_keep_idx_and_full_shape(lattice, elphdb, wfdb, BSE_dir)
-
         for iq in tqdm(range(nq), desc="q", leave=False):
             ph_eig, elph_mat = elphdb.read_iq(iq, convention="standard")
             elph_mat = elph_mat.transpose(1, 0, 2, 4, 3)  # -> (nmodes,nk,nb,nb)
@@ -333,6 +331,8 @@ def exciton_phonon_matelem_gpu(
             Akq = np.asarray(Akq)[:nS]
 
             if is_full:
+                # Ak = Ak[:nS, 0,0]
+                # Akq = np.asarray(Akq)[:nS,0,0]
                 ex_ph_mat_full_gpu_write_slice(
                     wfc_k_q=Akq,
                     wfc_k=Ak,
@@ -479,13 +479,14 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
 
     # Calculation
     print('Calculating EXCPH matrix elements...')
-    exph_mat = []
     Q_points = []
     for iQ in tqdm(range(Qrange[0],Qrange[1])):
+        exph_mat = []
         Q_in = wfdb.kBZ[iQ]
         Q_points.append(Q_in)
         exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,\
                                                    BSE_Lin_dir=BSE_Lin_dir,Q_in=Q_in,neigs=neigs) )
+        save_excph(exph_file, elphdb, Q_points, np.array(exph_mat))
     # IO
     if len(exph_mat)<2: exph_mat = exph_mat[0] # single Q-point calculation (suppress axis)
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
@@ -667,6 +668,59 @@ def exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,BSE_Lin_dir=None,
     exph_mat = 0.5 * np.array(exph_mat).transpose(0,1,3,2) #[nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
 
     return exph_mat
+
+def save_excph(exph_file, elphdb, Q_points, exph_mat):
+    """
+    Save exph_mat incrementally for each Q point.
+
+    Args:
+        exph_file: Path to the output NetCDF file.
+        elphdb: Database containing qpoints and other metadata.
+        Q_points: List of Q points (initial Q points).
+        exph_mat: Computed exph_mat for a single Q point (shape: [nq, nmodes, nexc_in, nexc_out]).
+    """
+    # Open the file in append mode (creates it if it doesn't exist)
+    with Dataset(exph_file, 'a', format='NETCDF4') as f:
+        # Create dimensions and variables if they don't exist
+        if 'G' not in f.variables:
+            print(f'Initializing file: {exph_file}')
+            f.createDimension('complex', 2)
+            f.createDimension('Q_out', elphdb.nq)
+            f.createDimension('q_coords', 3)
+            f.createDimension('Q_init', len(Q_points))
+
+            # Create Q_init and Q_out variables
+            Q_init_var = f.createVariable('Q_init', 'f8', ('Q_init', 'q_coords'))
+            Q_out_var = f.createVariable('Q_out', 'f8', ('Q_out', 'q_coords'))
+            Q_init_var[:] = np.array(Q_points)
+            Q_out_var[:] = np.array(Q_points) + elphdb.qpoints
+
+            # Create dimensions for G (excluding Q_init and Q_out)
+            dims_G = ['Q_init', 'Q_out']
+            print(exph_mat.shape)
+            for i, dim_size in enumerate(exph_mat.shape):
+                dim_name = f'dim_G_{i}'
+                f.createDimension(dim_name, dim_size)
+            dims_G.extend([f'dim_G_{i}' for i in range(len(exph_mat.shape))])
+            dims_G.append('complex')
+
+            # Create the G variable
+            G_var = f.createVariable('G', 'f8', tuple(dims_G))
+        else:
+            G_var = f.variables['G']
+
+        # Determine the current Q point index
+        current_Q_idx = f.variables['G'].shape[0] if 'G' in f.variables else 0
+
+        # Reshape exph_mat to fit the expected slice shape
+        # exph_mat shape: [nq, nmodes, nexc_in, nexc_out] -> [1, nq, nmodes, nexc_in, nexc_out, 2]
+        exph_mat_stacked = np.stack([exph_mat.real, exph_mat.imag], axis=-1)
+        exph_mat_reshaped = exph_mat_stacked[np.newaxis, ...]  # Add a dimension for Q_init
+
+        # Write exph_mat for the current Q point
+        G_var[current_Q_idx:current_Q_idx + 1, ...] = exph_mat_reshaped
+
+    print(f'Saved Q point {current_Q_idx} to {exph_file}')
 
 def save_or_load_dmat(wfdb, mode='run', dmat_file='Dmats.npy'):
     """
