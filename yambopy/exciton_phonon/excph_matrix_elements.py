@@ -486,7 +486,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         Q_points.append(Q_in)
         exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,\
                                                    BSE_Lin_dir=BSE_Lin_dir,Q_in=Q_in,neigs=neigs) )
-        save_excph(exph_file, elphdb, Q_points, np.array(exph_mat))
+        print("max exph:",np.array(exph_mat).max())
+        save_excph(exph_file, elphdb, Q_points, np.array(exph_mat), iQ)
     # IO
     if len(exph_mat)<2: exph_mat = exph_mat[0] # single Q-point calculation (suppress axis)
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
@@ -669,7 +670,7 @@ def exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,BSE_Lin_dir=None,
 
     return exph_mat
 
-def save_excph(exph_file, elphdb, Q_points, exph_mat):
+def save_excph(exph_file, elphdb, Q_points, exph_mat, iQ):
     """
     Save exph_mat incrementally for each Q point.
 
@@ -683,44 +684,48 @@ def save_excph(exph_file, elphdb, Q_points, exph_mat):
     with Dataset(exph_file, 'a', format='NETCDF4') as f:
         # Create dimensions and variables if they don't exist
         if 'G' not in f.variables:
-            print(f'Initializing file: {exph_file}')
+            # Dimensions
             f.createDimension('complex', 2)
             f.createDimension('Q_out', elphdb.nq)
             f.createDimension('q_coords', 3)
             f.createDimension('Q_init', len(Q_points))
+            f.createDimension('Q_coords', 3)
+                
+            # Exph matrix elements
+            # exph_mat shape: [nQ, nq, nmodes, nexc_in, nexc_out]
+            if exph_mat.ndim == 5: dims_G = ['Q_init', 'Q_out'] 
+            else:   dims_G = ['Q_out']
 
-            # Create Q_init and Q_out variables
-            Q_init_var = f.createVariable('Q_init', 'f8', ('Q_init', 'q_coords'))
-            Q_out_var = f.createVariable('Q_out', 'f8', ('Q_out', 'q_coords'))
-            Q_init_var[:] = np.array(Q_points)
-            Q_out_var[:] = np.array(Q_points) + elphdb.qpoints
-
-            # Create dimensions for G (excluding Q_init and Q_out)
-            dims_G = ['Q_init', 'Q_out']
-            print(exph_mat.shape)
-            for i, dim_size in enumerate(exph_mat.shape):
-                dim_name = f'dim_G_{i}'
-                f.createDimension(dim_name, dim_size)
-            dims_G.extend([f'dim_G_{i}' for i in range(len(exph_mat.shape))])
+            for i, dim in enumerate(exph_mat.shape[len(dims_G):]):
+                    dim_name = f'dim_G_{i}'
+                    f.createDimension(dim_name, dim)
+                    dims_G.append(dim_name)
             dims_G.append('complex')
-
-            # Create the G variable
-            G_var = f.createVariable('G', 'f8', tuple(dims_G))
+            G_var = f.createVariable('G', 'f8', dims_G)
+            G_var[..., 0] = exph_mat.real
+            G_var[..., 1] = exph_mat.imag
+                
+            # Q_init
+            Q_init_var = f.createVariable('Q_init', 'f8', ('Q_init', 'Q_coords'))
+            Q_init_var[:] = np.array(Q_points)
+                
+            # Q_out
+            Q_out_var = f.createVariable('Q_out', 'f8', ('Q_out', 'Q_coords'))
+            Q_out_var[:] = np.array(Q_points) + elphdb.qpoints
         else:
             G_var = f.variables['G']
 
         # Determine the current Q point index
-        current_Q_idx = f.variables['G'].shape[0] if 'G' in f.variables else 0
+            current_Q_idx = iQ
 
         # Reshape exph_mat to fit the expected slice shape
         # exph_mat shape: [nq, nmodes, nexc_in, nexc_out] -> [1, nq, nmodes, nexc_in, nexc_out, 2]
-        exph_mat_stacked = np.stack([exph_mat.real, exph_mat.imag], axis=-1)
-        exph_mat_reshaped = exph_mat_stacked[np.newaxis, ...]  # Add a dimension for Q_init
-
+            exph_mat_stacked = np.stack([exph_mat.real, exph_mat.imag], axis=-1)
+        # exph_mat_reshaped = exph_mat_stacked[np.newaxis, ...]  # Add a dimension for Q_init
         # Write exph_mat for the current Q point
-        G_var[current_Q_idx:current_Q_idx + 1, ...] = exph_mat_reshaped
+            G_var[current_Q_idx:current_Q_idx + 1, ...] = exph_mat_stacked
 
-    print(f'Saved Q point {current_Q_idx} to {exph_file}')
+    print(f'Saved Q point {iQ} to {exph_file}')
 
 def save_or_load_dmat(wfdb, mode='run', dmat_file='Dmats.npy'):
     """
