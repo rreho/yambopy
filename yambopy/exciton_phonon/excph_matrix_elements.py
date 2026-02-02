@@ -35,9 +35,11 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         The name of the folder which contains the BSE calculation. Default is 'bse'.
     BSE_Lin_dir : str, optional
         The name of the folder which contains the BSE Q=0 calculation (for optical spectra). Default is BSE_dir.
-    Qrange : int list or 'full', optional
+    Qrange : int list or 'full' or 'full-IBZ', optional
         Exciton Qpoint index range [iQ_initial, iQ_final] (python counting). 
-        If 'full', it covers all k-points in the FBZ. Default is [0,1] (Gamma point only).
+        If 'full', it covers all k-points in the FBZ. 
+        If 'full-IBZ', it covers only k-points in the IBZ.
+        Default is [0,1] (Gamma point only).
     neigs : int, optional
         Number of excitonic states included in calculation. Default is -1 (all).
     dmat_mode : str, optional
@@ -54,7 +56,15 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         If True, save expanded dipoles in `dipoles.nc` and exciton dipoles in `excitons.nc`. Default is False.
     """
     if Qrange is None: Qrange = [0,1]
-    if Qrange == 'full': Qrange = [0, wfdb.nkBZ]
+    
+    # Define indices to iterate over
+    if Qrange == 'full':
+        Q_indices = range(wfdb.nkBZ)
+    elif Qrange == 'full-IBZ':
+        # Get BZ indices corresponding to IBZ k-points
+        Q_indices = [wfdb.kptBZidx(wfdb.kpts_iBZ[i]) for i in range(wfdb.nkpoints)]
+    else:
+        Q_indices = range(Qrange[0], Qrange[1])
 
     # Check if we just need to load
     if exph_file.endswith('.nc'): exph_file_path = exph_file
@@ -110,7 +120,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              print(bse_bands)
              dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=True,debug=True)
              print(f'Saving expanded dipoles to dipoles.nc (bands: {bse_bands})...')
-             nq = Qrange[1] - Qrange[0]
+             nq = len(Q_indices)
              dipdb.save_nc('dipoles.nc', nq=nq)
         else:
              print('[WARNING] ndb.dipoles not found. Dipoles will not be saved.')
@@ -120,7 +130,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
     print('Calculating EXCPH matrix elements...')
     exph_mat = []
     Q_points = []
-    for iQ in tqdm(range(Qrange[0],Qrange[1])):
+    for iQ in tqdm(Q_indices):
         Q_in = wfdb.kBZ[iQ]
         Q_points.append(Q_in)
         exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,\
@@ -251,13 +261,15 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
                 Q_init_var[:] = np.array(Q_points)
                 
                 # Q_out
-                Q_out_var = f.createVariable('Q_out', 'f8', ('Q_out', 'Q_coords'))
-                Q_out_var[:] = np.array(Q_points) + elphdb.qpoints
+                # elphdb.qpoints: [nq, 3], Q_points: [nQ_init, 3]
+                f.createDimension('nq', elphdb.nq)
+                Q_out_var = f.createVariable('Q_out', 'f8', ('Q_init', 'nq', 'Q_coords'))
+                Q_out_var[:] = np.array(Q_points)[:,None,:] + elphdb.qpoints[None,:,:]
                 
         else:
             exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
             print(f'Excph coupling file saved to {exph_file_path}')
-            np.savez(exph_file_path, G=exph_mat, Q_init=np.array(Q_points), Q_out=np.array(Q_points)+elphdb.qpoints)
+            np.savez(exph_file_path, G=exph_mat, Q_init=np.array(Q_points), Q_out=np.array(Q_points)[:,None,:] + elphdb.qpoints[None,:,:])
     
     return exph_mat
 
