@@ -152,6 +152,7 @@ class YamboDipolesDB():
             nq_ibz, nq_bz, nk_ibz, nk_bz = database.variables['HEAD_R_LATT'][:].astype(int)
             spin = database.variables['SPIN_VARS'][0].astype(int)
             min_band, max_band, indexv, indexc = database.variables['PARS'][:4].astype(int)
+            min_band_db, max_band_db = min_band, max_band
             dip_bands_ordered = database.variables['PARS'][8].astype(int)
             
             # Determine the number of bands to read
@@ -189,8 +190,8 @@ class YamboDipolesDB():
                     indexv  = lattice.nbandsv-1
                     indexc  = lattice.nbandsv
                     nbands1, nbands2 = [nbands, nbands]
-                    start_idx_v, start_idx_c = [bands_range[0]-1,bands_range[0]-1]
-                    end_idx_v, end_idx_c = [bands_range[1], bands_range[1]]
+                    start_idx_v, start_idx_c = [bands_range[0]-min_band_db,bands_range[0]-min_band_db]
+                    end_idx_v, end_idx_c = [bands_range[1]-min_band_db+1, bands_range[1]-min_band_db+1]
 
             # Cases 1. and 2.
             if len(bands_range) == 0:    # Read full database
