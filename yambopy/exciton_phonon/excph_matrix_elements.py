@@ -265,11 +265,23 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
                 f.createDimension('nq', elphdb.nq)
                 Q_out_var = f.createVariable('Q_out', 'f8', ('Q_init', 'nq', 'Q_coords'))
                 Q_out_var[:] = np.array(Q_points)[:,None,:] + elphdb.qpoints[None,:,:]
+
+                # BZ to IBZ Mapping
+                f.createDimension('nk_bz', wfdb.nkBZ)
+                kBZ_var = f.createVariable('kBZ', 'f8', ('nk_bz', 'Q_coords'))
+                kBZ_var[:] = wfdb.kBZ
+                kidx_var = f.createVariable('kpoints_indexes', 'i4', ('nk_bz',))
+                kidx_var[:] = latdb.kpoints_indexes
+                symidx_var = f.createVariable('symmetry_indexes', 'i4', ('nk_bz',))
+                symidx_var[:] = latdb.symmetry_indexes
                 
         else:
             exph_file_path = exph_file if exph_file.endswith('.npz') else exph_file.replace('.npy', '.npz')
             print(f'Excph coupling file saved to {exph_file_path}')
-            np.savez(exph_file_path, G=exph_mat, Q_init=np.array(Q_points), Q_out=np.array(Q_points)[:,None,:] + elphdb.qpoints[None,:,:])
+            np.savez(exph_file_path, G=exph_mat, Q_init=np.array(Q_points), 
+                     Q_out=np.array(Q_points)[:,None,:] + elphdb.qpoints[None,:,:],
+                     kBZ=wfdb.kBZ, kpoints_indexes=latdb.kpoints_indexes,
+                     symmetry_indexes=latdb.symmetry_indexes)
     
     return exph_mat
 
