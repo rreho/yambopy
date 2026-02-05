@@ -161,7 +161,8 @@ def SF_Harmonic_Analysis(nldb, tol=1e-10, X_order=4, X_order2=None, T_range=[-1,
     else:
         raise ValueError("Fields different from SIN/SOFTSIN are not supported ! ")
     
-    if(nldb.Efield_general[2]["name"] != "none"):  raise ValueError("Three fields not supported yet ! ")
+    if(nldb.N_ext_fields==3): 
+        if(nldb.Efield_general[2]["name"] != "none"):  raise ValueError("Three fields not supported yet ! ")
 
     print("Number of frequencies : %d " % n_frequencies)
     # Smaller frequency
