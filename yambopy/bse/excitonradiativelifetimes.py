@@ -250,28 +250,32 @@ def average_lifetime(Trange,states,ylat,ydip,yexc,dimension,Meff=None,eps=None,d
                             - '3D' or '3D_iso' for isotropic 3D bulk systems
                             - '3D_aniso' for anisotropic (uniaxial) 3D bulks
                             - '2D', '1D', '0D' for lower-dimensional systems
+            * Meff:         exciton effective mass. Needed by 3D, 2D, 1D calculations.
+            * eps:          environment dielectric constant.
+            * dip_dir:      dipole orientation. Needed by 2D and 1D calculations.
 
         Output
             * Array of averaged radiative lifetime with length as Trange in input
     """
+    
+    ES = np.real(yexc.eigenvalues)
+    DeltaE = ES-ES[states[0]]
 
     if dimension in ['3D','3D_iso']:
-        gammas = np.array([1/get_radiative_lifetime_3D_iso(Trange,state,ylat,ydip,yexc,Meff,eps) for state in states])
+        gammas = np.array([np.exp(-DeltaE[state]/(kb*Trange))/get_radiative_lifetime_3D_iso(Trange,state,ylat,ydip,yexc,Meff,eps) for state in states])
     elif dimension=='3D_aniso':
-        gammas = np.array([1/get_radiative_lifetime_3D_aniso(Trange,state,ylat,ydip,yexc,Meff,eps) for state in states])
+        gammas = np.array([np.exp(-DeltaE[state]/(kb*Trange))/get_radiative_lifetime_3D_aniso(Trange,state,ylat,ydip,yexc,Meff,eps) for state in states])
     elif dimension=='2D':
-        gammas = np.array([1/get_radiative_lifetime_2D(Trange,state,ylat,ydip,yexc,Meff,eps,dip_dir) for state in states])
+        gammas = np.array([np.exp(-DeltaE[state]/(kb*Trange))/get_radiative_lifetime_2D(Trange,state,ylat,ydip,yexc,Meff,eps,dip_dir) for state in states])
     elif dimension=='1D':
-        gammas = np.array([1/get_radiative_lifetime_1D(Trange,state,ylat,ydip,yexc,Meff,eps,dip_dir) for state in states])
+        gammas = np.array([np.exp(-DeltaE[state]/(kb*Trange))/get_radiative_lifetime_1D(Trange,state,ylat,ydip,yexc,Meff,eps,dip_dir) for state in states])
     elif dimension=='0D':
-        gammas = np.array([1/get_radiative_lifetime_0D(state,ylat,ydip,yexc,eps) for state in states])
+        gammas = np.array([np.exp(-DeltaE[state]/(kb*Trange))/get_radiative_lifetime_0D(state,ylat,ydip,yexc,eps) for state in states])
     else:
         raise ValueError("dimension must be one of the following: '3D','3D_iso','3D_aniso', '2D', '1D', '0D'")
 
     gamma_sum = np.sum(gammas,axis=0)
 
-    ES = np.real(yexc.eigenvalues)
-    DeltaE = ES-ES[states[0]]
     normalize = np.array([np.exp(-DeltaE[state]/(kb*Trange)) for state in states])
     normalize_sum = np.sum(normalize,axis=0)
 
