@@ -136,7 +136,7 @@ def get_radiative_lifetime_3D_aniso(T,state,ylat,ydip,yexc,Meff,eps):
 
 
 
-def get_radiative_lifetime_2D(T,state,ylat,ydip,yexc,Meff,eps=1):
+def get_radiative_lifetime_2D(T,state,ylat,ydip,yexc,Meff,eps=1,dip_dir=[0,0,1]):
     """
         Function to compute the radiative lifetime tau_S(T) of a single exciton state for 2D materials.
 
@@ -147,7 +147,8 @@ def get_radiative_lifetime_2D(T,state,ylat,ydip,yexc,Meff,eps=1):
             * ydip:     dipoles database, YamboDipolesDB
             * yexc:     BSE database, YamboExcitonDB
             * Meff:     exciton effective mass in electron rest mass (m_e) units. 
-            * eps:      environment dielectric constant. Default: eps=1, vacuum
+            * eps:      environment dielectric constant. Default: eps=1, vacuum.
+            * dip_dir:  orientation of the dipole moments. Default: [1,1,0] in the xy plane.
 
         Output
             * Radiative lifetime of exciton state in seconds
@@ -159,7 +160,7 @@ def get_radiative_lifetime_2D(T,state,ylat,ydip,yexc,Meff,eps=1):
     lat = ylat.lat
     A = np.cross(lat[0],lat[1])[2] # Bohr**2
 
-    muS2 = get_exciton_dipole(state,[1,1,0],ylat,ydip,yexc) # Bohr**2
+    muS2 = get_exciton_dipole(state,dip_dir,ylat,ydip,yexc) # Bohr**2
     ES = np.real(yexc.eigenvalues[state]) # eV
 
     Meff_eV = Meff*m_e   # eV
@@ -171,7 +172,7 @@ def get_radiative_lifetime_2D(T,state,ylat,ydip,yexc,Meff,eps=1):
     return 1/(prefactor*gamma0_factor*T_factor)   # seconds
 
 
-def get_radiative_lifetime_1D(T,state,ylat,ydip,yexc,Meff,eps=1):
+def get_radiative_lifetime_1D(T,state,ylat,ydip,yexc,Meff,eps=1,dip_dir=[0,0,1]):
     """
         Function to compute the radiative lifetime tau_S(T) of a single exciton state for 1D materials.
 
@@ -182,7 +183,8 @@ def get_radiative_lifetime_1D(T,state,ylat,ydip,yexc,Meff,eps=1):
             * ydip:     dipoles database, YamboDipolesDB
             * yexc:     BSE database, YamboExcitonDB
             * Meff:     exciton effective mass in electron rest mass (m_e) units. 
-            * eps:      environment dielectric constant. Default: eps=1, vacuum
+            * eps:      environment dielectric constant. Default: eps=1, vacuum.
+            * dip_dir:  orientation of the dipole moments. Default: [0,0,1] along z.
 
         Output
             * Radiative lifetime of exciton state in seconds
@@ -192,9 +194,9 @@ def get_radiative_lifetime_1D(T,state,ylat,ydip,yexc,Meff,eps=1):
         raise ValueError("Meff and eps must be floats")
 
     lat = ylat.lat
-    Lz = lat[2]
+    Lz = lat[2,2]
 
-    muS2 = get_exciton_dipole(state,[0,0,1],ylat,ydip,yexc) # Bohr**2
+    muS2 = get_exciton_dipole(state,dip_dir,ylat,ydip,yexc) # Bohr**2
     ES = np.real(yexc.eigenvalues[state])  # eV
 
     Meff_eV = Meff*m_e   # eV
@@ -234,7 +236,7 @@ def get_radiative_lifetime_0D(state,ylat,ydip,yexc,eps=1):
 
 
 
-def average_lifetime(Trange,states,ylat,ydip,yexc,dimension,Meff=None,eps=None):
+def average_lifetime(Trange,states,ylat,ydip,yexc,dimension,Meff=None,eps=None,dip_dir=None):
     """
         Function to compute the material's exciton radiative lifetime thermally averaged on the exciton states `states`.
 
@@ -258,9 +260,9 @@ def average_lifetime(Trange,states,ylat,ydip,yexc,dimension,Meff=None,eps=None):
     elif dimension=='3D_aniso':
         gammas = np.array([1/get_radiative_lifetime_3D_aniso(Trange,state,ylat,ydip,yexc,Meff,eps) for state in states])
     elif dimension=='2D':
-        gammas = np.array([1/get_radiative_lifetime_2D(Trange,state,ylat,ydip,yexc,Meff,eps) for state in states])
+        gammas = np.array([1/get_radiative_lifetime_2D(Trange,state,ylat,ydip,yexc,Meff,eps,dip_dir) for state in states])
     elif dimension=='1D':
-        gammas = np.array([1/get_radiative_lifetime_1D(Trange,state,ylat,ydip,yexc,Meff,eps) for state in states])
+        gammas = np.array([1/get_radiative_lifetime_1D(Trange,state,ylat,ydip,yexc,Meff,eps,dip_dir) for state in states])
     elif dimension=='0D':
         gammas = np.array([1/get_radiative_lifetime_0D(state,ylat,ydip,yexc,eps) for state in states])
     else:
