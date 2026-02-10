@@ -222,7 +222,7 @@ def get_radiative_lifetime_0D(state,ylat,ydip,yexc,eps=1,shiftE=0):
             * ydip:     dipoles database, YamboDipolesDB
             * yexc:     BSE database, YamboExcitonDB
             * eps:      environment dielectric constant. Default: eps=1, vacuum
-            * shiftE:   rigid shift of exciton energies. Default: shift=0 eV
+            * shiftE:   rigid shift of exciton energies. Default: shift=0 eV.
 
         Output
             * Radiative lifetime of exciton state in seconds
