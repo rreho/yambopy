@@ -258,7 +258,7 @@ def average_lifetime(Trange,states,ylat,ydip,yexc,dimension,Meff=None,eps=None,d
             * Meff:         exciton effective mass. Needed by 3D, 2D, 1D calculations.
             * eps:          environment dielectric constant.
             * dip_dir:      dipole orientation. Needed by 2D and 1D calculations.
-            * shiftE:   rigid shift of exciton energies. Default: shift=0 eV
+            * shiftE:   rigid shift of exciton energies. Default: shift=0 eV.
 
         Output
             * Array of averaged radiative lifetime with length as Trange in input
