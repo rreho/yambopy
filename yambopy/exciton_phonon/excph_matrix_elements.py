@@ -84,30 +84,43 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         return exph_mat_loaded
 
     # Load exc dbs
-    exdbs = []
     excitons_nc_path = os.path.join(BSE_dir, 'excitons.nc')
     if os.path.exists(excitons_nc_path):
         print(f'Loading excitons from {excitons_nc_path}...')
         exdbs = YamboExcitonDB.load_excitons_nc(latdb, excitons_nc_path)
     else:
-        for ik in range(wfdb.nkpoints):
-            filename = 'ndb.BS_diago_Q%d' % (ik+1)
+        # We need exdbs for the matrix elements calculation
+        # Let's find available files to avoid FileNotFoundError
+        import glob, re
+        files = glob.glob(os.path.join(BSE_dir, 'ndb.BS_diago_Q*'))
+        q_indices = sorted([int(re.search(r'ndb\.BS_diago_Q(\d+)', f).group(1)) for f in files if re.search(r'ndb\.BS_diago_Q(\d+)', f)])
+        
+        exdbs_dict = {}
+        for iq in q_indices:
+            filename = 'ndb.BS_diago_Q%d' % iq
             excdb = YamboExcitonDB.from_db_file(latdb,filename=filename,folder=BSE_dir,\
                                                 Load_WF=True, neigs=neigs)
-            exdbs.append(excdb)
-            #
-            # NM : Add a sanity check to avoid a disasterous consequence
-            # if the user gives wrong bse band indices.
-            min_bnd_bse = np.min(excdb.unique_vbands)
-            max_bnd_bse = np.max(excdb.unique_cbands)+1
-            assert (wfdb.min_bnd == min_bnd_bse) and ((wfdb.min_bnd + wfdb.nbands) == max_bnd_bse), \
-                print("Error: BSE bands mismatch. Given bands range : [%d, %d]. " %(
-                    wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands) +
-                    "Bse band range found (expected) : [%d %d]" %( min_bnd_bse,max_bnd_bse))
+            exdbs_dict[iq] = excdb
+            
+        # Create ordered list for exdbs (indexed by IBZ k-point 0..nk-1)
+        max_iq = max(q_indices)
+        exdbs = [None] * max_iq
+        for iq, db in exdbs_dict.items():
+            exdbs[iq-1] = db
+
+        # NM : Add a sanity check to avoid a disasterous consequence
+        # if the user gives wrong bse band indices.
+        min_bnd_bse = np.min(exdbs_dict[q_indices[0]].unique_vbands)
+        max_bnd_bse = np.max(exdbs_dict[q_indices[0]].unique_cbands)+1
+        assert (wfdb.min_bnd == min_bnd_bse) and ((wfdb.min_bnd + wfdb.nbands) == max_bnd_bse), \
+            print("Error: BSE bands mismatch. Given bands range : [%d, %d]. " %(
+                wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands) +
+                "Bse band range found (expected) : [%d %d]" %( min_bnd_bse,max_bnd_bse))
 
     # get D matrices
     Dmats = save_or_load_dmat(wfdb,mode=dmat_mode,dmat_file='Dmats.npy')
 
+    dipdb = None
     if save_dipoles:
         dipoles_path = os.path.join(BSE_dir, 'ndb.dipoles')
         if not os.path.exists(dipoles_path):
@@ -117,11 +130,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              # Load dipoles, don't project, expand to FBZ
              # Use the bands from the first exciton DB in the list
              bse_bands = exdbs[0].bs_bands
-             print(bse_bands)
-             dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=True,debug=True)
-             print(f'Saving expanded dipoles to dipoles.nc (bands: {bse_bands})...')
-             nq = len(Q_indices)
-             dipdb.save_nc('dipoles.nc', nq=nq)
+             dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=True,debug=False)
+             dipdb.save_nc('dipoles.nc')
         else:
              print('[WARNING] ndb.dipoles not found. Dipoles will not be saved.')
              save_dipoles = False
@@ -140,90 +150,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
     
     if save_excitons:
-        # Compute exciton dipoles at Q=0 if possible
-        exc_dipoles_0 = None
-        if save_dipoles:
-             idx_gamma_bz = wfdb.kptBZidx(np.zeros(3))
-             if len(exdbs) == wfdb.nkBZ: # FBZ list
-                 gamma_db = exdbs[idx_gamma_bz]
-             else: # IBZ list
-                 iQ_gamma_ibz = latdb.kpoints_indexes[idx_gamma_bz]
-                 gamma_db = exdbs[iQ_gamma_ibz]
-             
-             # Compute exciton dipoles at Gamma: D_S = sum_{kcv} A_{kcv} d_{kcv}
-             # ydip for Gamma only
-             print(gamma_db.bs_bands)
-             ydip_gamma = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, 
-                                                      bands_range=gamma_db.bs_bands, 
-                                                      project=False, expand=False,debug=True)
-             
-             # Expand dipoles manually to full BZ (without square matrix reshaping)
-             rot_mats = latdb.sym_car[latdb.kmap[:, 1], ...]
-             dip_expanded = np.einsum('kij,kjcv->kicv', rot_mats, ydip_gamma.dipoles[latdb.kmap[:, 0]], optimize=True)
-             time_rev_s = (latdb.kmap[:, 1] >= len(latdb.sym_car) / (1 + int(latdb.time_rev)))
-             dip_expanded[time_rev_s] = dip_expanded[time_rev_s].conj()
-             
-             # Apply physical normalization (1/Nk)
-             dip_expanded /= latdb.nkpoints
-
-             BS_wfc = gamma_db.get_Akcv() # [nexcs, nblks, nspin, nk, nc, nv]
-             if BS_wfc.shape[1] == 1 and BS_wfc.shape[2] == 1: # TDA, no spin
-                 BS_wfc = np.squeeze(BS_wfc, axis=(1, 2)) # [nexcs, nk, nc, nv]
-                 # dip_expanded shape: [nkBZ, 3, nc, nv]
-                 # Expand BS_wfc to full BZ if needed
-                 if BS_wfc.shape[1] != dip_expanded.shape[0]:
-                     BS_wfc = BS_wfc[:, latdb.kmap[:, 0], ...]
-                 
-                 # Sanity check for dimensions
-                 if BS_wfc.shape[2:] != dip_expanded.shape[2:]:
-                     print(f'[WARNING] Dimension mismatch: BS_wfc {BS_wfc.shape[2:]} vs Dipoles {dip_expanded.shape[2:]}. Slicing may be required.')
-                     # Use the minimum common dimensions
-                     nc_min = min(BS_wfc.shape[2], dip_expanded.shape[2])
-                     nv_min = min(BS_wfc.shape[3], dip_expanded.shape[3])
-                     BS_wfc = BS_wfc[..., :nc_min, :nv_min]
-                     dip_expanded = dip_expanded[..., :nc_min, :nv_min]
-
-                 exc_dipoles_0 = np.einsum('nkcv,kicv->in', BS_wfc, dip_expanded, optimize=True)
-                 # result shape: [3, nexcs]
-             else:
-                 print('[WARNING] Exciton dipoles calculation only supported for TDA and no-spin-pol. Skipping.')
-
-        print('Expanding and saving excitons for the full BZ to excitons.nc...')
-        full_exdbs = []
-        for iQ in tqdm(range(wfdb.nkBZ)):
-            Qpt = wfdb.kBZ[iQ] # reduced
-            # Get rotated Akcv
-            Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats)
-            
-            # Identify IBZ index
-            idx_BZQ = wfdb.kptBZidx(Qpt)
-            iQ_iBZ = latdb.kpoints_indexes[idx_BZQ]
-            ibz_db = exdbs[iQ_iBZ]
-            
-            # Create rotated YamboExcitonDB
-            # Flatten Ak_rot back to eigenvectors format
-            eigenvectors_rot = ibz_db.flatten_Akcv(Ak_rot)
-            
-            # Rotate exc_dipoles_0 if present
-            exc_dipoles_Q = None
-            if exc_dipoles_0 is not None:
-                isym = latdb.symmetry_indexes[idx_BZQ]
-                rot_mat = latdb.sym_car[isym]
-                # Rotate the vector components
-                exc_dipoles_Q = np.einsum('ij,jn->in', rot_mat, exc_dipoles_0)
-                # Time reversal conjugation
-                if isym >= len(latdb.sym_car) / (1 + int(latdb.time_rev)):
-                    exc_dipoles_Q = exc_dipoles_Q.conj()
-            
-            full_exdb = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
-                                       ibz_db.l_residual, ibz_db.r_residual,
-                                       spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
-                                       table=ibz_db.table, eigenvectors=eigenvectors_rot,
-                                       exc_dipoles=exc_dipoles_Q,
-                                       electronic_dipoles=dip_expanded if save_dipoles else None)
-            full_exdbs.append(full_exdb)
-
-        YamboExcitonDB.save_excitons_nc(full_exdbs, 'excitons.nc')
+        bse_bnds_range = [wfdb.min_bnd, wfdb.min_bnd + wfdb.nbands]
+        YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, 'excitons.nc', dipdb=dipdb if save_dipoles else None, bands_range=bse_bnds_range)
     
     if save_lattice:
         print('Saving lattice to lattice.nc...')
@@ -358,15 +286,10 @@ def save_or_load_dmat(wfdb, mode='run', dmat_file='Dmats.npy'):
 
 def rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=None):
     '''
-    Qpt reduced coordinates in BZ
+    Qpt reduced coordinates in BZ or whatever
     '''
     latdb = wfdb.ydb
     idx_BZQ = wfdb.kptBZidx(Qpt)
-    
-    # If exdbs is already expanded to FBZ, just return the wavefunction
-    if len(exdbs) == wfdb.nkBZ and folder is None:
-        return exdbs[idx_BZQ].get_Akcv()
-
     iQ_isymm = latdb.symmetry_indexes[idx_BZQ]
     iQ_iBZ = latdb.kpoints_indexes[idx_BZQ]
     trev  = (iQ_isymm >= len(latdb.sym_car) / (1 + int(np.rint(latdb.time_rev))))
