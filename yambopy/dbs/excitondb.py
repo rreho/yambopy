@@ -314,7 +314,7 @@ class YamboExcitonDB(object):
             # Metadata
             f.units = 'Hartree'
             f.spin_pol = exdbs[0].spin_pol
-            f.dipole_units = 'atomic units (physical, 1/Nk normalization)'
+            f.dipole_units = 'atomic units (physical)'
 
     @classmethod
     def load_excitons_nc(cls, lattice, filename):
@@ -598,7 +598,7 @@ class YamboExcitonDB(object):
              dip_expanded = dipdb.dipoles[:, :, ic:ic+nc_bse, iv:iv+nv_bse]
              
         # Return physical intensive quantity (1/Nk normalization)
-        dip_expanded = dip_expanded / self.lattice.nkpoints
+       # dip_expanded = dip_expanded / self.lattice.nkpoints
              
         if BS_wfc.shape[1] == 1 and BS_wfc.shape[2] == 1: # TDA, no spin
             BS_wfc = np.squeeze(BS_wfc, axis=(1, 2)) # [nexcs, nk, nc, nv]
@@ -702,9 +702,9 @@ class YamboExcitonDB(object):
                         electronic_dipoles[:, time_rev_s] = electronic_dipoles[:, time_rev_s].conj()
                     
                     # Apply 1/Nk normalization for intensive quantity
-                    electronic_dipoles = electronic_dipoles / latdb.nkpoints
+                    #electronic_dipoles = electronic_dipoles / latdb.nkpoints
                 else:
-                    electronic_dipoles = electronic_dipoles_base / latdb.nkpoints
+                    #electronic_dipoles = electronic_dipoles_base / latdb.nkpoints
 
             #temp_db = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
             #                         ibz_db.l_residual, ibz_db.r_residual,
