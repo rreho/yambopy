@@ -348,13 +348,16 @@ class YamboDipolesDB():
             dip_tmp = f.variables['dipoles'][:]
             dipoles = dip_tmp[..., 0] + 1j*dip_tmp[..., 1]
             
-            # shape: (nq, nspin, nk, nc, nv, 3)
+            # shape: (nspin, nk, nc, nv, 3)
             # YamboDipolesDB internal expects (nspin, nk, 3, nc, nv) or (nk, 3, nc, nv)
-            # We take the first Q-point if multiple are present for initialization
-            dip = dipoles[0] # (nspin, nk, nc, nv, 3)
+            # Take care of potential multiple Q-points (not standard for YamboDipolesDB but supported in NC)
+            if dipoles.ndim == 6: # (nq, nspin, nk, nc, nv, 3)
+                dip = dipoles[0]
+            else:
+                dip = dipoles
             
-            # Move cartesian axis back: (nspin, nk, 3, nc, nv)
-            dip = np.moveaxis(dip, -1, 2)
+            # Move cartesian axis back: (..., nk, 3, nc, nv)
+            dip = np.moveaxis(dip, -1, -3)
             
             spin = f.dimensions['nspin'].size
             nk_bz = f.dimensions['nk'].size
@@ -388,12 +391,11 @@ class YamboDipolesDB():
             return cls(lattice, nq_ibz, nq_bz, nk_ibz, nk_bz, spin, min_band, max_band, indexv, indexc, 
                        bands_range, nbands, nv, nc, True, dip, dip_type=dip_type, field_dir=[1,1,1], project=False, polarization_mode=None, expand=expand)
 
-    def save_nc(self, filename, nq=1):
+    def save_nc(self, filename):
         """
         Save dipoles to a netCDF file
         """
-        # Prepare dipoles with the right shape: (nq, nspin, nk, nc, nv, 3)
-        # Standard internal shape is (nspin, nk, 3, nc, nv) or (nk, 3, nc, nv)
+        # Prepare dipoles with the right shape: (nspin, nk, nc, nv, 3)
         # Apply physical normalization (1/Nk)
         dip = self.dipoles / self.nk_bz
         if dip.ndim == 4: # (nk, 3, nc, nv)
@@ -403,31 +405,27 @@ class YamboDipolesDB():
         # Current dip: (nspin, nk, 3, nc, nv)
         dip = np.moveaxis(dip, 2, -1)
         
-        # Add nq dimension: (nq, nspin, nk, nc, nv, 3)
-        dip_nq = np.repeat(dip[None, ...], nq, axis=0)
-        
-        nq, nspin, nk, nc, nv, pol = dip_nq.shape
+        nspin, nk, nc, nv, pol = dip.shape
         ntrans = nk * nc * nv
 
         with Dataset(filename, 'w', format='NETCDF4') as f:
             # Dimensions
             f.createDimension('complex', 2)
             f.createDimension('cart', 3)
-            f.createDimension('nq', nq)
             f.createDimension('nspin', nspin)
             f.createDimension('nk', nk)
             f.createDimension('nc', nc)
             f.createDimension('nv', nv)
             f.createDimension('ntrans', ntrans)
 
-            # (nq, nspin, nk, nc, nv, 3)
-            dip_var = f.createVariable('dipoles', 'f8', ('nq', 'nspin', 'nk', 'nc', 'nv', 'cart', 'complex'))
-            dip_var[..., 0] = dip_nq.real
-            dip_var[..., 1] = dip_nq.imag
+            # (nspin, nk, nc, nv, 3)
+            dip_var = f.createVariable('dipoles', 'f8', ('nspin', 'nk', 'nc', 'nv', 'cart', 'complex'))
+            dip_var[..., 0] = dip.real
+            dip_var[..., 1] = dip.imag
             
-            # (nq, nspin, ntrans, 3)
-            dip_flat = dip_nq.reshape(nq, nspin, ntrans, 3)
-            dip_flat_var = f.createVariable('dipoles_flat', 'f8', ('nq', 'nspin', 'ntrans', 'cart', 'complex'))
+            # (nspin, ntrans, 3)
+            dip_flat = dip.reshape(nspin, ntrans, 3)
+            dip_flat_var = f.createVariable('dipoles_flat', 'f8', ('nspin', 'ntrans', 'cart', 'complex'))
             dip_flat_var[..., 0] = dip_flat.real
             dip_flat_var[..., 1] = dip_flat.imag
 

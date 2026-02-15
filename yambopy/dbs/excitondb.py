@@ -224,17 +224,12 @@ class YamboExcitonDB(object):
                 nspin = 1
                 if exdbs[0].spin_pol == 'pol': nspin = 2
                 f.createDimension('nspin', nspin)
-                # We need nk, nc, nv for dipoles too if present
-                if exdbs[0].electronic_dipoles is not None:
-                    dip_0 = exdbs[0].electronic_dipoles
-                    # (nspin, nk, 3, nc, nv) or (nk, 3, nc, nv)
-                    if dip_0.ndim == 5:
-                        nk, nc, nv = dip_0.shape[1], dip_0.shape[3], dip_0.shape[4]
-                    else:
-                        nk, nc, nv = dip_0.shape[0], dip_0.shape[2], dip_0.shape[3]
-                    f.createDimension('nk', nk)
-                    f.createDimension('nc', nc)
-                    f.createDimension('nv', nv)
+                nk = exdbs[0].nkpoints
+                nc = exdbs[0].ncbands
+                nv = exdbs[0].nvbands
+                f.createDimension('nk', nk)
+                f.createDimension('nc', nc)
+                f.createDimension('nv', nv)
 
             # Energies
             energies_var = f.createVariable('eigenvalues', 'f8', ('nq', 'nexcs', 'complex'))
@@ -275,44 +270,46 @@ class YamboExcitonDB(object):
                 for i, db in enumerate(exdbs):
                     if db.exc_dipoles is not None:
                         # db.exc_dipoles shape: (3, nexcs) -> (nexcs, 3)
-                        exc_dip_var[i, :, :, 0] = db.exc_dipoles.T.real
-                        exc_dip_var[i, :, :, 1] = db.exc_dipoles.T.imag
+                        exc_dip_var[i, :, :, 0] = db.exc_dipoles.swapaxes(1,0).real
+                        exc_dip_var[i, :, :, 1] = db.exc_dipoles.swapaxes(1,0).imag
             
             # Electronic Dipoles
             if exdbs[0].electronic_dipoles is not None:
-                # 6D Dipoles (nspin, nk, cart, nc, nv) -> (nspin, nk, nc, nv, cart)
-                dip_var = f.createVariable('dipoles', 'f8', ('nq', 'nspin', 'nk', 'nc', 'nv', 'cart', 'complex'))
+                # 6D Dipoles (nspin, nk, nc, nv, cart)
+                # We save only one set since they are the same for all Q
+                dip_var = f.createVariable('dipoles', 'f8', ('nspin', 'nk', 'nc', 'nv', 'cart', 'complex'))
                 
                 # Flat Dipoles following BSE table
-                dip_flat_var = f.createVariable('dipoles_flat', 'f8', ('nq', 'ntrans', 'cart', 'complex'))
+                dip_flat_var = f.createVariable('dipoles_flat', 'f8', ('ntrans', 'cart', 'complex'))
                 
-                # Precompute sorting indices for flattening according to table
-                v_min = np.min(exdbs[0].table[:,1])
-                c_min = np.min(exdbs[0].table[:,2])
-                bs_table0 = exdbs[0].table[:,0]-1 # k-index
-                bs_table1 = exdbs[0].table[:,1] - v_min # v-index
-                bs_table2 = exdbs[0].table[:,2] - c_min # c-index
-                bs_table3 = exdbs[0].table[:,3]-1 # spin-index
-                # Flattened index in (nspin, nk, nc, nv)
+                # Use dipoles from first exdbs
+                db0 = exdbs[0]
+                dip_in = db0.electronic_dipoles
+                # Ensure dip_in is (nspin, nk, 3, nc, nv)
+                if dip_in.ndim == 4: dip_in = dip_in[None, ...] 
+                
+                # Check if we need to broadcast across spin
+                if dip_in.shape[0] == 1 and nspin == 2:
+                    dip_in = np.repeat(dip_in, 2, axis=0)
+                
+                dip_6d = dip_in.transpose(0, 1, 3, 4, 2) # (nspin, nk, nc, nv, 3)
+                
+                dip_var[:, :, :, :, :, 0] = dip_6d.real
+                dip_var[:, :, :, :, :, 1] = dip_6d.imag
+                
+                # Flattening
+                v_min = np.min(db0.table[:,1])
+                c_min = np.min(db0.table[:,2])
+                bs_table0 = db0.table[:,0]-1 # k-index
+                bs_table1 = db0.table[:,1] - v_min # v-index
+                bs_table2 = db0.table[:,2] - c_min # c-index
+                bs_table3 = db0.table[:,3]-1 # spin-index
                 flat_idx = bs_table3*(nk*nc*nv) + bs_table0*(nc*nv) + bs_table2*nv + bs_table1
-
-                for i, db in enumerate(exdbs):
-                    if db.electronic_dipoles is not None:
-                        # (nspin, nk, cart, nc, nv) -> (nspin, nk, nc, nv, cart)
-                        # or (nk, cart, nc, nv) if nspin=1
-                        dip_in = db.electronic_dipoles
-                        if dip_in.ndim == 4: dip_in = dip_in[None, ...] # add spin
-                        
-                        dip_6d = dip_in.transpose(0, 1, 3, 4, 2)
-                        dip_var[i, ..., 0] = dip_6d.real
-                        dip_var[i, ..., 1] = dip_6d.imag
-                        
-                        # Flattening
-                        # dip_6d is (nspin, nk, nc, nv, cart)
-                        dip_6d_reshaped = dip_6d.reshape(-1, 3) # (nspin*nk*nc*nv, 3)
-                        dip_flat = dip_6d_reshaped[flat_idx]
-                        dip_flat_var[i, :, :, 0] = dip_flat.real
-                        dip_flat_var[i, :, :, 1] = dip_flat.imag
+                
+                dip_6d_reshaped = dip_6d.reshape(-1, 3)
+                dip_flat = dip_6d_reshaped[flat_idx]
+                dip_flat_var[:, :, 0] = dip_flat.real
+                dip_flat_var[:, :, 1] = dip_flat.imag
             
             # Metadata
             f.units = 'Hartree'
@@ -372,16 +369,19 @@ class YamboExcitonDB(object):
             if 'dipoles' in f.variables:
                 dip_tmp = f.variables['dipoles'][:]
                 dip_c = dip_tmp[..., 0] + 1j*dip_tmp[..., 1]
-                if dip_c.ndim == 5: # (nq, nk, nc, nv, cart) - OLD FORMAT
-                    # (nq, nk, nc, nv, cart) -> (nq, nk, 3, nc, nv)
-                    electronic_dipoles_all = np.moveaxis(dip_c, -1, -3)
-                elif dip_c.ndim == 6: # (nq, nspin, nk, nc, nv, cart) - NEW FORMAT
-                    # (nq, nspin, nk, nc, nv, cart) -> (nq, nspin, nk, 3, nc, nv)
-                    dip_6d = np.moveaxis(dip_c, -1, -3)
-                    if dip_6d.shape[1] == 1: # squeeze nspin=1
-                        electronic_dipoles_all = np.squeeze(dip_6d, axis=1)
-                    else:
-                        electronic_dipoles_all = dip_6d
+                # dip_c can be:
+                # (nspin, nk, nc, nv, cart) -> (nspin, nk, 3, nc, nv)
+                # (nk, nc, nv, cart) -> (nk, 3, nc, nv)
+                # (nq, nspin, nk, nc, nv, cart) -> (nq, nspin, nk, 3, nc, nv)
+                if dip_c.ndim == 4: # (nk, nc, nv, cart)
+                     electronic_dipoles_all = np.moveaxis(dip_c, -1, -3)
+                elif dip_c.ndim == 5: # (nq, nk, nc, nv, cart) or (nspin, nk, nc, nv, cart)
+                     if dip_c.shape[0] == nq: # (nq, nk, nc, nv, cart)
+                         electronic_dipoles_all = np.moveaxis(dip_c, -1, -3)
+                     else: # (nspin, nk, nc, nv, cart)
+                         electronic_dipoles_all = np.moveaxis(dip_c, -1, -3)
+                elif dip_c.ndim == 6: # (nq, nspin, nk, nc, nv, cart)
+                     electronic_dipoles_all = np.moveaxis(dip_c, -1, -3)
             
             for i in range(nq):
                 eigenvectors = None
@@ -391,7 +391,13 @@ class YamboExcitonDB(object):
                 if exc_dipoles_all is not None: exc_dipoles = exc_dipoles_all[i]
                 
                 electronic_dipoles = None
-                if electronic_dipoles_all is not None: electronic_dipoles = electronic_dipoles_all[i]
+                if electronic_dipoles_all is not None:
+                    # Check if electronic_dipoles_all has nq dimension
+                    # We expect (nspin, nk, 3, nc, nv) or (nk, 3, nc, nv) for internal DB
+                    if electronic_dipoles_all.shape[0] == nq and electronic_dipoles_all.ndim > 3:
+                         electronic_dipoles = electronic_dipoles_all[i]
+                    else:
+                         electronic_dipoles = electronic_dipoles_all
                 
                 db = cls(lattice, str(i+1), eigenvalues_all[i], l_residual_all[i], r_residual_all[i],
                          spin_pol=spin_pol, red_qpoint=red_qpoints[i], table=table, eigenvectors=eigenvectors, 
@@ -531,14 +537,9 @@ class YamboExcitonDB(object):
         """
         Inverse of get_Akcv: (neigs,nblks,nspin,nk,nc,nv) -> (neigs,ntransitions)
         """
-        neigs = Akcv.shape[0]
-        nblks = Akcv.shape[1]
-        nspin = Akcv.shape[2]
-        nk = Akcv.shape[3]
-        nc = Akcv.shape[4]
-        nv = Akcv.shape[5]
+        neigs, nblks, nspin, nk, nc, nv = Akcv.shape
+        ntrans = self.table.shape[0]
         
-        table_len = nspin*nk*nv*nc
         v_min = np.min(self.table[:,1])
         c_min = np.min(self.table[:,2])
         bs_table0 = self.table[:,0]-1
@@ -548,14 +549,219 @@ class YamboExcitonDB(object):
         
         sort_idx = bs_table0*nc*nv + bs_table2*nv + bs_table1 + nk*nc*nv*bs_table3
         
-        eigenvectors = np.zeros((neigs, self.ntransitions), dtype=Akcv.dtype)
+        # We need to return (neigs, nblks * nspin * nk * nc * nv)
+        eigenvectors = np.zeros((neigs, nblks * ntrans), dtype=Akcv.dtype)
+        
+        # Flatten Akcv to (neigs, nblks, nspin * nk * nc * nv)
         Akcv_flat = Akcv.reshape(neigs, nblks, -1)
         
-        eigenvectors[:, :table_len] = Akcv_flat[:, 0, np.argsort(sort_idx)]
-        if nblks == 2:
-            eigenvectors[:, table_len:] = Akcv_flat[:, 1, np.argsort(sort_idx)]
+        for iblk in range(nblks):
+            eigenvectors[:, iblk*ntrans : (iblk+1)*ntrans][:, sort_idx] = Akcv_flat[:, iblk, :]
             
         return eigenvectors
+
+    def compute_exciton_dipoles(self, dipdb, bands_range=None):
+        """
+        Compute exciton dipoles: D_S = sum_{kcv} A_{kcv} d_{kcv}
+        
+        dipdb: YamboDipolesDB object
+        bands_range: list of 2 ints [min_band, max_band] in Python indexing (0-indexed)
+                     If None, it tries to infer from exdbs and dipdb.
+        """
+        BS_wfc = self.get_Akcv() # [nexcs, nblks, nspin, nk, nc, nv]
+        if BS_wfc is None: return None
+        
+        nc_bse = BS_wfc.shape[4]
+        nv_bse = BS_wfc.shape[5]
+
+        # Get expanded dipoles if not already expanded
+        if not dipdb.expand:
+             # Expand dipoles manually to full BZ (without square matrix reshaping)
+             latdb = self.lattice
+             rot_mats = latdb.sym_car[latdb.kmap[:, 1], ...]
+             # Raw dipoles from from_db_file (expand=False) are (nkIBZ, 3, nc, nv)
+             dip_expanded = np.einsum('kij,kjcv->kicv', rot_mats, dipdb.dipoles[latdb.kmap[:, 0]], optimize=True)
+             time_rev_s = (latdb.kmap[:, 1] >= len(latdb.sym_car) / (1 + int(latdb.time_rev)))
+             dip_expanded[time_rev_s] = dip_expanded[time_rev_s].conj()
+        else:
+             # Already expanded. Shape is (nkBZ, 3, nbands, nbands)
+             # Identify correct slice for transitions
+             if dipdb.dipoles.shape[2:] == (nc_bse, nv_bse):
+                 iv, ic = 0, 0
+             else:
+                 if bands_range is not None:
+                     iv = bands_range[0] - dipdb.min_band
+                 else:
+                     iv = (self.lattice.nbandsv - nv_bse + 1) - dipdb.min_band
+                 ic = (self.lattice.nbandsv + 1) - dipdb.min_band
+             
+             dip_expanded = dipdb.dipoles[:, :, ic:ic+nc_bse, iv:iv+nv_bse]
+             
+        # Return physical intensive quantity (1/Nk normalization)
+        dip_expanded = dip_expanded / self.lattice.nkpoints
+             
+        if BS_wfc.shape[1] == 1 and BS_wfc.shape[2] == 1: # TDA, no spin
+            BS_wfc = np.squeeze(BS_wfc, axis=(1, 2)) # [nexcs, nk, nc, nv]
+            
+            # Sanity check for dimensions
+            if BS_wfc.shape[1] != dip_expanded.shape[0]:
+                 # Try to expand BS_wfc if it's IBZ but dip_expanded is FBZ
+                 # This happens if self.table only has IBZ points
+                 # For Q=0 we can use kpoints_indexes
+                 if self.Qpt == "1":
+                     BS_wfc = BS_wfc[:, self.lattice.kpoints_indexes, ...]
+            
+            # Final sanity check for dimensions
+            if BS_wfc.shape[1:] != dip_expanded.shape[0:1] + dip_expanded.shape[2:]:
+                # Use the minimum common dimensions
+                nk_min = min(BS_wfc.shape[1], dip_expanded.shape[0])
+                nc_min = min(BS_wfc.shape[2], dip_expanded.shape[2])
+                nv_min = min(BS_wfc.shape[3], dip_expanded.shape[3])
+                BS_wfc = BS_wfc[:, :nk_min, :nc_min, :nv_min]
+                dip_expanded = dip_expanded[:nk_min, :, :nc_min, :nv_min]
+
+            self.exc_dipoles = np.einsum('nkcv,kicv->in', BS_wfc, dip_expanded, optimize=True).astype(dtype=dipdb.dipoles.dtype)
+            # result shape: [3, nexcs]
+        else:
+            print('[WARNING] Exciton dipoles calculation only supported for TDA and no-spin-pol. Skipping.')
+            return None
+            
+        return self.exc_dipoles
+
+    @staticmethod
+    def expand_and_save_nc(exdbs, wfdb, Dmats, filename, dipdb=None, bands_range=None):
+        """
+        Expand excitons from IBZ to FBZ and save to netCDF
+        """
+        from yambopy.exciton_phonon.excph_matrix_elements import rotate_Akcv_Q
+        
+        latdb = wfdb.ydb
+        
+        full_exdbs = []
+        for iQ in range(wfdb.nkBZ):
+            Qpt = wfdb.kBZ[iQ] # reduced
+            # Get rotated Akcv
+            Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats)
+            
+            # Identify IBZ index
+            idx_BZQ = wfdb.kptBZidx(Qpt)
+            iQ_iBZ = latdb.kpoints_indexes[idx_BZQ]
+            ibz_db = exdbs[iQ_iBZ]
+            
+            # Create rotated YamboExcitonDB
+            # Flatten Ak_rot back to eigenvectors format
+            eigenvectors_rot = ibz_db.flatten_Akcv(Ak_rot)
+
+            # Create a temporary DB to compute dipoles at this Q
+            temp_db = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
+                                     ibz_db.l_residual, ibz_db.r_residual,
+                                     spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
+                                     table=ibz_db.table, eigenvectors=eigenvectors_rot)
+            temp_db.Akcv = Ak_rot # Set expanded Akcv directly
+
+            # Compute exciton dipoles at this Q if dipdb is present
+            exc_dipoles_Q = None
+            electronic_dipoles = None
+            if dipdb is not None:
+                # Use bs_bands from the original DB for consistency
+                bse_bands = ibz_db.bs_bands
+                exc_dipoles_Q = temp_db.compute_exciton_dipoles(dipdb, bands_range=bse_bands)
+                
+                # We also want to save the electronic dipoles (cv part)
+                # Use the same logic as in compute_exciton_dipoles to get the correct slice
+                Akcv_tmp = ibz_db.get_Akcv()
+                nc_bse = Akcv_tmp.shape[4]
+                nv_bse = Akcv_tmp.shape[5]
+                
+                # Identify correct slice for transitions
+                if dipdb.dipoles.shape[2:] == (nc_bse, nv_bse):
+                    iv, ic = 0, 0
+                else:
+                    # Always use bse_bands to align dipoles with eigenvectors
+                    iv = bse_bands[0] - dipdb.min_band
+                    ic = (latdb.nbandsv + 1) - dipdb.min_band
+                
+                # dipdb.dipoles can be (nkIBZ, 3, nc, nv) or (nspin, nkIBZ, 3, nc, nv)
+                if dipdb.dipoles.ndim == 4:
+                    electronic_dipoles_base = dipdb.dipoles[:, :, ic:ic+nc_bse, iv:iv+nv_bse]
+                else:
+                    electronic_dipoles_base = dipdb.dipoles[:, :, :, ic:ic+nc_bse, iv:iv+nv_bse]
+                
+                # If it's IBZ, we need to expand it to FBZ to be consistent with Ak_rot
+                if not dipdb.expand:
+                    if dipdb.dipoles.ndim == 4:
+                        rot_mats = latdb.sym_car[latdb.kmap[:, 1], ...]
+                        electronic_dipoles = np.einsum('kij,kjcv->kicv', rot_mats, electronic_dipoles_base[latdb.kmap[:, 0]], optimize=True)
+                        time_rev_s = (latdb.kmap[:, 1] >= len(latdb.sym_car) / (1 + int(latdb.time_rev)))
+                        electronic_dipoles[time_rev_s] = electronic_dipoles[time_rev_s].conj()
+                    else:
+                        # Spin polarized
+                        rot_mats = latdb.sym_car[latdb.kmap[:, 1], ...]
+                        electronic_dipoles = np.einsum('kij,skjcv->skicv', rot_mats, electronic_dipoles_base[:, latdb.kmap[:, 0]], optimize=True)
+                        time_rev_s = (latdb.kmap[:, 1] >= len(latdb.sym_car) / (1 + int(latdb.time_rev)))
+                        electronic_dipoles[:, time_rev_s] = electronic_dipoles[:, time_rev_s].conj()
+                    
+                    # Apply 1/Nk normalization for intensive quantity
+                    electronic_dipoles = electronic_dipoles / latdb.nkpoints
+                else:
+                    electronic_dipoles = electronic_dipoles_base / latdb.nkpoints
+
+            #temp_db = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
+            #                         ibz_db.l_residual, ibz_db.r_residual,
+            #                         spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
+            #                         table=ibz_db.table, eigenvectors=eigenvectors_rot)            
+            full_exdb = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
+                                       ibz_db.l_residual, ibz_db.r_residual,
+                                       spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
+                                       table=ibz_db.table, eigenvectors=eigenvectors_rot,
+                                       exc_dipoles=exc_dipoles_Q,
+                                       electronic_dipoles=electronic_dipoles)
+            full_exdbs.append(full_exdb)
+
+        YamboExcitonDB.save_excitons_nc(full_exdbs, filename)
+
+    @staticmethod
+    def expand_and_save_from_folder(latdb, folder, wfdb, dipdb=None, bands_range=None, neigs=-1, filename='excitons.nc'):
+        """
+        Read ndb.BS_diago_Q* files from a folder, expand them to FBZ and save to netCDF.
+        This handles cases where only IBZ points are present.
+        """
+        import glob
+        import re
+        
+        # Find all ndb.BS_diago_Q* files
+        files = glob.glob(os.path.join(folder, 'ndb.BS_diago_Q*'))
+        if not files:
+            raise FileNotFoundError(f"No ndb.BS_diago_Q* files found in {folder}")
+            
+        # Extract indices and sort
+        q_indices = []
+        for f in files:
+            match = re.search(r'ndb\.BS_diago_Q(\d+)', f)
+            if match:
+                q_indices.append(int(match.group(1)))
+        q_indices.sort()
+        
+        # Load exdbs
+        exdbs_dict = {}
+        for iq in q_indices:
+            filename_iq = f'ndb.BS_diago_Q{iq}'
+            excdb = YamboExcitonDB.from_db_file(latdb, filename=filename_iq, folder=folder,
+                                               Load_WF=True, neigs=neigs)
+            exdbs_dict[iq] = excdb
+            
+        # We need a list of exdbs indexed by IBZ k-point (0-indexed)
+        # Assuming q_indices covers all IBZ points 1..nkpoints
+        max_iq = max(q_indices)
+        exdbs = [None] * max_iq
+        for iq, db in exdbs_dict.items():
+            exdbs[iq-1] = db
+            
+        # Get Dmats
+        Dmats = wfdb.Dmat()
+        
+        # Call expand_and_save_nc
+        YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, filename, dipdb=dipdb, bands_range=bands_range)
     
     def real_wf_to_cube(self, iexe, wfdb, fixed_postion=[0,0,0], supercell=[1,1,1], degen_tol=1e-2,
                         wfcCutoffRy=-1, fix_particle='h', phase=False, block_size=256):
