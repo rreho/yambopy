@@ -704,7 +704,8 @@ class YamboExcitonDB(object):
                     # Apply 1/Nk normalization for intensive quantity
                     #electronic_dipoles = electronic_dipoles / latdb.nkpoints
                 else:
-                    #electronic_dipoles = electronic_dipoles_base / latdb.nkpoints
+                    print('Electronic dipoles are already in FBZ')
+                    electronic_dipoles = electronic_dipoles_base
 
             #temp_db = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
             #                         ibz_db.l_residual, ibz_db.r_residual,
