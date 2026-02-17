@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2025, Claudio Attaccalite
+# Copyright (c) 2023-2025, Claudio Attaccalite and Myrta Gruning
 # All rights reserved.
 #
 # This file is part of the yambopy project

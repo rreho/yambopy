@@ -109,6 +109,7 @@ class YamboNLDB(object):
         # External fields
         # 
         self.Efield_general=[]
+        self.N_ext_fields=0
         for n in range(1,4):
             try:
                 efield=self.read_Efield(database,self.RT_step,n)
@@ -116,6 +117,7 @@ class YamboNLDB(object):
                 print("Field %d not found" % n)
             else:
                 self.Efield_general.append(efield.copy())
+                self.N_ext_fields=self.N_ext_fields+1
 
         #
         # Read polarization and currect files 
