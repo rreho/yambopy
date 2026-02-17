@@ -181,7 +181,7 @@ class YamboDipolesDB():
                     indexv = indexv-1
                     indexc = indexc-1 
                     nbands1, nbands2 = [nbandsv, nbandsc]
-                    start_idx_v, start_idx_c = [bands_range[0]-1,0]
+                    start_idx_v, start_idx_c = [0,0]
                     end_idx_v, end_idx_c = [indexv+1, nbandsc]
 
                 if not dip_bands_ordered: # Yambo calculation with DipBandsALl

@@ -629,7 +629,7 @@ class YamboExcitonDB(object):
         return self.exc_dipoles
 
     @staticmethod
-    def expand_and_save_nc(exdbs, wfdb, Dmats, filename, dipdb=None, bands_range=None):
+    def expand_and_save_nc(exdbs, wfdb, Dmats, filename, dipdb=None, bands_range=None,BSE_Lin_dir=None):
         """
         Expand excitons from IBZ to FBZ and save to netCDF
         """
@@ -641,7 +641,7 @@ class YamboExcitonDB(object):
         for iQ in range(wfdb.nkBZ):
             Qpt = wfdb.kBZ[iQ] # reduced
             # Get rotated Akcv
-            Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats)
+            Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=BSE_Lin_dir)
             
             # Identify IBZ index
             idx_BZQ = wfdb.kptBZidx(Qpt)
@@ -722,7 +722,7 @@ class YamboExcitonDB(object):
         YamboExcitonDB.save_excitons_nc(full_exdbs, filename)
 
     @staticmethod
-    def expand_and_save_from_folder(latdb, folder, wfdb, dipdb=None, bands_range=None, neigs=-1, filename='excitons.nc'):
+    def expand_and_save_from_folder(latdb, folder, wfdb, dipdb=None, bands_range=None, neigs=-1, filename='excitons.nc', BSE_Lin_dir=None):
         """
         Read ndb.BS_diago_Q* files from a folder, expand them to FBZ and save to netCDF.
         This handles cases where only IBZ points are present.
@@ -738,7 +738,9 @@ class YamboExcitonDB(object):
         # Extract indices and sort
         q_indices = []
         for f in files:
-            match = re.search(r'ndb\.BS_diago_Q(\d+)', f)
+            f=f.strip()
+            name = os.path.basename(f)
+            match = re.match(r'ndb\.BS_diago_Q(\d+)$', name)
             if match:
                 q_indices.append(int(match.group(1)))
         q_indices.sort()
@@ -751,7 +753,7 @@ class YamboExcitonDB(object):
                                                Load_WF=True, neigs=neigs)
             exdbs_dict[iq] = excdb
             
-        # We need a list of exdbs indexed by IBZ k-point (0-indexed)
+        # We need a list of exdbs indexed by IBZ k-point (1-indexed)
         # Assuming q_indices covers all IBZ points 1..nkpoints
         max_iq = max(q_indices)
         exdbs = [None] * max_iq
@@ -762,7 +764,7 @@ class YamboExcitonDB(object):
         Dmats = wfdb.Dmat()
         
         # Call expand_and_save_nc
-        YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, filename, dipdb=dipdb, bands_range=bands_range)
+        YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, filename, dipdb=dipdb, bands_range=bands_range, BSE_Lin_dir=BSE_Lin_dir)
     
     def real_wf_to_cube(self, iexe, wfdb, fixed_postion=[0,0,0], supercell=[1,1,1], degen_tol=1e-2,
                         wfcCutoffRy=-1, fix_particle='h', phase=False, block_size=256):
