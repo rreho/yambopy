@@ -270,8 +270,8 @@ class YamboExcitonDB(object):
                 for i, db in enumerate(exdbs):
                     if db.exc_dipoles is not None:
                         # db.exc_dipoles shape: (3, nexcs) -> (nexcs, 3)
-                        exc_dip_var[i, :, :, 0] = db.exc_dipoles.swapaxes(1,0).real
-                        exc_dip_var[i, :, :, 1] = db.exc_dipoles.swapaxes(1,0).imag
+                        exc_dip_var[i, :, :, 0] = db.exc_dipoles.swapaxes(-1,-2).real
+                        exc_dip_var[i, :, :, 1] = db.exc_dipoles.swapaxes(-1,-2).imag
             
             # Electronic Dipoles
             if exdbs[0].electronic_dipoles is not None:
