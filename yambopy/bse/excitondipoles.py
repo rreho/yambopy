@@ -60,7 +60,11 @@ def exciton_dipoles(blongdir,lattice_path,dipoles_path=None,bse_path=None,kplot=
     dipoles = np.einsum('x,kxcv->kcv',field_dir,ydip.dipoles)
 
     # Rotate to exciton basis (no-loop fast sum)
-    dip_exc = np.sum(yexc.eigenvectors*dipoles[tuple(table_kcv[:,:3].T-1)],axis=1)
+    # The factor sqrt(weights*Nk) accounts for degeneracies in the IBZ sum
+    # (consistent with the /Nk normalization at the end)
+    weights = ylat.weights_ibz[table_kcv[:,0]-1]
+    weights_Nk = weights*ylat.nkpoints
+    dip_exc = np.sum(yexc.eigenvectors*dipoles[tuple(table_kcv[:,:3].T-1)]*np.sqrt(weights_Nk),axis=1)
     dip_exc_squared = np.abs(dip_exc)**2.
     
     # If k resolution required, we have to do it manually
@@ -68,7 +72,7 @@ def exciton_dipoles(blongdir,lattice_path,dipoles_path=None,bse_path=None,kplot=
         dip_exc_k = np.zeros( (yexc.nexcitons,ylat.nkpoints), dtype=complex)
         for it in range(yexc.nexcitons):
             ik,ic,iv = table_kcv[it,:3]-1
-            dip_exc_k[:,ik]+=yexc.eigenvectors[:,it]*dipoles[ik,ic,iv]
+            dip_exc_k[:,ik]+=yexc.eigenvectors[:,it]*dipoles[ik,ic,iv]*np.sqrt(weights_Nk[it])
 
     if check==True:
         q0_def_norm=1e-5 # Optical-limit field in Yambo residuals
@@ -126,10 +130,17 @@ def exc_dipoles_pol(lattice_path,dipoles_path=None,bse_path=None,save_files=True
 
     # Rotate dipoles in exc. basis [n,nblks,nspin,k,c,v] -> [n,k,c,v]
     BS_wfc = np.squeeze( yexc.get_Akcv() ) # Works in TDA and no spin pol
+    # Expand BS_wfc if it's IBZ but dip_expanded is FBZ
+    if BS_wfc.shape[1] != ylat.nkpoints:
+        BS_wfc = BS_wfc[:, ylat.kpoints_indexes, ...]
+
+    # Factor sqrt(deg*Nk) accounts for intensive normalization and degeneracies
+    deg = ylat.weights_ibz[ylat.kpoints_indexes] * ylat.nkpoints
+    
     # Since we have dipoles for emission, we do not conjugate BS_wfc
     # Then the results are directly the exciton dipoles for emission
-    dip_exc = np.einsum('nkcv,kicv->in',BS_wfc,dip_expanded,
-                        optimize=True).astype(dtype=ydip.dipoles.dtype)
+    dip_exc = np.einsum('nkcv,kicv->in',BS_wfc,dip_expanded/np.sqrt(deg)[:,None,None,None],
+                        optimize=True).astype(dtype=ydip.dipoles.dtype) / np.sqrt(ylat.nkpoints)
     if save_files:
         if dip_file[-4:]!='.npy': dip_file = dip_file+'.npy'
         print(f'Exciton dipoles file saved to {dip_file}')
