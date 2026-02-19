@@ -70,7 +70,7 @@ class YamboExcitonDB(object):
         Exciton eigenvectors are arranged as eigenvectors[i_exc, i_kvc]
         Transitions are unpacked in table[ i_k, i_v, i_c, i_s_c, i_s_v ] (last two are spin indices)
     """
-    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None,q_cutoff=None,table=None,eigenvectors=None):
+    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',car_qpoint=None,q_cutoff=None,Lkind=None,table=None,eigenvectors=None):
         if not isinstance(lattice,YamboLatticeDB):
             raise ValueError('Invalid type for lattice argument. It must be YamboLatticeDB')
 
@@ -83,6 +83,7 @@ class YamboExcitonDB(object):
         self.car_qpoint = car_qpoint
         self.q_cutoff = q_cutoff
         self.table = table
+        self.Lkind    = Lkind
         if table is not None:
             self.bs_bands = np.array([np.min(self.table[:,1]),np.max(self.table[:,2])]) # set range of bse bands
         self.eigenvectors = eigenvectors
@@ -119,6 +120,11 @@ class YamboExcitonDB(object):
                 neigs = neig_full
             #
             eigenvalues = eigenvalues[:neigs]
+
+            # Check Lkind if present
+            Lkind = None
+            if 'X_kind' in list(database.variables.keys()):
+                Lkind = ''.join( database.variables['X_kind'][0].astype(str) ).strip()
 
             if 'BS_left_Residuals' in list(database.variables.keys()):
                 # MN: using complex views instead of a+I*b copies to avoid memory duplication
@@ -175,7 +181,7 @@ class YamboExcitonDB(object):
                 bare_qpg = bare_qpg[:,:,0]+bare_qpg[:,:,1]*I
                 q_cutoff = np.abs(bare_qpg[0,int(Qpt)-1])
 
-        return cls(lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol,q_cutoff=q_cutoff,car_qpoint=car_qpoint,table=table,eigenvectors=eigenvectors)
+        return cls(lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol,q_cutoff=q_cutoff,car_qpoint=car_qpoint,Lkind=Lkind,table=table,eigenvectors=eigenvectors)
 
     @property
     def unique_vbands(self):
@@ -2007,6 +2013,8 @@ class YamboExcitonDB(object):
         app( marquee(self.__class__.__name__,mark=mark) )
         app( "BSE solved at Q:            %s"%self.Qpt )
         app( "number of excitons:         %d"%self.nexcitons )
+        if self.Lkind is not None:
+            app("L kind:                     %s"%self.Lkind)
         if self.table is not None: 
             app( "number of transitions:      %d"%self.ntransitions )
             app( "number of kpoints:          %d"%self.nkpoints  )
