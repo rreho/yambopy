@@ -182,7 +182,7 @@ class YamboDipolesDB():
                     indexc = indexc-1 
                     nbands1, nbands2 = [nbandsv, nbandsc]
                     start_idx_v, start_idx_c = [0,0]
-                    end_idx_v, end_idx_c = [indexv+1, nbandsc]
+                    end_idx_v, end_idx_c = [nbandsv, nbandsc]
 
                 if not dip_bands_ordered: # Yambo calculation with DipBandsALl
                     nbandsv = lattice.nbandsv-min_band+1
@@ -233,6 +233,7 @@ class YamboDipolesDB():
                 print(f"start_idx_c: {start_idx_c}")
                 print(f"end_idx_v: {end_idx_v}")
                 print(f"end_idx_c: {end_idx_c}")
+                print(f"dip_bands_ordered {dip_bands_ordered}")
 
             dipoles = database[f'DIP_{dip_type}'][:,:,start_idx_v:end_idx_v,start_idx_c:end_idx_c,:].data # Read as nk,nv,nc,ir
             dipoles = dipoles.view(dtype=CmplxType(dipoles)).reshape((spin,nk_ibz,nbands1,nbands2,3))
