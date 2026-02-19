@@ -583,22 +583,12 @@ class YamboExcitonDB(object):
              dip_expanded = np.einsum('kij,kjcv->kicv', rot_mats, dipdb.dipoles[latdb.kmap[:, 0]], optimize=True)
              time_rev_s = (latdb.kmap[:, 1] >= len(latdb.sym_car) / (1 + int(latdb.time_rev)))
              dip_expanded[time_rev_s] = dip_expanded[time_rev_s].conj()
+
         else:
-             # Already expanded. Shape is (nkBZ, 3, nbands, nbands)
-             # Identify correct slice for transitions
-             if dipdb.dipoles.shape[2:] == (nc_bse, nv_bse):
-                 iv, ic = 0, 0
-             else:
-                 if bands_range is not None:
-                     iv = bands_range[0] - dipdb.min_band
-                 else:
-                     iv = (self.lattice.nbandsv - nv_bse + 1) - dipdb.min_band
-                 ic = (self.lattice.nbandsv + 1) - dipdb.min_band
-             
-             dip_expanded = dipdb.dipoles[:, :, ic:ic+nc_bse, iv:iv+nv_bse]
+            raise ValueError('YamboDipolesDB should be set with expand = False')
              
         # Return physical intensive quantity (1/Nk normalization)
-       # dip_expanded = dip_expanded / self.lattice.nkpoints
+        dip_expanded = dip_expanded / np.sqrt(self.lattice.nkpoints)
              
         if BS_wfc.shape[1] == 1 and BS_wfc.shape[2] == 1: # TDA, no spin
             BS_wfc = np.squeeze(BS_wfc, axis=(1, 2)) # [nexcs, nk, nc, nv]

@@ -138,7 +138,7 @@ def exc_dipoles_pol(lattice_path,dipoles_path=None,bse_path=None,save_files=True
     # Since we have dipoles for emission, we do not conjugate BS_wfc
     # Then the results are directly the exciton dipoles for emission
     dip_exc = np.einsum('nkcv,kicv->in',BS_wfc,dip_expanded[:,None,None,None],
-                        optimize=True).astype(dtype=ydip.dipoles.dtype)
+                        optimize=True).astype(dtype=ydip.dipoles.dtype)/np.sqrt(ylat.nkpoints)
     
     if save_files:
         if dip_file[-4:]!='.npy': dip_file = dip_file+'.npy'
