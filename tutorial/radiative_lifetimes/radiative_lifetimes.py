@@ -7,7 +7,8 @@ Plotting the radiative lifetime of the lowest-energy exciton of an ANISOTROPIC 3
 Plotting the thermal average exciton radiative lifetime of an ANISOTROPIC 3D material.
 
 """
-from yambopy import *
+from yambopy import YamboLatticeDB,YamboExcitonDB,YamboDipolesDB
+from yambopy.bse.excitonradiativelifetimes import *
 import numpy as np
 import matplotlib.pyplot as plt
 
