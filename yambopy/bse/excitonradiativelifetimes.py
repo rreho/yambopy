@@ -7,7 +7,9 @@
 # This file is part of the yambopy project
 #
 import numpy as np
-from yambopy import YamboLatticeDB,YamboExcitonDB,YamboDipolesDB
+from yambopy.dbs.latticedb import YamboLatticeDB
+from yambopy.dbs.excitondb import YamboExcitonDB
+from yambopy.dbs.dipolesdb import YamboDipolesDB
 from yambopy.units import kb,autime2s,ha2ev,m_e,speed_of_light
 import os
 
