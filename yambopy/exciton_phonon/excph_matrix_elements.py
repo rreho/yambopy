@@ -52,23 +52,6 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
         exph_mat_loaded = np.load(exph_file)
         return exph_mat_loaded
 
-    # Load exc dbs
-    exdbs = []
-    for ik in range(wfdb.nkpoints):
-        filename = 'ndb.BS_diago_Q%d' % (ik+1)
-        excdb = YamboExcitonDB.from_db_file(latdb,filename=filename,folder=BSE_dir,\
-                                            Load_WF=True, neigs=nexc_out)
-        exdbs.append(excdb)
-        #
-        # NM : Add a sanity check to avoid a disasterous consequence
-        # if the user gives wrong bse band indices.
-        min_bnd_bse = np.min(excdb.unique_vbands)
-        max_bnd_bse = np.max(excdb.unique_cbands)+1
-        assert (wfdb.min_bnd == min_bnd_bse) and ((wfdb.min_bnd + wfdb.nbands) == max_bnd_bse), \
-            print("Error: BSE bands mismatch. Given bands range : [%d, %d]. " %(
-                wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands) +
-                "Bse band range found (expected) : [%d %d]" %( min_bnd_bse,max_bnd_bse))
-
     # get D matrices
     Dmats = save_or_load_dmat(wfdb,mode=dmat_mode,dmat_file='Dmats.npy')
 
@@ -77,7 +60,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     exph_mat = []
     for iQ in tqdm(range(Qrange[0],Qrange[1])):
         Q_in = wfdb.kBZ[iQ]
-        exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,\
+        exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,Dmats,\
                          BSE_dir=BSE_dir,BSE_Lin_dir=BSE_Lin_dir,\
                          Q_in=Q_in,nexc_in=nexc_in,nexc_out=nexc_out) )
     # IO
@@ -91,7 +74,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     
     return exph_mat
 
-def exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,BSE_dir,BSE_Lin_dir=None,
+def exciton_phonon_matelem_iQ(elphdb,wfdb,Dmats,BSE_dir,BSE_Lin_dir=None,
                               Q_in=np.zeros(3),nexc_in=-1,nexc_out=-1): 
     """
     This function calculates the exciton-phonon matrix element per Q 
@@ -113,8 +96,6 @@ def exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,BSE_dir,BSE_Lin_dir=None,
         elements.
     wfdb : YamboWFDB
         The YamboWFDB object which contains the wavefunction information.
-    exdbs : YamboExcitonDB list
-        List of Q+q YamboExcitonDB objects containing the BSE calculation
     BSE_dir : str, optional
         The name of the folder which contains the BSE calculation. Default is 'bse'.
     BSE_Lin_dir : str, optional
