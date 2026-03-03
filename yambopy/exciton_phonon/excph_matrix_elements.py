@@ -78,7 +78,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     for iQ in tqdm(range(Qrange[0],Qrange[1])):
         Q_in = wfdb.kBZ[iQ]
         exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,\
-                                                   BSE_Lin_dir=BSE_Lin_dir,Q_in=Q_in,neigs=nexc_in) )
+                         BSE_dir=BSE_dir,BSE_Lin_dir=BSE_Lin_dir,\
+                         Q_in=Q_in,nexc_in=nexc_in,nexc_out=nexc_out) )
     # IO
     if len(exph_mat)<2: exph_mat = exph_mat[0] # single Q-point calculation (suppress axis)
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
@@ -90,15 +91,20 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     
     return exph_mat
 
-def exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,BSE_Lin_dir=None,
-                              Q_in=np.zeros(3),neigs=-1,dmat_mode='run'): 
+def exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,BSE_dir,BSE_Lin_dir=None,
+                              Q_in=np.zeros(3),nexc_in=-1,nexc_out=-1): 
     """
     This function calculates the exciton-phonon matrix element per Q 
 
     - Q is the exciton momentum
     - q is the phonon momentum
-    - exc_in represent the "initial" exciton states in the scattering process (at mom. Q)
-    - exc_out represents the "final" exciton states in the scattering process (at mom. Q+q)
+    - exc_in / Lin represents the "initial" exciton states in the scattering process (at mom. Q)
+    - exc_out / Lout represents the "final" exciton states in the scattering process (at mom. Q+q)
+
+    NB: 
+        - el-ph couplings are automatically set to convention k->k+q regardless.
+        - excitons are instead assumed in convention k-q->k from Yambo.
+        - The final results of the exc-ph calculation is INDEPENDENT of conventions.
 
     Parameters
     ----------
@@ -109,24 +115,30 @@ def exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,BSE_Lin_dir=None,
         The YamboWFDB object which contains the wavefunction information.
     exdbs : YamboExcitonDB list
         List of Q+q YamboExcitonDB objects containing the BSE calculation
+    BSE_dir : str, optional
+        The name of the folder which contains the BSE calculation. Default is 'bse'.
     BSE_Lin_dir : str, optional
         The name of the folder which contains the BSE q=0 calculation (for optical spectra). Default is exdbs[Q].
     Q_in : np.ndarray, optional
         Excitonic momentum in reduced units. Default np.array([0.0,0.0,0.0]) 
-    neigs : int, optional
-        Number of excitonic states included in calculation. Default is -1 (all).
+    nexc_in : int, optional
+        Number of excitonic states included in Lin calculation. Default is -1 (all).
+    nexc_out : int, optional
+        Number of excitonic states included in Lout calculation. Default is -1 (all).
     """
     latdb = wfdb.ydb
-    # Determine Lkind(in)
-    Ak = rotate_Akcv_Q(wfdb, exdbs, Q_in, Dmats, neigs=neigs, folder=BSE_Lin_dir)
+    # Load and rotate Lin(Q)
+    Ak = rotate_Akcv_Q(wfdb, Q_in, Dmats, neigs=nexc_in, folder=BSE_Lin_dir)
     # Compute ex-ph
     exph_mat = []
     bse_bnds_range = [wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands]
     for iq in range(elphdb.nq):
+        # Load el-ph coupling
         ph_eig, elph_mat = elphdb.read_iq(iq,bands_range=bse_bnds_range,convention='standard')
         elph_mat = elph_mat.transpose(1,0,2,4,3)
-        #
-        Akq = rotate_Akcv_Q(wfdb, exdbs, Q_in + elphdb.qpoints[iq], Dmats) # q+Q
+        # Load and rotate Lout(q+Q)
+        Akq = rotate_Akcv_Q(wfdb, Q_in + elphdb.qpoints[iq], Dmats, neigs=nexc_out, folder= BSE_dir)
+        # Call the internal generic function to calculate excitonic matrix elements
         tmp_exph = exciton_X_matelem(Q_in, elphdb.qpoints[iq], \
                                      Akq, Ak, elph_mat, wfdb.kBZ, \
                                      contribution='b', diagonal_only=False, ktree=wfdb.ktree)
@@ -160,18 +172,19 @@ def save_or_load_dmat(wfdb, mode='run', dmat_file='Dmats.npy'):
     else:
         return wfdb.Dmat()
 
-
-def rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, neigs=-1, folder=None):
+def rotate_Akcv_Q(wfdb, Qpt, Dmats, folder, neigs=-1):
     '''
-    Qpt reduced coordinates in BZ or whatever
+    First load and then rotate exciton coefficients
 
     wfdb : wavefunction object
     exdbs : previously read list of exciton objects for Lout (used if folder is None)
     Qpt: reduced coordinates in BZ or whatever
     Dmats: precalculated Dmat
+    folder: where to load the L exciton states 
     neigs: number of states (used if folder is not None, otherwise it's nexc_out)
-    folder: where to load the Lin exciton states (if needed). 
-            can be used also to reload the same in case we want nexc_in/=nexc_out for same L
+
+    if folder=BSE_Lin_dir and neigs = nexc_in and Qpt = Q --> load Lin
+    if folder=BSE_dir and neigs = nexc_out and Qpt = Q+q --> load Lout
     '''
     latdb = wfdb.ydb
     idx_BZQ = wfdb.kptBZidx(Qpt)
@@ -180,16 +193,20 @@ def rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, neigs=-1, folder=None):
     trev  = (iQ_isymm >= len(latdb.sym_car) / (1 + int(np.rint(latdb.time_rev))))
     symm_mat_red = latdb.lat@latdb.sym_car[iQ_isymm]@np.linalg.inv(latdb.lat)
     exe_iQIBZ = wfdb.kpts_iBZ[iQ_iBZ]
-    #
-    if folder is not None:
-        if neigs==-1:
-            neigs = len(exdbs[0].eigenvalues) # Set neigs equal to nexc_out
-        filename = 'ndb.BS_diago_Q%d' % (iQ_iBZ+1)
-        excdbin = YamboExcitonDB.from_db_file(latdb,filename=filename,folder=folder,\
-                                              Load_WF=True, neigs=neigs)
-        AQibz = excdbin.get_Akcv()
-    else : AQibz = exdbs[iQ_iBZ].get_Akcv()
-    #
+    filename = 'ndb.BS_diago_Q%d' % (iQ_iBZ+1)
+    
+    # Here we load the required exciton data
+    excdb = YamboExcitonDB.from_db_file(latdb,filename=filename,folder=folder,\
+                                        Load_WF=True, neigs=neigs)
+    AQibz = excdb.get_Akcv()
+    
+    # NM : Add a sanity check to avoid a disastrous consequence
+    #      if the user gives wrong bse band indices.
+    min_bnd_bse = np.min(excdb.unique_vbands)
+    max_bnd_bse = np.max(excdb.unique_cbands)+1
+    assert (wfdb.min_bnd == min_bnd_bse) and ((wfdb.min_bnd + wfdb.nbands) == max_bnd_bse), print("[ERROR]: BSE bands mismatch. Given bands range : [%d, %d]. " %(wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands) + "BSE band range found (expected) : [%d %d]" %( min_bnd_bse,max_bnd_bse))
+    
+    # Here we finally rotate the Akcv coefficients via the internal function
     AQ_rot = rotate_exc_wf(AQibz,symm_mat_red,wfdb.kBZ,exe_iQIBZ,Dmats[iQ_isymm],trev,wfdb.ktree)
     
     return AQ_rot
