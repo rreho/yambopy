@@ -121,7 +121,7 @@ class Pbs(Scheduler):
         """
         get a bash command to submit the job
         """
-        s = "echo \"%s\" | "%self.get_commands().replace("'","\"").replace("\"","\\\"").replace("$","\$")
+        s = "echo \"%s\" | "%self.get_commands().replace("'","\"").replace("\"","\\\"").replace("$",r"\$")
         s += "qsub \\\n"
         s += " \\\n".join(self.arguments)
         return s

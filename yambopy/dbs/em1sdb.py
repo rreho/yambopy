@@ -20,7 +20,7 @@ class YamboStaticScreeningDB(object):
     Class to handle static screening databases from Yambo
     
     This reads the databases ``ndb.em1s*`` or equivalently the static part of the ``ndb.pp*``.
-    There :math:`√v(q,g1) \chi_{g1,g2} (q,\omega=0) √v(q,g2)` is stored.
+    There :math: `√v(q,g1) chi_{g1,g2} (q, omega=0) √v(q,g2)` is stored.
     
     If a Coulomb truncation is used for :math:`v(q,g)`, then the database ``ndb.cutoff`` is also read.
 
@@ -210,7 +210,7 @@ class YamboStaticScreeningDB(object):
         Get epsilon_{0,0} = [1/(1+vX)]_{0,0} as a function of |q|
         vX is a matrix with size equal to the number of local fields components
  
-        In the database we find √vX√v(\omega=0) where:
+        In the database we find √vX√v(omega=0) where:
         v -> coulomb interaction (truncated or not)
         X -> electronic response function
 
@@ -267,7 +267,7 @@ class YamboStaticScreeningDB(object):
         Get vX_{ng1,ng2} as a function of |q|
         vX is a matrix with size equal to the number of local fields components
  
-        In the database we find √vX√v(\omega=0) where:
+        In the database we find √vX√v(omega=0) where:
         v -> coulomb interaction (truncated or not)
         X -> electronic response function
 
@@ -293,7 +293,7 @@ class YamboStaticScreeningDB(object):
         """
         Get eps^-1_{ng1,ng2} a function of |q|
 
-        In the database we find √vX√v(\omega=0) where:
+        In the database we find √vX√v(omega=0) where:
         v -> coulomb interaction (truncated or not)
         X -> electronic response function
 

@@ -22,7 +22,7 @@ class YamboBZgridsDB(object):
     
     ! ikbz=(ik,is) --<--:--<-- okbz=(ok,os) = (IK-Q)
     !                   :
-    !                  /:\ iqbz=(iq,is)
+    !                 //:\\ iqbz=(iq,is)
     !                   :
     !
     ! iq_is = ik_is-ok_os-Go

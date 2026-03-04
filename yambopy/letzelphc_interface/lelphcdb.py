@@ -187,8 +187,8 @@ class LetzElphElectronPhononDB():
             If provided, the function will use this open dataset instead of opening the file again.
         convention : str, optional
             Defines the convention used for electron-phonon matrix elements.
-            - 'yambo': Outputs \<k|dV|k-q>.
-            - Any other value: Outputs \<k+q|dV|k>.
+            - 'yambo': Outputs <k|dV|k-q>.
+            - Any other value: Outputs <k+q|dV|k>.
 
         Returns
         -------

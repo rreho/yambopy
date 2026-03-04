@@ -259,8 +259,8 @@ class YamboWFDB:
         Args:
             s_z (numpy.ndarray, optional): Spin operator. Defaults to the z-component of spin operator.
 
-        < Sk,m| S_z | Sk,n> = <k,m| (U^\dagger S_z U) | k,m>
-        if S is tim rev: < Sk,m| S_z | Sk,n> = <k,m| (U^\dagger S_z^* U) | k,m>^*
+        < Sk,m| S_z | Sk,n> = <k,m| (U^\\dagger S_z U) | k,m>
+        if S is tim rev: < Sk,m| S_z | Sk,n> = <k,m| (U^\\dagger S_z^* U) | k,m>^*
         This means, we donot need to rotate the wfcs. 
         instead we need to rotate the spin operator with su(2) matrices 
         ---

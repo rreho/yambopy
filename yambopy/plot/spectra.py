@@ -15,7 +15,9 @@ def get_spectra(energies,constant=1.,weights=None,residuals=None,broadening=0.01
 
     This class computes the generic quantity: 
 
-            D(w)= C sum\_i^N_i wa\_i |D\_i|^2 delta_b(w - dE\_i)
+    .. math::
+
+            D(\omega)= C \sum_i^N_i wa_i |D_i|^2 \delta_b(\omega - dE_i)
     
     Inputs:
     * dE_i:    pole energies in eV, must be an array of shape (N_momenta, N_states) or (N_states)

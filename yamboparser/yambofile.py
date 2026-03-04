@@ -111,7 +111,7 @@ class YamboFile(object):
         zip_tags = parse_kwargs.get('zip_tags',False) #flag--default behavior is to do nothing
         #get the tags of the columns
         if self.type in YamboFile._outputs_type.keys():  #== "output_absorption":
-            pattern = '([ `0-9a-zA-Z\-\/]+)\[[0-9]\]'
+            pattern = r'([ `0-9a-zA-Z\-\/]+)\[[0-9]\]'
             tags = [tag.strip() for tag in re.findall(pattern,''.join(self.lines))]
             if len(tags) < 2 and self.type in ["output_loss", "output_abs", "output_alpha"]: # temporary fix for IP case: E[1] [eV]          Im(eps)            Re(eps)
                 lines_with_matches = [line for line in self.lines if re.search(pattern, line)] 
@@ -219,10 +219,10 @@ class YamboFile(object):
             done.
         """
         # start with check for  failure due to error:
-        err = re.compile('^\s+?\[ERROR\]\s+?(.*)$')
-        kpoints = re.compile('^  [A-X*]+\sK\s\[([0-9]+)\]\s[:](?:\s+)?([0-9.E-]+\s+[0-9.E-]+\s+[0-9.E-]+)\s[A-Za-z()\s*.]+[0-9]+[A-Za-z()\s*.]+([0-9.]+)')
-        memory = re.compile('^\s+?<([0-9a-z-]+)> ([A-Z0-9]+)[:] \[M  ([0-9.]+) Gb\]? ([a-zA-Z0-9\s.()\[\]]+)?')
-        timing = re.compile('\s+?[A-Za-z]+iming\s+?[A-Za-z/\[\]]+[:]\s+?([a-z0-9-]+)[/]([a-z0-9-]+)[/]([a-z0-9-]+)')
+        err = re.compile(r'^\s+?\[ERROR\]\s+?(.*)$')
+        kpoints = re.compile(r'^  [A-X*]+\sK\s\[([0-9]+)\]\s[:](?:\s+)?([0-9.E-]+\s+[0-9.E-]+\s+[0-9.E-]+)\s[A-Za-z()\s*.]+[0-9]+[A-Za-z()\s*.]+([0-9.]+)')
+        memory = re.compile(r'^\s+?<([0-9a-z-]+)> ([A-Z0-9]+)[:] \[M  ([0-9.]+) Gb\]? ([a-zA-Z0-9\s.()\[\]]+)?')
+        timing = re.compile(r'\s+?[A-Za-z]+iming\s+?[A-Za-z/\[\]]+[:]\s+?([a-z0-9-]+)[/]([a-z0-9-]+)[/]([a-z0-9-]+)')
         self.memstats.extend([ line for line in self.lines if memory.match(line)])
         for line in self.lines:
             if err.match(line):
@@ -237,10 +237,10 @@ class YamboFile(object):
                 self.kpoints[str(int(kindx))] =  [ float(i.strip()) for i in kpt.split()]
 
         full_lines = '\n'.join(self.lines)
-        qp_regx = re.compile('(^\s+?QP\s\[eV\]\s@\sK\s\[\d+\][a-z0-9E:()\s.-]+)(.*?)(?=^$)',re.M|re.DOTALL)
-        kp_regex = re.compile('^\s+?QP\s\[eV\]\s@\sK\s\[(\d+)\][a-z0-9E:()\s.-]+$')
-        spliter = re.compile('^(B[=]\d+\sEo[=]\s+?[E0-9.-]+\sE[=]\s+?[E0-9.-]+\sE[-]Eo[=]\s+?[E0-9.-]+\sRe[(]Z[)][=]\s+?[E0-9.-]+\sIm[(]Z[)][=]\s?[E0-9.-]+\snlXC[=]\s+?[E0-9.-]+\slXC[=]\s+?[E0-9.-]+\sSo[=]\s+?[E0-9.-]+)')
-        extract = re.compile('B[=](\d+)\sEo[=](?:\s+)?([E0-9.-]+)\sE[=](?:\s+)?([E0-9.-]+)\sE[-]Eo[=](?:\s+)?([E0-9.-]+)\sRe[(]Z[)][=](?:\s+)?([E0-9.-]+)\sIm[(]Z[)][=](?:\s+)?[E0-9.-]+\snlXC[=](?:\s+)?([E0-9.-]+)\slXC[=](?:\s+)?([E0-9.-]+)\sSo[=](?:\s+)?([E0-9.-]+)')
+        qp_regx = re.compile(r'(^\s+?QP\s\[eV\]\s@\sK\s\[\d+\][a-z0-9E:()\s.-]+)(.*?)(?=^$)',re.M|re.DOTALL)
+        kp_regex = re.compile(r'^\s+?QP\s\[eV\]\s@\sK\s\[(\d+)\][a-z0-9E:()\s.-]+$')
+        spliter = re.compile(r'^(B[=]\d+\sEo[=]\s+?[E0-9.-]+\sE[=]\s+?[E0-9.-]+\sE[-]Eo[=]\s+?[E0-9.-]+\sRe[(]Z[)][=]\s+?[E0-9.-]+\sIm[(]Z[)][=]\s?[E0-9.-]+\snlXC[=]\s+?[E0-9.-]+\slXC[=]\s+?[E0-9.-]+\sSo[=]\s+?[E0-9.-]+)')
+        extract = re.compile(r'B[=](\d+)\sEo[=](?:\s+)?([E0-9.-]+)\sE[=](?:\s+)?([E0-9.-]+)\sE[-]Eo[=](?:\s+)?([E0-9.-]+)\sRe[(]Z[)][=](?:\s+)?([E0-9.-]+)\sIm[(]Z[)][=](?:\s+)?[E0-9.-]+\snlXC[=](?:\s+)?([E0-9.-]+)\slXC[=](?:\s+)?([E0-9.-]+)\sSo[=](?:\s+)?([E0-9.-]+)')
         qp_lines = qp_regx.findall(full_lines)
         qp_results ={}
         for each in qp_lines: # first group of qp data, shares k-point index
@@ -290,8 +290,8 @@ class YamboFile(object):
     def parse_log(self,**parse_kwargs):
         """ Get ERRORS and WARNINGS from  l-*  file, useful for debugging
         """
-        warning = re.compile('^\s+?<([0-9a-z-]+)> ([A-Z0-9]+)[:] \[(WARNING)\]? ([a-zA-Z0-9\s.()\[\]]+)?')
-        error = re.compile('^\s+?<([0-9a-z-]+)> ([A-Z0-9]+)[:] \[(ERROR)\]? ([a-zA-Z0-9\s.()\[\]]+)?')
+        warning = re.compile(r'^\s+?<([0-9a-z-]+)> ([A-Z0-9]+)[:] \[(WARNING)\]? ([a-zA-Z0-9\s.()\[\]]+)?')
+        error = re.compile(r'^\s+?<([0-9a-z-]+)> ([A-Z0-9]+)[:] \[(ERROR)\]? ([a-zA-Z0-9\s.()\[\]]+)?')
         self.warnings.extend([ line for line in self.lines if warning.match(line)])
         self.errors.extend([ line for line in self.lines if error.match(line)])
 

@@ -17,7 +17,9 @@ def get_exciton_dipole(state, blongdir, ylat, ydip, yexc, _cache={}):
     This function computes the dipole D of exciton state `state`
     at Q=0 starting from the transition-space expression:
 
-    D_{state} = \sum_{cvk} A^{state}_{cvk} Efield \cdot r_cvk 
+    .. math ::
+        
+        D_{state} = \sum_{cvk} A^{state}_{cvk} Efield \cdot r_cvk 
 
     :: A      --> BSE eigenvectors
     :: Efield --> electric field

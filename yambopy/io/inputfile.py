@@ -59,13 +59,13 @@ class YamboIn(object):
 
     """
     #Regular expressions
-    _variaexp   = '([A-Za-z\_0-9]+(?:\_[A-Za-z]+)?)' #variables names
-    _numexp     = '([+-]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)' #number
-    _spacexp    = '(?:[ \t]+)?' #space
-    _stringexp  = '["\']([a-zA-Z0-9_ ]+?)["\']' #string
-    _arrayexp   = '%'+_spacexp+_variaexp+'\s+(?:\#.+)?((?:(?:\s|\.|[+-]?\d)+?\|)+)\s+([a-zA-Z]+)?' #arrays
-    _complexexp = '\('+_spacexp+_numexp+_spacexp+','+_spacexp+_numexp+_spacexp+'\)' #complex numbers
-    _runexp     = '([a-zA-Z0-9_]+)' #runlevels
+    _variaexp   = r'([A-Za-z\_0-9]+(?:\_[A-Za-z]+)?)' #variables names
+    _numexp     = r'([+-]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)' #number
+    _spacexp    = r'(?:[ \t]+)?' #space
+    _stringexp  = r'["\']([a-zA-Z0-9_ ]+?)["\']' #string
+    _arrayexp   = '%'+_spacexp+_variaexp+r'\s+(?:\#.+)?((?:(?:\s|\.|[+-]?\d)+?\|)+)\s+([a-zA-Z]+)?' #arrays
+    _complexexp = r'\('+_spacexp+_numexp+_spacexp+','+_spacexp+_numexp+_spacexp+r'\)' #complex numbers
+    _runexp     = r'([a-zA-Z0-9_]+)' #runlevels
     # list of available runlevels to be stored in the arguments array
     _runlevels  = ['rim_cut','chi','em1s','bse','optics','bsk','bss','dipoles','ExcitonGkkp'
                    'em1d','gw0','HF_and_locXC','setup','ppa','cohsex','life',

@@ -120,7 +120,7 @@ def analyse_gw(folder,var,bandc,kpointc,bandv,kpointv,pack,text,draw,verbose=Fal
         ax = fig.add_subplot(1,1,1)
         ax.plot(convergence_data[:,0],convergence_data[:,1],'o-')
         ax.set_xlabel(var+' ('+unit+')')
-        ax.set_ylabel('$E_{GW} = E_{LDA} + \Delta E$')
+        ax.set_ylabel(r'$E_{GW} = E_{LDA} + \Delta E$')
         plt.show()
         fig.savefig('%s.png'%var)
 
@@ -207,8 +207,8 @@ def analyse_bse(folder,var,numbexc,intexc,degenexc,maxexc,text,draw,verbose=Fals
         plt.plot(w,spectra.imag,c=cmap(i/nspectra),label="{} = {} {}".format(var,value,unit))
 
     ## Spectra plots
-    ax.set_xlabel('$\omega$ (eV)')
-    ax.set_ylabel('Im($\epsilon_M$)')
+    ax.set_xlabel(r'$\omega$ (eV)')
+    ax.set_ylabel(r'Im($\epsilon_M$)')
     ax.legend(frameon=False)
     output_file = '%s_exciton_spectra.pdf'%var
     fig.savefig(os.path.join(output_folder,output_file))

@@ -17,7 +17,9 @@ def exciton_dipoles(blongdir,lattice_path,dipoles_path=None,bse_path=None,kplot=
     This function computes the dipoles D in the excitonic basis (i.e., the residuals)
     at Q=0 starting from the transition-space expression:
 
-    D_{a} = \sum_{cvk} A^{a}_{cvk} Efield \cdot r_cvk 
+    .. math ::
+
+        D_{a} = \sum_{cvk} A^{a}_{cvk} Efield \cdot r_cvk 
 
     :: A      --> BSE eigenvectors
     :: Efield --> electric field

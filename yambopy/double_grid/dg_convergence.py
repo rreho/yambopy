@@ -38,8 +38,8 @@ class YamboDG_Optimize():
     step 2  FG_11 ... FG_M1   FG_12 ... FG_M2 ...      CG_1              CG_2 ... CG_N
                                                        |                 |
     step 3                                             FG_11 ... FG_M1   FG_12 ... FG_M2 ...
-                                                        \         |      |         /
-                                                         \        \      |        /
+                                                        \\         |      |         /
+                                                         \\       \\      |        /
     step 4                                                 _________ PLOTS ______
     
     Some optional variables

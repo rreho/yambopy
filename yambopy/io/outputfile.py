@@ -174,7 +174,7 @@ class YamboOut():
                 for line in f:
                     if 'Timing' in line:
                         timing[category] = line.split()[-1].split('/')
-                    if re.search('(\[[0-9.]+\].[A-Z])', line):
+                    if re.search(r'(\[[0-9.]+\].[A-Z])', line):
                         category = line.strip()
                 
             self.files[filename]["runtime"] = timing

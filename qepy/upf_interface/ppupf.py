@@ -93,7 +93,7 @@ class PPUPF():
     
         new_string = deepcopy(data_string)
 
-        new_string = re.sub('\d', '0', new_string)
+        new_string = re.sub(r'\d', '0', new_string)
         
         return new_string 
 
