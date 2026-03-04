@@ -181,7 +181,7 @@ class ExcitonDispersion():
         qpoints_rep, qpoints_idx_rep = replicate_red_kmesh(
             qpoints, repx=rep, repy=rep, repz=[0]
         )
-        car_qpoints = red_car(qpoints_rep, lat=self.lattice.lat)
+        car_qpoints = red_car(qpoints_rep, lat=self.lattice.rlat)
         kpts_path_car = red_car(path.kpoints, self.rlat)
 
         sampled_car   = []
@@ -208,8 +208,13 @@ class ExcitonDispersion():
         from scipy.spatial import cKDTree
         tree = cKDTree(car_qpoints)
         _, nn_indices = tree.query(sampled_car, k=1)
-
         exc_indexes = qpoints_idx_rep[nn_indices]   # 0-based index into self.red_qpoints
+
+        unique, counts = np.unique(exc_indexes, return_counts=True)
+        print(f"Unique q-points matched to path: {len(unique)} / {len(self.red_qpoints)}")
+        print(f"Each used this many times (npath points snapped to it):")
+        for iq, c in sorted(zip(unique, counts), key=lambda x: -x[1]):
+            print(f"  q-index {iq}: {c} path points")
 
         energies      = self.exc_energies[self.lattice.kpoints_indexes]
         energies_path = energies[exc_indexes]       # (npath, nbands)
