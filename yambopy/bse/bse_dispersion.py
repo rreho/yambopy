@@ -16,6 +16,8 @@ from yambopy.plot.plotting import add_fig_kwargs,BZ_Wigner_Seitz
 from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red
 from yambopy.kpoints import get_path
 from yambopy.tools.funcs import gaussian, lorentzian
+import matplotlib.pyplot as plt
+import numpy as np
 
 class ExcitonDispersion():
     """
@@ -60,6 +62,7 @@ class ExcitonDispersion():
             exc_tables[iQ,:]          = exc_obj.table
 
         # Set up variables
+        self.folder = folder
         self.nqpoints     = nqpoints
         self.nexcitons    = nexcitons
         self.car_qpoints  = car_qpoints
@@ -170,7 +173,125 @@ class ExcitonDispersion():
     #####################################
     # Dispersion plot under development #
     #####################################
-    def get_dispersion(self, path):
+    def get_dispersion(self, path, path_npoints=50, atol=None):
+        
+        qpoints = self.red_qpoints
+        rep = list(range(-1, 2))
+
+        qpoints_rep, qpoints_idx_rep = replicate_red_kmesh(
+            qpoints, repx=rep, repy=rep, repz=[0]
+        )
+        car_qpoints = red_car(qpoints_rep, lat=self.lattice.lat)
+        kpts_path_car = red_car(path.kpoints, self.rlat)
+
+        sampled_car   = []
+        sampled_kpath = []
+        boundary_distances = [0.0]
+        cumulative = 0.0
+
+        for k in range(len(path.kpoints) - 1):
+            start   = kpts_path_car[k]
+            end     = kpts_path_car[k + 1]
+            seg_len = np.linalg.norm(end - start)
+            for i in range(path_npoints):
+                t = i / path_npoints
+                sampled_car.append(start + t * (end - start))
+                sampled_kpath.append(cumulative + t * seg_len)
+            cumulative += seg_len
+            boundary_distances.append(cumulative)
+
+        sampled_car.append(kpts_path_car[-1])
+        sampled_kpath.append(cumulative)
+        sampled_car   = np.array(sampled_car)
+        sampled_kpath = np.array(sampled_kpath)
+
+        from scipy.spatial import cKDTree
+        tree = cKDTree(car_qpoints)
+        _, nn_indices = tree.query(sampled_car, k=1)
+
+        exc_indexes = qpoints_idx_rep[nn_indices]   # 0-based index into self.red_qpoints
+
+        energies      = self.exc_energies[self.lattice.kpoints_indexes]
+        energies_path = energies[exc_indexes]       # (npath, nbands)
+
+        return energies_path, sampled_kpath, np.array(boundary_distances), path.klabels, exc_indexes
+
+
+    def get_spin_along_path(self, exc_indexes, nstates, bse_dir='SAVE', contribution='b'):
+        """
+        Compute Sz for each unique q-point along the path.
+        Returns spin array of shape (npath, nstates).
+        """
+        npath   = len(exc_indexes)
+        spin    = np.zeros((npath, nstates))
+
+        # Cache results per unique q-point to avoid recomputing
+        from yambopy.bse.exciton_spin import compute_exc_spin_iqpt
+        cache = {}
+        for i, iq0 in enumerate(exc_indexes):
+            iq_fortran = int(iq0) + 1   # 0-based -> Fortran 1-based
+            if iq_fortran not in cache:
+                exe_Sz, _ = compute_exc_spin_iqpt(
+                    path=self.folder,
+                    bse_dir=bse_dir,
+                    iqpt=iq_fortran,
+                    nstates=nstates,
+                    contribution=contribution,
+                    return_dbs_and_spin=True
+                )
+                cache[iq_fortran] = exe_Sz[:nstates]   # (nstates,)
+            spin[i] = cache[iq_fortran]
+
+        return spin   # (npath, nstates)
+
+
+    def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
+                                title="Exciton dispersion", bse_dir='SAVE',
+                                contribution='b', show_spin=False):
+
+        bands, distances, boundaries, labels, exc_indexes = self.get_dispersion(path=path)
+        nstates = bands.shape[1]
+        print(nstates)
+        fig, ax = plt.subplots(figsize=figsize)
+
+        if show_spin:
+            spin = self.get_spin_along_path(exc_indexes, nstates,
+                                            bse_dir=bse_dir, contribution=contribution)
+            # spin values are in [-0.5, +0.5], normalize to [0,1] for colormap
+            norm  = plt.Normalize(vmin=-0.5, vmax=0.5)
+            cmap  = plt.cm.RdBu   # red=spin-up (+0.5), blue=spin-down (-0.5)
+
+            for ib in range(nstates):
+                # scatter colored by Sz
+                sc = ax.scatter(distances, bands[:, ib],
+                                c=spin[:, ib], cmap=cmap, norm=norm,
+                                s=8, linewidths=0, zorder=2, label=f"Exciton {ib+1}")
+            cbar = plt.colorbar(sc, ax=ax, pad=0.02)
+            cbar.set_label(r"$\langle S_z \rangle$")
+            cbar.set_ticks([-0.5, 0, 0.5])
+
+        else:
+            colors = plt.cm.viridis(np.linspace(0, 0.85, nstates))
+            for ib in range(nstates):
+                ax.plot(distances, bands[:, ib], color=colors[ib],
+                        lw=1.5, label=f"Exciton {ib+1}")
+            ax.legend(fontsize=8)
+
+        for x in boundaries:
+            ax.axvline(x, color='gray', lw=0.8, ls='--')
+        ax.set_xticks(boundaries)
+        ax.set_xticklabels(labels)
+        ax.set_xlim(distances[0], distances[-1])
+        if ylim:
+            ax.set_ylim(ylim)
+        ax.set_ylabel("Exciton energy (eV)")
+        ax.set_title(title)
+        plt.tight_layout()
+        plt.show()
+        return fig, ax
+
+
+    def get_dispersion_suck(self, path):
         """ 
         Obtain dispersion along symmetry lines.
         
@@ -181,18 +302,22 @@ class ExcitonDispersion():
         qpoints = self.red_qpoints
         qpath    = np.array(path.kpoints)
 
+
         rep = list(range(-1,2))
-        qpoints_rep, qpoints_idx_rep = replicate_red_kmesh(qpoints,repx=rep,repy=rep,repz=rep)
-        exc_indexes = get_path(qpoints_rep,qpath)[1] #indices are second output
+        qpoints_rep, qpoints_idx_rep = replicate_red_kmesh(qpoints,repx=rep,repy=rep,repz=[0])
+        car_qpoints = red_car(qpoints_rep,lat=self.lattice.lat)
+
+        exc_indexes = get_path(car_qpoints,self.rlat,None,path)[1] #indices are second output
+
         exc_qpoints  = np.array(qpoints_rep[exc_indexes])
         exc_indexes = qpoints_idx_rep[exc_indexes]
-        
+        self.exc_indexes = exc_indexes
         # Here assuming same ordering in index expansion between k-yambopy and q-yambo...
         energies = self.exc_energies[self.lattice.kpoints_indexes]
         energies_path  = energies[exc_indexes]
         
         ybs_disp = YambopyBandStructure(energies_path, exc_qpoints, kpath=path)
-        return ybs_disp
+        return ybs_disp#, energies
         
     def get_dispersion_interpolated(self):
         """ Interpolated with SkwInterpolator
@@ -203,7 +328,6 @@ class ExcitonDispersion():
         print(ybs_disp.nbands)
         print(ybs_disp.nkpoints)
         print(ybs_disp._xlim)
-        print(ybs_disp.nbands)
         return ybs_disp.plot_ax(ax) 
 
     @add_fig_kwargs
