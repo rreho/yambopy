@@ -249,12 +249,79 @@ class ExcitonDispersion():
 
         return spin   # (npath, nstates)
 
+    def get_dispersion_interpolated(self, path, path_npoints=50, lpratio=5):
+        """
+        Use SKW Fourier interpolation to get smooth exciton dispersion along path.
+        """
+        # --- Inputs for SKW ---
+        # self.lattice.expand_kpoints()
+        kpts      = self.lattice.red_kpoints                          # (nq, 3) reduced coords
 
+        eigens    = self.exc_energies[self.lattice.kpoints_indexes]  # (nq, nbands)
+
+        # SKW expects shape (nsppol, nkpt, nband)
+        eigens_skw = eigens[np.newaxis, :, :]                 # (1, nq, nbands)
+
+        # You need symmetry operations in real space (reduced coords)
+        # If your lattice object has them:
+        symrel   = self.lattice.sym_red                       # (nsym, 3, 3) — adjust attr name
+        has_timrev = True
+
+        cell = (self.lattice.lat,                             # real-space lattice vectors
+                self.lattice.red_atomic_positions,                # reduced atomic positions
+                self.lattice.atomic_numbers)                  # atomic numbers
+
+        skw = SkwInterpolator(
+            lpratio    = lpratio,
+            kpts       = kpts,
+            eigens     = eigens_skw,
+            fermie     = 0.0,
+            nelect     = 0,
+            cell       = cell,
+            symrel     = symrel,
+            has_timrev = has_timrev,
+            verbose    = 1
+        )
+
+        # --- Sample the path in reduced coords ---
+        sampled_red   = []
+        sampled_kpath = []
+        boundary_distances = [0.0]
+        cumulative = 0.0
+
+        kpts_path_car = red_car(path.kpoints, self.rlat)
+
+        for k in range(len(path.kpoints) - 1):
+            start_red = path.kpoints[k]
+            end_red   = path.kpoints[k + 1]
+            start_car = kpts_path_car[k]
+            end_car   = kpts_path_car[k + 1]
+            seg_len   = np.linalg.norm(end_car - start_car)
+
+            for i in range(path_npoints):
+                t = i / path_npoints
+                sampled_red.append(start_red + t * (end_red - start_red))
+                sampled_kpath.append(cumulative + t * seg_len)
+
+            cumulative += seg_len
+            boundary_distances.append(cumulative)
+
+        sampled_red.append(path.kpoints[-1])
+        sampled_kpath.append(cumulative)
+        sampled_red   = np.array(sampled_red)
+        sampled_kpath = np.array(sampled_kpath)
+
+        # --- Interpolate ---
+        result    = skw.interp_kpts(sampled_red)
+        bands_interp = result.eigens[0]              # (npath, nbands)
+
+        return bands_interp, sampled_kpath, np.array(boundary_distances), path.klabels
+    
     def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
                                 title="Exciton dispersion", bse_dir='SAVE',
                                 contribution='b', show_spin=False):
 
-        bands, distances, boundaries, labels, exc_indexes = self.get_dispersion(path=path)
+        bands, distances, boundaries, labels = self.get_dispersion_interpolated(path=path)        
         nstates = bands.shape[1]
         print(nstates)
         fig, ax = plt.subplots(figsize=figsize)
@@ -324,9 +391,6 @@ class ExcitonDispersion():
         ybs_disp = YambopyBandStructure(energies_path, exc_qpoints, kpath=path)
         return ybs_disp#, energies
         
-    def get_dispersion_interpolated(self):
-        """ Interpolated with SkwInterpolator
-        """
     
     def plot_exciton_disp_ax(self,ax,path,**kwargs):
         ybs_disp = self.get_dispersion(path)
