@@ -223,43 +223,25 @@ class ExcitonDispersion():
         return data_ibz[self.lattice.kpoints_indexes]
 
 
-    def _expand_spin_to_full_bz(self, spin_ibz):
+    def _compute_spin_full_bz(self, nstates, save_dir, bse_dir, contribution):
         """
-        Expand S_z from IBZ to full BZ applying symmetry transformations.
-        S_z transforms as a pseudovector: S_z -> sym_red[isym][2,2] * S_z
-        For 2D hexagonal systems, sym_red[2,2] is always +1 or -1.
-        """
-        sym_red   = self.lattice.sym_red
-        nq_full   = len(self.lattice.kpoints_indexes)
-        spin_full = np.zeros((nq_full, spin_ibz.shape[1]))
-
-        for iq_full, (iq_ibz, isym) in enumerate(zip(self.lattice.kpoints_indexes,
-                                                    self.lattice.symmetry_indexes)):
-            Rzz = sym_red[isym][2, 2]
-            spin_full[iq_full] = Rzz * spin_ibz[iq_ibz]
-
-        return spin_full
-
-
-    def _compute_spin_ibz(self, nstates, save_dir, bse_dir, contribution):
-        """
-        Compute S_z expectation values for all IBZ q-points.
-        Returns spin_ibz of shape (nq_ibz, nstates).
+        Compute S_z expectation values for all full BZ q-points directly.
+        Returns spin_full of shape (nq_full, nstates).
         """
         from yambopy.bse.exciton_spin import compute_exc_spin_iqpt
-        nq_ibz   = len(self.red_qpoints)
-        spin_ibz = np.zeros((nq_ibz, nstates))
+        nq_full  = len(self.lattice.kpoints_indexes)
+        spin_full = np.zeros((nq_full, nstates))
 
-        for iq in range(nq_ibz):
+        for iq in range(nq_full):
             exe_Sz, _ = compute_exc_spin_iqpt(
                 path=save_dir, bse_dir=bse_dir,
-                iqpt=iq + 1,                      # Fortran 1-based
+                iqpt=iq + 1,
                 nstates=nstates, contribution=contribution,
                 return_dbs_and_spin=True
             )
-            spin_ibz[iq] = exe_Sz[:nstates]
+            spin_full[iq] = exe_Sz[:nstates]
 
-        return spin_ibz
+        return spin_full
     
     def _nn_interpolate(self, sampled_car, car_qpoints, qpoints_idx_rep, *data_full):
         """
@@ -312,8 +294,7 @@ class ExcitonDispersion():
         eigens_full = self._expand_ibz_to_full_bz(self.exc_energies)
 
         if show_spin:
-            spin_ibz  = self._compute_spin_ibz(nstates, save_dir, bse_dir, contribution)
-            spin_full = self._expand_spin_to_full_bz(spin_ibz)
+            spin_full  = self._compute_spin_full_bz(nstates, save_dir, bse_dir, contribution)
             bands, spin_path = self._nn_interpolate(sampled_car, car_qpoints,
                                                     qpoints_idx_rep,
                                                     eigens_full, spin_full)
@@ -323,26 +304,15 @@ class ExcitonDispersion():
             spin_path = None
 
         return bands, sampled_kpath, boundaries, path.klabels, spin_path
-
+   
     def get_spin_along_path(self, exc_indexes, nstates,
                             save_dir='SAVE', bse_dir='BSE', contribution='b'):
-        """
-        Compute S_z for each path point using exact (non-interpolated) q-point indices.
-        Applies correct symmetry transformation for each full BZ q-point.
-        Returns spin of shape (npath, nstates).
-        """
         from yambopy.bse.exciton_spin import compute_exc_spin_iqpt
-        sym_red  = self.lattice.sym_red
-        sym_idxs = self.lattice.symmetry_indexes   # maps full BZ index -> sym operation
-
-        # We need the full BZ symmetry index for each path point.
-        # exc_indexes are IBZ indices — recover full BZ index via kpoints_indexes
-        kpoints_indexes = self.lattice.kpoints_indexes
         spin  = np.zeros((len(exc_indexes), nstates))
         cache = {}
 
-        for i, iq_ibz in enumerate(exc_indexes):
-            iq_fortran = int(iq_ibz) + 1
+        for i, iq_full in enumerate(exc_indexes):
+            iq_fortran = int(iq_full) + 1
             if iq_fortran not in cache:
                 exe_Sz, _ = compute_exc_spin_iqpt(
                     path=save_dir, bse_dir=bse_dir,
@@ -351,13 +321,7 @@ class ExcitonDispersion():
                     return_dbs_and_spin=True
                 )
                 cache[iq_fortran] = exe_Sz[:nstates]
-
-            # Find first full BZ point corresponding to this IBZ point
-            # and get its symmetry operation
-            iq_full_matches = np.where(kpoints_indexes == iq_ibz)[0]
-            isym = sym_idxs[iq_full_matches[0]]
-            Rzz  = sym_red[isym][2, 2]
-            spin[i] = Rzz * cache[iq_fortran]
+            spin[i] = cache[iq_fortran]
 
         return spin
 
