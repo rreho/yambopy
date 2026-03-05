@@ -350,28 +350,34 @@ class ExcitonDispersion():
         bands         = energies_full[exc_indexes]
 
         return bands, sampled_kpath, boundaries, path.klabels, exc_indexes
-    def _interpolate_rbf(self, sampled_car, car_qpoints_ibz, eigens):
+    
+    def _interpolate_rbf(self, sampled_car, eigens, eigens_full_bz=None):
         """
-        RBF interpolation using scipy. Falls back to simpler kernel if needed.
+        RBF interpolation using full BZ q-points in Cartesian space.
+        If eigens_full_bz is provided, use it directly (e.g. for spin which is 
+        already in full BZ). Otherwise expand eigens from IBZ to full BZ.
         """
         from scipy.interpolate import RBFInterpolator
 
-        # Only use x,y components for 2D system
-        pts_2d    = car_qpoints_ibz[:, :2]
-        sample_2d = sampled_car[:, :2]
-        nbands    = eigens.shape[1]
-        npath     = len(sampled_car)
-        result    = np.zeros((npath, nbands))
+        car_qpoints_full = red_car(self.lattice.red_kpoints, self.rlat)
 
-        kernels = ['thin_plate_spline', 'linear', 'multiquadric', 'gaussian']
+        if eigens_full_bz is not None:
+            eigens_full = eigens_full_bz      # already full BZ (e.g. spin)
+        else:
+            eigens_full = self._expand_ibz_to_full_bz(eigens)  # expand from IBZ
+
+        pts_2d    = car_qpoints_full[:, :2]
+        sample_2d = sampled_car[:, :2]
+        nbands    = eigens_full.shape[1]
+        result    = np.zeros((len(sampled_car), nbands))
+
+        kernels = ['linear', 'thin_plate_spline', 'multiquadric', 'gaussian']
         for kernel in kernels:
             try:
                 for ib in range(nbands):
                     rbf = RBFInterpolator(
-                        pts_2d, eigens[:, ib],
-                        kernel    = kernel,
-                        smoothing = 0.0,
-                        degree    = -1    # no polynomial tail — avoids singular monomial matrix
+                        pts_2d, eigens_full[:, ib],
+                        kernel=kernel, smoothing=0.0, degree=-1
                     )
                     result[:, ib] = rbf(sample_2d)
                 print(f"RBF succeeded with kernel='{kernel}'")
@@ -380,7 +386,7 @@ class ExcitonDispersion():
                 print(f"RBF kernel '{kernel}' failed ({e}), trying next...")
 
         raise RuntimeError("All RBF kernels failed")
-
+    
     def get_dispersion_interpolated(self, path, show_spin=False,
                                     save_dir='SAVE', bse_dir='BSE', contribution='b',
                                     dmat_mode='run', dmat_file='Dmats.npy',
@@ -420,8 +426,7 @@ class ExcitonDispersion():
                 print(f"SKW failed ({e}), trying RBF...")
                 try:
                     car_qpoints_ibz = red_car(self.red_qpoints, self.rlat)
-                    bands = self._interpolate_rbf(sampled_car, car_qpoints_ibz,
-                                                self.exc_energies)
+                    bands = self._interpolate_rbf(sampled_car, self.exc_energies)                    
                     print("RBF interpolation succeeded")
                 except Exception as e2:
                     print(f"RBF failed ({e2}), falling back to NN")
@@ -448,7 +453,7 @@ class ExcitonDispersion():
             try:
                 # Try RBF for spin (SKW not used since spin is not periodic in same way)
                 car_qpoints_full = red_car(self.lattice.red_kpoints, self.rlat)
-                spin_path = self._interpolate_rbf(sampled_car, car_qpoints_full, spin_full)
+                spin_path = self._interpolate_rbf(sampled_car, None, eigens_full_bz=spin_full)
                 print("RBF spin interpolation succeeded")
             except Exception as e:
                 print(f"RBF spin failed ({e}), falling back to NN spin")
