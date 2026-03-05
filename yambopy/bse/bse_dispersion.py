@@ -173,41 +173,32 @@ class ExcitonDispersion():
     # Excition dispersion along BZ path #
     #####################################
     def _sample_path_cartesian(self, path):
-        """
-        Sample a BZ path using path.get_klist() which respects path.intervals.
-        Returns sampled Cartesian coords, cumulative distances, and segment boundary distances.
-        """
-        klist = path.get_klist()                    # (npath, 4) reduced coords + weight
-        red_kpts = klist[:, :3]                     # (npath, 3)
-        car_kpts = red_car(red_kpts, self.rlat)     # (npath, 3)
+        from yambopy.kpoints import make_kpositive
+        klist    = path.get_klist()
+        red_kpts = klist[:, :3]
 
-        # Compute cumulative distances in Cartesian
+        # Unfolded Cartesian for correct path geometry and distances
+        car_kpts = red_car(red_kpts, self.rlat)
+
         diffs      = np.linalg.norm(np.diff(car_kpts, axis=0), axis=1)
         cumulative = np.concatenate([[0], np.cumsum(diffs)])
 
-        # Boundary distances at high-symmetry points
         boundary_distances = [0.0]
         idx = 0
         for npts in path.intervals:
             idx += npts
             boundary_distances.append(cumulative[idx])
 
-        return car_kpts, cumulative, np.array(boundary_distances)
+        # Folded reduced coords for NN search
+        red_kpts_folded = make_kpositive(red_kpts)
+
+        return car_kpts, red_kpts_folded, cumulative, np.array(boundary_distances)
     
     def _get_full_bz_qpoints(self):
-        """
-        Return full BZ q-points with BZ images to handle folding.
-        """
-        red_kpoints = self.lattice.red_kpoints          # (nq_full, 3)
-        nq          = len(red_kpoints)
-
-        # Add BZ images so path points near zone boundary find correct q-point
-        shifts = np.array([[i, j, 0] for i in [-1,0,1] for j in [-1,0,1]])
-        red_rep = np.vstack([red_kpoints + s for s in shifts])   # (9*nq, 3)
-        idx_rep = np.tile(np.arange(nq), len(shifts))            # maps back to original
-
-        car_rep = red_car(red_rep, self.rlat)
-        return red_kpoints, idx_rep, car_rep
+        from yambopy.kpoints import build_ktree
+        red_kpoints = self.lattice.red_kpoints
+        ktree       = build_ktree(red_kpoints)
+        return red_kpoints, ktree
 
 
     def _expand_ibz_to_full_bz(self, data_ibz):
@@ -351,37 +342,14 @@ class ExcitonDispersion():
 
         return spin_full
     
-    def _nn_interpolate(self, sampled_car, car_qpoints, qpoints_idx_rep, *data_full):
-        """
-        Linear interpolation using 2 nearest neighbours in Cartesian space.
-        qpoints_idx_rep maps replicated mesh indices back to full BZ indices.
-        """
-        from scipy.spatial import cKDTree
-        dists, nn_indices = cKDTree(car_qpoints).query(sampled_car, k=2)
-
-        d0, d1 = dists[:, 0], dists[:, 1]
-        total  = d0 + d1
-        exact  = total < 1e-10
-        w0 = np.where(exact, 1.0, d1 / total)[:, np.newaxis]
-        w1 = np.where(exact, 0.0, d0 / total)[:, np.newaxis]
-
-        # Map replicated indices back to full BZ indices
-        idx0 = qpoints_idx_rep[nn_indices[:, 0]]
-        idx1 = qpoints_idx_rep[nn_indices[:, 1]]
-
-        return [w0 * d[idx0] + w1 * d[idx1] for d in data_full]
 
     def get_dispersion(self, path):
-        """
-        Nearest-neighbour q-point matching along path.
-        Uses path.intervals for npoints per segment if path_npoints is None.
-        """
-        _, qpoints_idx_rep, car_qpoints = self._get_full_bz_qpoints()
-        sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path)
-        
-        from scipy.spatial import cKDTree
-        _, nn_indices  = cKDTree(car_qpoints).query(sampled_car, k=1)
-        exc_indexes    = qpoints_idx_rep[nn_indices]
+        from yambopy.kpoints import make_kpositive
+        red_kpoints, ktree = self._get_full_bz_qpoints()
+
+        car_kpts, red_kpts_folded, sampled_kpath, boundaries = self._sample_path_cartesian(path)
+
+        _, exc_indexes = ktree.query(red_kpts_folded, k=1)
 
         unique, counts = np.unique(exc_indexes, return_counts=True)
         print(f"Unique q-points on path: {len(unique)} / {len(self.red_qpoints)}")
@@ -390,7 +358,21 @@ class ExcitonDispersion():
         bands         = energies_full[exc_indexes]
 
         return bands, sampled_kpath, boundaries, path.klabels, exc_indexes
-    
+
+
+    def _nn_interpolate(self, car_kpts, red_kpts_folded, *data_full):
+        red_kpoints, ktree = self._get_full_bz_qpoints()
+
+        dists, nn_indices = ktree.query(red_kpts_folded, k=2)
+        d0, d1 = dists[:, 0], dists[:, 1]
+        total  = d0 + d1
+        exact  = total < 1e-10
+        w0 = np.where(exact, 1.0, d1 / total)[:, np.newaxis]
+        w1 = np.where(exact, 0.0, d0 / total)[:, np.newaxis]
+
+        idx0, idx1 = nn_indices[:, 0], nn_indices[:, 1]
+        return [w0 * d[idx0] + w1 * d[idx1] for d in data_full]
+        
     def _interpolate_rbf(self, sampled_car, eigens, eigens_full_bz=None,
                         enforce_symmetry_points=None):
         from scipy.interpolate import RBFInterpolator
@@ -432,11 +414,11 @@ class ExcitonDispersion():
         raise RuntimeError("All RBF kernels failed")
     
     def get_dispersion_interpolated(self, path, show_spin=False,
-                                    save_dir='SAVE', bse_dir='BSE', contribution='b',
-                                    dmat_mode='run', dmat_file='Dmats.npy',
-                                    use_skw=True, lpratio=5, spin_method='rotate_Ak'):
+                                 save_dir='SAVE', bse_dir='BSE', contribution='b',
+                                 dmat_mode='run', dmat_file='Dmats.npy',
+                                 use_skw=True, lpratio=5, spin_method='Rzz'):
 
-        _, qpoints_idx_rep, car_qpoints = self._get_full_bz_qpoints()
+        red_kpoints, ktree = self._get_full_bz_qpoints()
         sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path)
 
         nstates     = self.exc_energies.shape[1]
@@ -464,49 +446,40 @@ class ExcitonDispersion():
                 if skw.mae > 10.0:
                     raise ValueError(f"SKW MAE too large ({skw.mae:.1f} meV)")
                 bands = skw.interp_kpts(sampled_red).eigens[0]
-                print(f"SKW interpolation succeeded, MAE={skw.mae:.3f} meV")
+                print(f"SKW succeeded, MAE={skw.mae:.3f} meV")
 
             except Exception as e:
                 print(f"SKW failed ({e}), trying RBF...")
                 try:
-                    car_qpoints_ibz = red_car(self.red_qpoints, self.rlat)
-                    bands = self._interpolate_rbf(sampled_car, self.exc_energies)                    
+                    bands = self._interpolate_rbf(sampled_car, self.exc_energies)
                     print("RBF interpolation succeeded")
                 except Exception as e2:
                     print(f"RBF failed ({e2}), falling back to NN")
 
-        # NN fallback (also used when use_skw=False)
         if bands is None:
             if show_spin:
-                spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
-                                                        contribution, dmat_mode=dmat_mode,
-                                                        dmat_file=dmat_file, method=spin_method)
-                bands, spin_path = self._nn_interpolate(sampled_car, car_qpoints,
-                                                        qpoints_idx_rep,
-                                                        eigens_full, spin_full)
+                spin_full        = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
+                                                            contribution, dmat_mode=dmat_mode,
+                                                            dmat_file=dmat_file, method=spin_method)
+                bands, spin_path = self._nn_interpolate(sampled_car, eigens_full, spin_full)
             else:
-                bands, = self._nn_interpolate(sampled_car, car_qpoints,
-                                            qpoints_idx_rep, eigens_full)
+                bands,           = self._nn_interpolate(sampled_car, eigens_full)
             return bands, sampled_kpath, boundaries, path.klabels, spin_path
 
-        # --- Interpolate spin (only if bands came from SKW or RBF) ---
         if show_spin:
             spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
                                                     contribution, dmat_mode=dmat_mode,
                                                     dmat_file=dmat_file, method=spin_method)
             try:
-                # Try RBF for spin (SKW not used since spin is not periodic in same way)
-                car_qpoints_full = red_car(self.lattice.red_kpoints, self.rlat)
                 spin_path = self._interpolate_rbf(sampled_car, None, eigens_full_bz=spin_full)
                 print("RBF spin interpolation succeeded")
             except Exception as e:
-                print(f"RBF spin failed ({e}), falling back to NN spin")
-                _, spin_path = self._nn_interpolate(sampled_car, car_qpoints,
-                                                    qpoints_idx_rep,
-                                                    eigens_full, spin_full)
+                print(f"RBF spin failed ({e}), falling back to NN")
+                spin_path, = self._nn_interpolate(sampled_car, spin_full)
 
         return bands, sampled_kpath, boundaries, path.klabels, spin_path
-        
+
+
     def _expand_spin_to_full_bz(self, spin_ibz):
         """
         Expand S_z from IBZ to full BZ applying symmetry transformations.
