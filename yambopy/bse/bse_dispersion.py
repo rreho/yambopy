@@ -263,10 +263,13 @@ class ExcitonDispersion():
 
         return spin_ibz
     def _compute_spin_full_bz(self, nstates, save_dir, bse_dir, contribution,
-                            sz=0.5 * np.array([[1, 0], [0, -1]]),
-                            dmat_mode='run', dmat_file='Dmats.npy'):
+                           sz=0.5 * np.array([[1, 0], [0, -1]]),
+                           dmat_mode='run', dmat_file='Dmats.npy',
+                           method='rotate_Ak'):
         """
-        Compute S_z for full BZ by computing at IBZ points and applying Rzz.
+        Compute S_z for full BZ.
+        method='Rzz'        : apply Rzz symmetry transformation to IBZ spin (fast)
+        method='rotate_Ak'  : rotate exciton wavefunction to full BZ q-point (slow)
         """
         from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
         from yambopy.dbs.wfdb import YamboWFDB
@@ -274,7 +277,7 @@ class ExcitonDispersion():
         nq_ibz  = len(self.red_qpoints)
         nq_full = len(self.lattice.kpoints_indexes)
 
-        # Load wfdb and elec_sz once
+        # --- Load wfdb and elec_sz once ---
         excdb_q1 = YamboExcitonDB.from_db_file(
             self.lattice, filename='ndb.BS_diago_Q1',
             folder=bse_dir, Load_WF=True, neigs=nstates
@@ -284,33 +287,65 @@ class ExcitonDispersion():
         wfdb    = YamboWFDB(path=save_dir, latdb=self.lattice, bands_range=bands_range)
         elec_sz = wfdb.get_spin_m_e_BZ(s_z=sz)
 
-        # Compute spin at IBZ q-points
+        # --- Load all IBZ exciton dbs ---
+        exdbs = [excdb_q1]
+        for iq in range(1, nq_ibz):
+            exdbs.append(YamboExcitonDB.from_db_file(
+                self.lattice, filename=f'ndb.BS_diago_Q{iq + 1}',
+                folder=bse_dir, Load_WF=True, neigs=nstates
+            ))
+
+        # --- Compute spin at IBZ q-points ---
         spin_ibz = np.zeros((nq_ibz, nstates))
-        for iq in range(nq_ibz):
-            if iq == 0:
-                excdb = excdb_q1
-            else:
-                excdb = YamboExcitonDB.from_db_file(
-                    self.lattice, filename=f'ndb.BS_diago_Q{iq + 1}',
-                    folder=bse_dir, Load_WF=True, neigs=nstates
-                )
-            smat   = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
+        for iq, excdb in enumerate(exdbs):
+            smat = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
                                         contribution=contribution, diagonal=False)
-            smat   = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
+            smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
             ss_tmp = []
             for i in smat:
                 ss_tmp += list(i)
             spin_ibz[iq] = np.array(ss_tmp)[:nstates].real
 
-        # Expand to full BZ using Rzz from symmetry operations
+        # --- Expand to full BZ ---
         spin_full = np.zeros((nq_full, nstates))
-        for iq_full, (iq_ibz, isym) in enumerate(zip(self.lattice.kpoints_indexes,
-                                                    self.lattice.symmetry_indexes)):
-            Rzz = self.lattice.sym_red[isym][2, 2]
-            spin_full[iq_full] = Rzz * spin_ibz[iq_ibz]
+
+        if method == 'Rzz':
+            for iq_full, (iq_ibz, isym) in enumerate(zip(self.lattice.kpoints_indexes,
+                                                        self.lattice.symmetry_indexes)):
+                Rzz = self.lattice.sym_red[isym][2, 2]
+                spin_full[iq_full] = Rzz * spin_ibz[iq_ibz]
+
+        elif method == 'rotate_Ak':
+            from yambopy.exciton_phonon.excph_matrix_elements import rotate_Akcv_Q, save_or_load_dmat
+            from scipy.spatial import cKDTree
+
+            Dmats = save_or_load_dmat(wfdb, mode=dmat_mode, dmat_file=dmat_file)
+
+            for iq_full in range(nq_full):
+                Qpt    = self.lattice.red_kpoints[iq_full]
+                rot_Ak = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=None)
+
+                iq_ibz          = self.lattice.kpoints_indexes[iq_full]
+                excdb           = exdbs[iq_ibz]
+                original_get_Akcv = excdb.get_Akcv
+                excdb.get_Akcv  = lambda: rot_Ak
+
+                smat = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
+                                            contribution=contribution, diagonal=False)
+                smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
+
+                excdb.get_Akcv = original_get_Akcv
+
+                ss_tmp = []
+                for i in smat:
+                    ss_tmp += list(i)
+                spin_full[iq_full] = np.array(ss_tmp)[:nstates].real
+
+        else:
+            raise ValueError(f"Unknown method '{method}', use 'Rzz' or 'rotate_Ak'")
 
         return spin_full
-        
+    
     def _nn_interpolate(self, sampled_car, car_qpoints, qpoints_idx_rep, *data_full):
         """
         Linear interpolation using 2 nearest neighbours in Cartesian space.
@@ -351,23 +386,27 @@ class ExcitonDispersion():
 
         return bands, sampled_kpath, boundaries, path.klabels, exc_indexes
     
-    def _interpolate_rbf(self, sampled_car, eigens, eigens_full_bz=None):
-        """
-        RBF interpolation using full BZ q-points in Cartesian space.
-        If eigens_full_bz is provided, use it directly (e.g. for spin which is 
-        already in full BZ). Otherwise expand eigens from IBZ to full BZ.
-        """
+    def _interpolate_rbf(self, sampled_car, eigens, eigens_full_bz=None,
+                        enforce_symmetry_points=None):
         from scipy.interpolate import RBFInterpolator
 
-        car_qpoints_full = red_car(self.lattice.red_kpoints, self.rlat)
+        # Fold full BZ q-points into [-0.5, 0.5) to ensure consistent representation
+        red_kpoints_folded = self.lattice.red_kpoints.copy()
+        red_kpoints_folded = (red_kpoints_folded + 0.5) % 1.0 - 0.5  # fold to [-0.5, 0.5)
+        car_qpoints_full   = red_car(red_kpoints_folded, self.rlat)
 
         if eigens_full_bz is not None:
-            eigens_full = eigens_full_bz      # already full BZ (e.g. spin)
+            eigens_full = eigens_full_bz
         else:
-            eigens_full = self._expand_ibz_to_full_bz(eigens)  # expand from IBZ
+            eigens_full = self._expand_ibz_to_full_bz(eigens)
+
+        # Also fold the sampled path points
+        sampled_red    = car_red(sampled_car, self.rlat)
+        sampled_folded = (sampled_red + 0.5) % 1.0 - 0.5
+        sampled_car_folded = red_car(sampled_folded, self.rlat)
 
         pts_2d    = car_qpoints_full[:, :2]
-        sample_2d = sampled_car[:, :2]
+        sample_2d = sampled_car_folded[:, :2]
         nbands    = eigens_full.shape[1]
         result    = np.zeros((len(sampled_car), nbands))
 
@@ -390,7 +429,7 @@ class ExcitonDispersion():
     def get_dispersion_interpolated(self, path, show_spin=False,
                                     save_dir='SAVE', bse_dir='BSE', contribution='b',
                                     dmat_mode='run', dmat_file='Dmats.npy',
-                                    use_skw=True, lpratio=5):
+                                    use_skw=True, lpratio=5, spin_method='rotate_Ak'):
 
         _, qpoints_idx_rep, car_qpoints = self._get_full_bz_qpoints()
         sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path)
@@ -436,7 +475,7 @@ class ExcitonDispersion():
             if show_spin:
                 spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
                                                         contribution, dmat_mode=dmat_mode,
-                                                        dmat_file=dmat_file)
+                                                        dmat_file=dmat_file, method=spin_method)
                 bands, spin_path = self._nn_interpolate(sampled_car, car_qpoints,
                                                         qpoints_idx_rep,
                                                         eigens_full, spin_full)
@@ -449,7 +488,7 @@ class ExcitonDispersion():
         if show_spin:
             spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
                                                     contribution, dmat_mode=dmat_mode,
-                                                    dmat_file=dmat_file)
+                                                    dmat_file=dmat_file, method=spin_method)
             try:
                 # Try RBF for spin (SKW not used since spin is not periodic in same way)
                 car_qpoints_full = red_car(self.lattice.red_kpoints, self.rlat)
@@ -482,25 +521,25 @@ class ExcitonDispersion():
 
     def get_spin_along_path(self, exc_indexes_full, nstates,
                             save_dir='SAVE', bse_dir='BSE', contribution='b',
-                            dmat_mode='save', dmat_file='Dmats.npy'):
+                            dmat_mode='save', dmat_file='Dmats.npy', spin_method='rotate_Ak'):
         spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir, contribution,
-                                                dmat_mode=dmat_mode, dmat_file=dmat_file)
+                                                dmat_mode=dmat_mode, dmat_file=dmat_file, method=spin_method)
         return spin_full[exc_indexes_full]
 
     def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
                                 title="Exciton dispersion", save_dir='SAVE', bse_dir='BSE',
                                 contribution='b', show_spin=False, interpolate=False,
-                                dmat_mode='save', dmat_file='Dmats.npy'):
+                                dmat_mode='save', dmat_file='Dmats.npy',spin_method='rotate_Ak'):
         if interpolate:
             bands, distances, boundaries, labels, spin = self.get_dispersion_interpolated(
                 path=path, show_spin=show_spin, save_dir=save_dir, bse_dir=bse_dir,
-                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file
+                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file, spin_method=spin_method
             )
         else:
             bands, distances, boundaries, labels, exc_indexes_full = self.get_dispersion(path=path)
             spin = self.get_spin_along_path(
                 exc_indexes_full, bands.shape[1], save_dir=save_dir, bse_dir=bse_dir,
-                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file
+                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file, spin_method=spin_method
             ) if show_spin else None
 
         fig, ax = plt.subplots(figsize=figsize)
