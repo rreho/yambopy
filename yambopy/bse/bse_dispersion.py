@@ -262,69 +262,52 @@ class ExcitonDispersion():
             spin_ibz[iq] = np.array(ss_tmp)[:nstates].real
 
         return spin_ibz
-    
     def _compute_spin_full_bz(self, nstates, save_dir, bse_dir, contribution,
                             sz=0.5 * np.array([[1, 0], [0, -1]]),
                             dmat_mode='run', dmat_file='Dmats.npy'):
         """
-        Compute S_z expectation values for all full BZ q-points.
-        Uses rotate_Akcv_Q to correctly rotate exciton wavefunctions to full BZ q-points.
+        Compute S_z for full BZ by computing at IBZ points and applying Rzz.
         """
         from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
         from yambopy.dbs.wfdb import YamboWFDB
-        from yambopy.exciton_phonon.excph_matrix_elements import rotate_Akcv_Q, save_or_load_dmat
 
-        kpoints_indexes = self.lattice.kpoints_indexes
-        nq_full         = len(kpoints_indexes)
-        nq_ibz          = len(self.red_qpoints)
+        nq_ibz  = len(self.red_qpoints)
+        nq_full = len(self.lattice.kpoints_indexes)
 
-        # --- Load excdb_q1 to get bands_range ---
+        # Load wfdb and elec_sz once
         excdb_q1 = YamboExcitonDB.from_db_file(
             self.lattice, filename='ndb.BS_diago_Q1',
             folder=bse_dir, Load_WF=True, neigs=nstates
         )
         bands_range = [np.min(excdb_q1.table[:, 1]) - 1,
                     np.max(excdb_q1.table[:, 2])]
-
-        # --- Load wfdb, elec_sz, and Dmats once ---
         wfdb    = YamboWFDB(path=save_dir, latdb=self.lattice, bands_range=bands_range)
         elec_sz = wfdb.get_spin_m_e_BZ(s_z=sz)
-        Dmats   = save_or_load_dmat(wfdb, mode=dmat_mode, dmat_file=dmat_file)
 
-        # --- Load all IBZ exciton dbs ---
-        exdbs = [excdb_q1]
-        for iq in range(1, nq_ibz):
-            exdbs.append(YamboExcitonDB.from_db_file(
-                self.lattice, filename=f'ndb.BS_diago_Q{iq + 1}',
-                folder=bse_dir, Load_WF=True, neigs=nstates
-            ))
-
-        # --- Loop over full BZ q-points ---
-        spin_full = np.zeros((nq_full, nstates))
-
-        for iq_full in range(nq_full):
-            # Get the full BZ q-point in reduced coordinates
-            Qpt = self.lattice.red_kpoints[iq_full]   # or however full BZ q-points are stored
-
-            # Rotate Akcv to this full BZ q-point
-            rot_Ak = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=None)
-
-            # Patch get_Akcv to return rotated wavefunction
-            iq_ibz = kpoints_indexes[iq_full]
-            excdb  = exdbs[iq_ibz]
-            original_get_Akcv = excdb.get_Akcv
-            excdb.get_Akcv    = lambda: rot_Ak
-
-            smat = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
+        # Compute spin at IBZ q-points
+        spin_ibz = np.zeros((nq_ibz, nstates))
+        for iq in range(nq_ibz):
+            if iq == 0:
+                excdb = excdb_q1
+            else:
+                excdb = YamboExcitonDB.from_db_file(
+                    self.lattice, filename=f'ndb.BS_diago_Q{iq + 1}',
+                    folder=bse_dir, Load_WF=True, neigs=nstates
+                )
+            smat   = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
                                         contribution=contribution, diagonal=False)
-            smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
-
-            excdb.get_Akcv = original_get_Akcv  # restore
-
+            smat   = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
             ss_tmp = []
             for i in smat:
                 ss_tmp += list(i)
-            spin_full[iq_full] = np.array(ss_tmp)[:nstates].real
+            spin_ibz[iq] = np.array(ss_tmp)[:nstates].real
+
+        # Expand to full BZ using Rzz from symmetry operations
+        spin_full = np.zeros((nq_full, nstates))
+        for iq_full, (iq_ibz, isym) in enumerate(zip(self.lattice.kpoints_indexes,
+                                                    self.lattice.symmetry_indexes)):
+            Rzz = self.lattice.sym_red[isym][2, 2]
+            spin_full[iq_full] = Rzz * spin_ibz[iq_ibz]
 
         return spin_full
         
