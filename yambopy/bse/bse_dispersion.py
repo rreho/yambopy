@@ -376,29 +376,71 @@ class ExcitonDispersion():
         bands         = energies_full[exc_indexes]
 
         return bands, sampled_kpath, boundaries, path.klabels, exc_indexes
-    
+
     def get_dispersion_interpolated(self, path, path_npoints=50,
                                     show_spin=False, save_dir='SAVE',
                                     bse_dir='BSE', contribution='b',
-                                    dmat_mode='run', dmat_file='Dmats.npy'):
+                                    dmat_mode='run', dmat_file='Dmats.npy',
+                                    use_skw=True, lpratio=5):
 
         _, qpoints_idx_rep, car_qpoints = self._get_full_bz_qpoints()
         sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path, path_npoints)
 
         nstates     = self.exc_energies.shape[1]
         eigens_full = self._expand_ibz_to_full_bz(self.exc_energies)
-        spin_path   = None   
+        spin_path   = None
+        if use_skw:
+            try:
+                from yambopy.tools.skw import SkwInterpolator
+                sampled_red = car_red(sampled_car, self.rlat)
+                kpts        = self.red_qpoints
+                eigens_skw  = self.exc_energies[np.newaxis, :, :]  # (1, nq_ibz, nbands)
+                cell        = (self.lattice.lat,
+                            self.lattice.red_atomic_positions,
+                            self.lattice.atomic_numbers)
 
-        if show_spin:
-            spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir, contribution,
-                                                    dmat_mode=dmat_mode, dmat_file=dmat_file)
-            bands, spin_path = self._nn_interpolate(sampled_car, car_qpoints,
-                                                    qpoints_idx_rep, eigens_full, spin_full)
+                skw = SkwInterpolator(
+                    lpratio    = lpratio,
+                    kpts       = kpts,
+                    eigens     = eigens_skw,
+                    fermie     = 0.0, nelect = 0,
+                    cell       = cell,
+                    symrel     = self.lattice.sym_red,
+                    has_timrev = bool(self.lattice.time_rev),
+                    verbose    = 1
+                )
+                if skw.mae > 10.0:
+                    raise ValueError(f"SKW MAE too large ({skw.mae:.1f} meV), falling back to NN")
+
+                bands = skw.interp_kpts(sampled_red).eigens[0]  # (npath, nbands)
+                print(f"SKW interpolation successful, MAE={skw.mae:.3f} meV")
+
+            except Exception as e:
+                print(f"SKW failed ({e}), falling back to NN interpolation")
+                if show_spin:
+                    spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
+                                                            contribution, dmat_mode=dmat_mode,
+                                                            dmat_file=dmat_file)
+                    bands, spin_path = self._nn_interpolate(sampled_car, car_qpoints,
+                                                            qpoints_idx_rep,
+                                                            eigens_full, spin_full)
+                else:
+                    bands, = self._nn_interpolate(sampled_car, car_qpoints,
+                                                qpoints_idx_rep, eigens_full)
+                
         else:
-            bands, = self._nn_interpolate(sampled_car, car_qpoints,
-                                        qpoints_idx_rep, eigens_full)
+            if show_spin:
+                spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
+                                                        contribution, dmat_mode=dmat_mode,
+                                                        dmat_file=dmat_file)
+                bands, spin_path = self._nn_interpolate(sampled_car, car_qpoints,
+                                                        qpoints_idx_rep,
+                                                        eigens_full, spin_full)
+            else:
+                bands, = self._nn_interpolate(sampled_car, car_qpoints,
+                                            qpoints_idx_rep, eigens_full)
 
-        return bands, sampled_kpath, boundaries, path.klabels, spin_path   
+        return bands, sampled_kpath, boundaries, path.klabels, spin_path
     
     def _expand_spin_to_full_bz(self, spin_ibz):
         """
@@ -419,7 +461,7 @@ class ExcitonDispersion():
 
     def get_spin_along_path(self, exc_indexes_full, nstates,
                             save_dir='SAVE', bse_dir='BSE', contribution='b',
-                            dmat_mode='run', dmat_file='Dmats.npy'):
+                            dmat_mode='save', dmat_file='Dmats.npy'):
         spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir, contribution,
                                                 dmat_mode=dmat_mode, dmat_file=dmat_file)
         return spin_full[exc_indexes_full]
@@ -427,7 +469,7 @@ class ExcitonDispersion():
     def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
                                 title="Exciton dispersion", save_dir='SAVE', bse_dir='BSE',
                                 contribution='b', show_spin=False, interpolate=False,
-                                dmat_mode='run', dmat_file='Dmats.npy'):
+                                dmat_mode='save', dmat_file='Dmats.npy'):
         if interpolate:
             bands, distances, boundaries, labels, spin = self.get_dispersion_interpolated(
                 path=path, show_spin=show_spin, save_dir=save_dir, bse_dir=bse_dir,
