@@ -1,0 +1,27 @@
+# Instructions for parallel executions
+
+Yambopy supports extremely basic parallel execution.
+
+## Threads | openMP | shared memory
+Yambopy inherits the multithreading support of numpy. 
+
+If you select
+```
+export OMP_NUM_THREADS=nthreads
+```
+then numpy will automatically take advantage of this. 
+Notice however that this is not always guaranteed to speed up execution.
+
+## Tasks | openMPI/mpich | distributed memory
+Very few functions support MPI parallelization via the package `mpi4py`.
+
+Take care when installing this package that the correct environment is used.
+For example, for mpirun/mpiexec (i.e., openMPI), you can install it as
+```
+conda install -c conda-forge mpi4py openmpi
+```
+Or using `pip` as
+```
+pip install mpi4py XXXX
+```
+

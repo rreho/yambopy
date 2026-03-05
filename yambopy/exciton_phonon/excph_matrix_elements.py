@@ -1,5 +1,5 @@
 ##
-## Authors: MN (FP adapted)
+## Authors: MN FP
 ##
 import numpy as np
 import os
@@ -7,6 +7,7 @@ from yambopy.dbs.excitondb import YamboExcitonDB
 from yambopy.bse.exciton_matrix_elements import exciton_X_matelem
 from yambopy.bse.rotate_excitonwf import rotate_exc_wf
 from tqdm import tqdm
+from mpi4py import MPI
 
 def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_dir=None,
                            nexc_in=-1,nexc_out=-1,dmat_mode='run',save_files=True,exph_file='Ex-ph.npy',overwrite=False):
@@ -45,6 +46,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     overwrite : bool, optional
         If False and `exph_file` is found, the matrix elements will be loaded from file. Default is False.
     """
+    comm = MPI.COMM_WORLD
 
     # Check if we just need to load
     if os.path.exists(exph_file) and overwrite==False:
@@ -63,15 +65,23 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
         exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,Dmats,\
                          BSE_dir=BSE_dir,BSE_Lin_dir=BSE_Lin_dir,\
                          Q_in=Q_in,nexc_in=nexc_in,nexc_out=nexc_out) )
-    # IO
-    if len(exph_mat)<2: exph_mat = exph_mat[0] # single Q-point calculation (suppress axis)
-    else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
+
+    # IO (MPI aware)
+    rnk = comm.Get_rank()
     
-    if save_files: 
-        if exph_file[-4:]!='.npy': exph_file = exph_file+'.npy'
-        print(f'Excph coupling file saved to {exph_file}')
-        np.save(exph_file,exph_mat)
+    if rnk==0:
+        # single Q-point calculation (suppress axis)
+        if len(exph_mat)<2: exph_mat = exph_mat[0]
+        # [nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
+        else:               exph_mat = np.array(exph_mat)
     
+        # Save database
+        if save_files: 
+            if exph_file[-4:]!='.npy': exph_file = exph_file+'.npy'
+            print(f'Excph coupling file saved to {exph_file}')
+            np.save(exph_file,exph_mat)
+
+    # [WARNING] In MPI execution, rank 0 has the array, all others have None
     return exph_mat
 
 def exciton_phonon_matelem_iQ(elphdb,wfdb,Dmats,BSE_dir,BSE_Lin_dir=None,
@@ -110,24 +120,62 @@ def exciton_phonon_matelem_iQ(elphdb,wfdb,Dmats,BSE_dir,BSE_Lin_dir=None,
     latdb = wfdb.ydb
     # Load and rotate Lin(Q)
     Ak = rotate_Akcv_Q(wfdb, Q_in, Dmats, neigs=nexc_in, folder=BSE_Lin_dir)
+    
     # Compute ex-ph
-    exph_mat = []
-    bse_bnds_range = [wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands]
-    for iq in range(elphdb.nq):
+    bse_bnds_range = [wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands]    
+    
+    #### This loop supports MPI parallelization
+    comm = MPI.COMM_WORLD
+    # Variables with rnk* are supposed to be different for each process
+    rnk    = comm.Get_rank() # rank id
+    ntasks = comm.Get_size()
+
+    # Basic check
+    if ntasks > elphdb.nq:
+        if rnk==0:
+            raise ValueError(f"[MPI][ERROR] You have {ntasks} processes for {elphdb.nq} iterations.")
+    # Create "chunks" list with no. of q-iterations per rank
+    chunks = [elphdb.nq // ntasks] * ntasks
+    for i in range(elphdb.nq % ntasks): chunks[i] += 1 # adjust if not equally div
+    # Actual MPI elements (since we are dealing with ndim array, chunks/=counts)
+    counts = [ chunk*elphdb.nm*nexc_out*nexc_in for chunk in chunks ] 
+    # Indices where each rank must gather in global array
+    displs = [sum(counts[:i]) for i in range(ntasks)]
+    # Process with rank rnk computes rnk_chunk iterations
+    rnk_chunk = chunks[rnk]
+    # All of the above is done so we can allocate a small local array for each rank
+    inside_dims = [elphdb.nm,nexc_out,nexc_in]
+    rnk_exph = np.zeros([rnk_chunk]+inside_dims,dtype=complex)
+    # Start of MPI partial loop
+    rnk_start = sum(chunks[:rnk]) # q-index where each rank starts
+    for rnk_iq in range(rnk_chunk):
+        iq = rnk_start + rnk_iq # global q-point index
         # Load el-ph coupling
         ph_eig, elph_mat = elphdb.read_iq(iq,bands_range=bse_bnds_range,convention='standard')
         elph_mat = elph_mat.transpose(1,0,2,4,3)
         # Load and rotate Lout(q+Q)
         Akq = rotate_Akcv_Q(wfdb, Q_in + elphdb.qpoints[iq], Dmats, neigs=nexc_out, folder= BSE_dir)
         # Call the internal generic function to calculate excitonic matrix elements
-        tmp_exph = exciton_X_matelem(Q_in, elphdb.qpoints[iq], \
-                                     Akq, Ak, elph_mat, wfdb.kBZ, \
-                                     contribution='b', diagonal_only=False, ktree=wfdb.ktree)
-        exph_mat.append(tmp_exph)
+        #rnk_exph[rnk_iq,...] = iq
+        rnk_exph[rnk_iq] = exciton_X_matelem(Q_in, elphdb.qpoints[iq], \
+                                             Akq, Ak, elph_mat, wfdb.kBZ, \
+                                             contribution='b', diagonal_only=False, \
+                                             ktree=wfdb.ktree)
 
-    ## 0.5 for Ry to Ha
-    exph_mat = 0.5 * np.array(exph_mat).transpose(0,1,3,2) #[nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
+    # Allocate global array on rank 0
+    if rnk==0: exph_mat = np.zeros([elphdb.nq]+inside_dims,dtype=complex)
+    else:      exph_mat = None
+    #print(rnk,rnk_exph.shape)
+    #if rnk==0: print(counts,displs,exph_mat.shape)
+    # Finally, gather call to rank 0
+    comm.Gatherv(rnk_exph,[exph_mat,counts,displs,MPI.DOUBLE_COMPLEX],root=0)
 
+    if rnk==0:
+        ## 0.5 for Ry to Ha
+        ## change dim order: [nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
+        exph_mat = 0.5 * np.array(exph_mat).transpose(0,1,3,2)
+    
+    #### End of MPI part 
     return exph_mat
 
 def save_or_load_dmat(wfdb, mode='run', dmat_file='Dmats.npy'):
