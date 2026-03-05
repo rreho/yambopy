@@ -196,15 +196,13 @@ class ExcitonDispersion():
     
     def _get_full_bz_qpoints(self):
         """
-        Replicate IBZ q-mesh over neighbouring BZ images and convert to Cartesian.
-        Returns (qpoints_rep, qpoints_idx_rep, car_qpoints).
+        Return full BZ q-points in Cartesian coordinates without replication.
         """
-        rep = list(range(-1, 2))
-        qpoints_rep, qpoints_idx_rep = replicate_red_kmesh(
-            self.red_qpoints, repx=rep, repy=rep, repz=[0]
-        )
-        car_qpoints = red_car(qpoints_rep, self.rlat)
-        return qpoints_rep, qpoints_idx_rep, car_qpoints
+        red_kpoints = self.lattice.red_kpoints          # (nq_full, 3)
+        car_qpoints = red_car(red_kpoints, self.rlat)   # (nq_full, 3)
+        # identity mapping since we're using full BZ directly
+        qpoints_idx = np.arange(len(red_kpoints))
+        return red_kpoints, qpoints_idx, car_qpoints
 
 
     def _expand_ibz_to_full_bz(self, data_ibz):
