@@ -222,7 +222,7 @@ class ExcitonDispersion():
         return energies_path, sampled_kpath, np.array(boundary_distances), path.klabels, exc_indexes
 
 
-    def get_spin_along_path(self, exc_indexes, nstates, bse_dir='SAVE', contribution='b'):
+    def get_spin_along_path(self, exc_indexes, nstates,save_dir='SAVE', bse_dir='BSE', contribution='b'):
         """
         Compute Sz for each unique q-point along the path.
         Returns spin array of shape (npath, nstates).
@@ -237,7 +237,7 @@ class ExcitonDispersion():
             iq_fortran = int(iq0) + 1   # 0-based -> Fortran 1-based
             if iq_fortran not in cache:
                 exe_Sz, _ = compute_exc_spin_iqpt(
-                    path=self.folder,
+                    path=save_dir,
                     bse_dir=bse_dir,
                     iqpt=iq_fortran,
                     nstates=nstates,
@@ -318,30 +318,33 @@ class ExcitonDispersion():
         return bands_interp, sampled_kpath, np.array(boundary_distances), path.klabels
     
     def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
-                                title="Exciton dispersion", bse_dir='SAVE',
-                                contribution='b', show_spin=False):
+                                title="Exciton dispersion", save_dir='SAVE', bse_dir='BSE',
+                                contribution='b', show_spin=False, interpolate=False):
 
-        bands, distances, boundaries, labels = self.get_dispersion_interpolated(path=path)        
+        if interpolate:
+            if show_spin:
+                raise ValueError("show_spin=True requires interpolate=False (spin needs exact q-point indices)")
+            bands, distances, boundaries, labels = self.get_dispersion_interpolated(path=path)
+            exc_indices = None
+        else:
+            bands, distances, boundaries, labels, exc_indices = self.get_dispersion(path=path)
+        
         nstates = bands.shape[1]
-        print(nstates)
         fig, ax = plt.subplots(figsize=figsize)
 
         if show_spin:
-            spin = self.get_spin_along_path(exc_indexes, nstates,
-                                            bse_dir=bse_dir, contribution=contribution)
-            # spin values are in [-0.5, +0.5], normalize to [0,1] for colormap
-            norm  = plt.Normalize(vmin=-0.5, vmax=0.5)
-            cmap  = plt.cm.RdBu   # red=spin-up (+0.5), blue=spin-down (-0.5)
-
+            spin = self.get_spin_along_path(exc_indices, nstates,
+                                            save_dir=save_dir, bse_dir=bse_dir,
+                                            contribution=contribution)
+            norm = plt.Normalize(vmin=-0.5, vmax=0.5)
+            cmap = plt.cm.RdBu
             for ib in range(nstates):
-                # scatter colored by Sz
                 sc = ax.scatter(distances, bands[:, ib],
                                 c=spin[:, ib], cmap=cmap, norm=norm,
                                 s=8, linewidths=0, zorder=2, label=f"Exciton {ib+1}")
             cbar = plt.colorbar(sc, ax=ax, pad=0.02)
             cbar.set_label(r"$\langle S_z \rangle$")
             cbar.set_ticks([-0.5, 0, 0.5])
-
         else:
             colors = plt.cm.viridis(np.linspace(0, 0.85, nstates))
             for ib in range(nstates):
