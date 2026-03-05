@@ -196,13 +196,18 @@ class ExcitonDispersion():
     
     def _get_full_bz_qpoints(self):
         """
-        Return full BZ q-points in Cartesian coordinates without replication.
+        Return full BZ q-points with BZ images to handle folding.
         """
         red_kpoints = self.lattice.red_kpoints          # (nq_full, 3)
-        car_qpoints = red_car(red_kpoints, self.rlat)   # (nq_full, 3)
-        # identity mapping since we're using full BZ directly
-        qpoints_idx = np.arange(len(red_kpoints))
-        return red_kpoints, qpoints_idx, car_qpoints
+        nq          = len(red_kpoints)
+
+        # Add BZ images so path points near zone boundary find correct q-point
+        shifts = np.array([[i, j, 0] for i in [-1,0,1] for j in [-1,0,1]])
+        red_rep = np.vstack([red_kpoints + s for s in shifts])   # (9*nq, 3)
+        idx_rep = np.tile(np.arange(nq), len(shifts))            # maps back to original
+
+        car_rep = red_car(red_rep, self.rlat)
+        return red_kpoints, idx_rep, car_rep
 
 
     def _expand_ibz_to_full_bz(self, data_ibz):
@@ -391,9 +396,9 @@ class ExcitonDispersion():
         from scipy.interpolate import RBFInterpolator
 
         # Fold full BZ q-points into [-0.5, 0.5) to ensure consistent representation
-        red_kpoints_folded = self.lattice.red_kpoints.copy()
-        red_kpoints_folded = (red_kpoints_folded + 0.5) % 1.0 - 0.5  # fold to [-0.5, 0.5)
-        car_qpoints_full   = red_car(red_kpoints_folded, self.rlat)
+
+
+        car_qpoints_full   = red_car(self.lattice.red_kpoints, self.rlat)
 
         if eigens_full_bz is not None:
             eigens_full = eigens_full_bz
