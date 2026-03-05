@@ -172,35 +172,28 @@ class ExcitonDispersion():
     #####################################
     # Excition dispersion along BZ path #
     #####################################
-
-    def _sample_path_cartesian(self, path, path_npoints):
+    def _sample_path_cartesian(self, path):
         """
-        Sample a BZ path at regular intervals.
+        Sample a BZ path using path.get_klist() which respects path.intervals.
         Returns sampled Cartesian coords, cumulative distances, and segment boundary distances.
         """
-        kpts_path_car      = red_car(path.kpoints, self.rlat)
-        sampled_car        = []
-        sampled_kpath      = []
+        klist = path.get_klist()                    # (npath, 4) reduced coords + weight
+        red_kpts = klist[:, :3]                     # (npath, 3)
+        car_kpts = red_car(red_kpts, self.rlat)     # (npath, 3)
+
+        # Compute cumulative distances in Cartesian
+        diffs      = np.linalg.norm(np.diff(car_kpts, axis=0), axis=1)
+        cumulative = np.concatenate([[0], np.cumsum(diffs)])
+
+        # Boundary distances at high-symmetry points
         boundary_distances = [0.0]
-        cumulative         = 0.0
+        idx = 0
+        for npts in path.intervals:
+            idx += npts
+            boundary_distances.append(cumulative[idx])
 
-        for k in range(len(path.kpoints) - 1):
-            start   = kpts_path_car[k]
-            end     = kpts_path_car[k + 1]
-            seg_len = np.linalg.norm(end - start)
-            for i in range(path_npoints):
-                t = i / path_npoints
-                sampled_car.append(start + t * (end - start))
-                sampled_kpath.append(cumulative + t * seg_len)
-            cumulative += seg_len
-            boundary_distances.append(cumulative)
-
-        sampled_car.append(kpts_path_car[-1])
-        sampled_kpath.append(cumulative)
-
-        return np.array(sampled_car), np.array(sampled_kpath), np.array(boundary_distances)
-
-
+        return car_kpts, cumulative, np.array(boundary_distances)
+    
     def _get_full_bz_qpoints(self):
         """
         Replicate IBZ q-mesh over neighbouring BZ images and convert to Cartesian.
@@ -357,14 +350,14 @@ class ExcitonDispersion():
 
         return [w0 * d[idx0] + w1 * d[idx1] for d in data_full]
 
-    def get_dispersion(self, path, path_npoints=50):
+    def get_dispersion(self, path):
         """
-        Nearest-neighbour q-point matching along path. No interpolation.
-        Returns: bands, distances, boundaries, labels, exc_indexes
+        Nearest-neighbour q-point matching along path.
+        Uses path.intervals for npoints per segment if path_npoints is None.
         """
         _, qpoints_idx_rep, car_qpoints = self._get_full_bz_qpoints()
-        sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path, path_npoints)
-
+        sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path)
+        
         from scipy.spatial import cKDTree
         _, nn_indices  = cKDTree(car_qpoints).query(sampled_car, k=1)
         exc_indexes    = qpoints_idx_rep[nn_indices]
@@ -377,15 +370,14 @@ class ExcitonDispersion():
 
         return bands, sampled_kpath, boundaries, path.klabels, exc_indexes
 
-    def get_dispersion_interpolated(self, path, path_npoints=50,
-                                    show_spin=False, save_dir='SAVE',
+    def get_dispersion_interpolated(self, path, show_spin=False, save_dir='SAVE',
                                     bse_dir='BSE', contribution='b',
                                     dmat_mode='run', dmat_file='Dmats.npy',
                                     use_skw=True, lpratio=5):
 
         _, qpoints_idx_rep, car_qpoints = self._get_full_bz_qpoints()
-        sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path, path_npoints)
-
+        sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path)
+        
         nstates     = self.exc_energies.shape[1]
         eigens_full = self._expand_ibz_to_full_bz(self.exc_energies)
         spin_path   = None
