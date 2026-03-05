@@ -221,7 +221,56 @@ class ExcitonDispersion():
         For scalars (energy) this is just indexing.
         """
         return data_ibz[self.lattice.kpoints_indexes]
+    
+    def _compute_spin_ibz(self, nstates, save_dir, bse_dir, contribution,
+                        sz=0.5 * np.array([[1, 0], [0, -1]])):
+        """
+        Compute S_z expectation values for all IBZ q-points.
+        Loads wfdb and elec_sz once, then loops over IBZ q-points.
+        Returns spin_ibz of shape (nq_ibz, nstates).
+        """
+        from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
+        from yambopy.dbs.wfdb import YamboWFDB
 
+        nq_ibz   = len(self.red_qpoints)
+        spin_ibz = np.zeros((nq_ibz, nstates))
+
+        # Load excdb once just to get bands_range
+        excdb_q1 = YamboExcitonDB.from_db_file(
+            self.lattice,
+            filename='ndb.BS_diago_Q1',
+            folder=bse_dir,
+            Load_WF=True, neigs=nstates
+        )
+        bands_range = [np.min(excdb_q1.table[:, 1]) - 1,
+                    np.max(excdb_q1.table[:, 2])]
+
+        # Load wfdb and elec_sz once — these don't depend on q-point
+        wfdb    = YamboWFDB(path=save_dir, latdb=self.lattice, bands_range=bands_range)
+        elec_sz = wfdb.get_spin_m_e_BZ(s_z=sz)
+
+        # Now loop over IBZ q-points, reusing wfdb and elec_sz
+        for iq in range(nq_ibz):
+            if iq == 0:
+                excdb = excdb_q1   # already loaded
+            else:
+                excdb = YamboExcitonDB.from_db_file(
+                    self.lattice,
+                    filename=f'ndb.BS_diago_Q{iq + 1}',
+                    folder=bse_dir,
+                    Load_WF=True, neigs=nstates
+                )
+
+            smat   = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
+                                        contribution=contribution, diagonal=False)
+            smat   = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
+
+            ss_tmp = []
+            for i in smat:
+                ss_tmp += list(i)
+            spin_ibz[iq] = np.array(ss_tmp)[:nstates].real
+
+        return spin_ibz
 
     def _compute_spin_full_bz(self, nstates, save_dir, bse_dir, contribution):
         """
@@ -294,7 +343,8 @@ class ExcitonDispersion():
         eigens_full = self._expand_ibz_to_full_bz(self.exc_energies)
 
         if show_spin:
-            spin_full  = self._compute_spin_full_bz(nstates, save_dir, bse_dir, contribution)
+            spin_ibz  = self._compute_spin_ibz(nstates, save_dir, bse_dir, contribution)
+            spin_full = self._expand_spin_to_full_bz(spin_ibz)
             bands, spin_path = self._nn_interpolate(sampled_car, car_qpoints,
                                                     qpoints_idx_rep,
                                                     eigens_full, spin_full)
@@ -305,25 +355,29 @@ class ExcitonDispersion():
 
         return bands, sampled_kpath, boundaries, path.klabels, spin_path
    
-    def get_spin_along_path(self, exc_indexes, nstates,
+    def _expand_spin_to_full_bz(self, spin_ibz):
+        """
+        Expand S_z from IBZ to full BZ applying symmetry transformations.
+        S_z transforms as a pseudovector: S_z -> sym_red[isym][2,2] * S_z
+        """
+        sym_red   = self.lattice.sym_red
+        nq_full   = len(self.lattice.kpoints_indexes)
+        spin_full = np.zeros((nq_full, spin_ibz.shape[1]))
+
+        for iq_full, (iq_ibz, isym) in enumerate(zip(self.lattice.kpoints_indexes,
+                                                    self.lattice.symmetry_indexes)):
+            Rzz = sym_red[isym][2, 2]
+            spin_full[iq_full] = Rzz * spin_ibz[iq_ibz]
+
+        return spin_full
+
+
+    def get_spin_along_path(self, exc_indexes_full, nstates,
                             save_dir='SAVE', bse_dir='BSE', contribution='b'):
-        from yambopy.bse.exciton_spin import compute_exc_spin_iqpt
-        spin  = np.zeros((len(exc_indexes), nstates))
-        cache = {}
-
-        for i, iq_full in enumerate(exc_indexes):
-            iq_fortran = int(iq_full) + 1
-            if iq_fortran not in cache:
-                exe_Sz, _ = compute_exc_spin_iqpt(
-                    path=save_dir, bse_dir=bse_dir,
-                    iqpt=iq_fortran, nstates=nstates,
-                    contribution=contribution, degen_tol=1e-4,
-                    return_dbs_and_spin=True
-                )
-                cache[iq_fortran] = exe_Sz[:nstates]
-            spin[i] = cache[iq_fortran]
-
-        return spin
+        """exc_indexes_full: full BZ indices for each path point."""
+        spin_ibz  = self._compute_spin_ibz(nstates, save_dir, bse_dir, contribution)
+        spin_full = self._expand_spin_to_full_bz(spin_ibz)
+        return spin_full[exc_indexes_full]   # (npath, nstates)
 
 
     def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
@@ -341,8 +395,8 @@ class ExcitonDispersion():
                 save_dir=save_dir, bse_dir=bse_dir, contribution=contribution
             )
         else:
-            bands, distances, boundaries, labels, exc_indices = self.get_dispersion(path=path)
-            spin = self.get_spin_along_path(exc_indices, bands.shape[1],
+            bands, distances, boundaries, labels, exc_indexes_full = self.get_dispersion(path=path)
+            spin = self.get_spin_along_path(exc_indexes_full, bands.shape[1],
                                             save_dir=save_dir, bse_dir=bse_dir,
                                             contribution=contribution) if show_spin else None
 
