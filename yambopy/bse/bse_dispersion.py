@@ -271,27 +271,72 @@ class ExcitonDispersion():
             spin_ibz[iq] = np.array(ss_tmp)[:nstates].real
 
         return spin_ibz
+    
+    def _compute_spin_full_bz(self, nstates, save_dir, bse_dir, contribution,
+                            sz=0.5 * np.array([[1, 0], [0, -1]]),
+                            dmat_mode='run', dmat_file='Dmats.npy'):
+        """
+        Compute S_z expectation values for all full BZ q-points.
+        Uses rotate_Akcv_Q to correctly rotate exciton wavefunctions to full BZ q-points.
+        """
+        from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
+        from yambopy.dbs.wfdb import YamboWFDB
+        from yambopy.exciton_phonon.excph_matrix_elements import rotate_Akcv_Q, save_or_load_dmat
 
-    def _compute_spin_full_bz(self, nstates, save_dir, bse_dir, contribution):
-        """
-        Compute S_z expectation values for all full BZ q-points directly.
-        Returns spin_full of shape (nq_full, nstates).
-        """
-        from yambopy.bse.exciton_spin import compute_exc_spin_iqpt
-        nq_full  = len(self.lattice.kpoints_indexes)
+        kpoints_indexes = self.lattice.kpoints_indexes
+        nq_full         = len(kpoints_indexes)
+        nq_ibz          = len(self.red_qpoints)
+
+        # --- Load excdb_q1 to get bands_range ---
+        excdb_q1 = YamboExcitonDB.from_db_file(
+            self.lattice, filename='ndb.BS_diago_Q1',
+            folder=bse_dir, Load_WF=True, neigs=nstates
+        )
+        bands_range = [np.min(excdb_q1.table[:, 1]) - 1,
+                    np.max(excdb_q1.table[:, 2])]
+
+        # --- Load wfdb, elec_sz, and Dmats once ---
+        wfdb    = YamboWFDB(path=save_dir, latdb=self.lattice, bands_range=bands_range)
+        elec_sz = wfdb.get_spin_m_e_BZ(s_z=sz)
+        Dmats   = save_or_load_dmat(wfdb, mode=dmat_mode, dmat_file=dmat_file)
+
+        # --- Load all IBZ exciton dbs ---
+        exdbs = [excdb_q1]
+        for iq in range(1, nq_ibz):
+            exdbs.append(YamboExcitonDB.from_db_file(
+                self.lattice, filename=f'ndb.BS_diago_Q{iq + 1}',
+                folder=bse_dir, Load_WF=True, neigs=nstates
+            ))
+
+        # --- Loop over full BZ q-points ---
         spin_full = np.zeros((nq_full, nstates))
 
-        for iq in range(nq_full):
-            exe_Sz, _ = compute_exc_spin_iqpt(
-                path=save_dir, bse_dir=bse_dir,
-                iqpt=iq + 1,
-                nstates=nstates, contribution=contribution,
-                return_dbs_and_spin=True
-            )
-            spin_full[iq] = exe_Sz[:nstates]
+        for iq_full in range(nq_full):
+            # Get the full BZ q-point in reduced coordinates
+            Qpt = self.lattice.red_kpoints[iq_full]   # or however full BZ q-points are stored
+
+            # Rotate Akcv to this full BZ q-point
+            rot_Ak = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=None)
+
+            # Patch get_Akcv to return rotated wavefunction
+            iq_ibz = kpoints_indexes[iq_full]
+            excdb  = exdbs[iq_ibz]
+            original_get_Akcv = excdb.get_Akcv
+            excdb.get_Akcv    = lambda: rot_Ak
+
+            smat = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
+                                        contribution=contribution, diagonal=False)
+            smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
+
+            excdb.get_Akcv = original_get_Akcv  # restore
+
+            ss_tmp = []
+            for i in smat:
+                ss_tmp += list(i)
+            spin_full[iq_full] = np.array(ss_tmp)[:nstates].real
 
         return spin_full
-    
+        
     def _nn_interpolate(self, sampled_car, car_qpoints, qpoints_idx_rep, *data_full):
         """
         Linear interpolation using 2 nearest neighbours in Cartesian space.
@@ -331,30 +376,30 @@ class ExcitonDispersion():
         bands         = energies_full[exc_indexes]
 
         return bands, sampled_kpath, boundaries, path.klabels, exc_indexes
-
+    
     def get_dispersion_interpolated(self, path, path_npoints=50,
                                     show_spin=False, save_dir='SAVE',
-                                    bse_dir='BSE', contribution='b'):
+                                    bse_dir='BSE', contribution='b',
+                                    dmat_mode='run', dmat_file='Dmats.npy'):
 
         _, qpoints_idx_rep, car_qpoints = self._get_full_bz_qpoints()
         sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path, path_npoints)
 
         nstates     = self.exc_energies.shape[1]
         eigens_full = self._expand_ibz_to_full_bz(self.exc_energies)
+        spin_path   = None   
 
         if show_spin:
-            spin_ibz  = self._compute_spin_ibz(nstates, save_dir, bse_dir, contribution)
-            spin_full = self._expand_spin_to_full_bz(spin_ibz)
+            spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir, contribution,
+                                                    dmat_mode=dmat_mode, dmat_file=dmat_file)
             bands, spin_path = self._nn_interpolate(sampled_car, car_qpoints,
-                                                    qpoints_idx_rep,
-                                                    eigens_full, spin_full)
+                                                    qpoints_idx_rep, eigens_full, spin_full)
         else:
             bands, = self._nn_interpolate(sampled_car, car_qpoints,
                                         qpoints_idx_rep, eigens_full)
-            spin_path = None
 
-        return bands, sampled_kpath, boundaries, path.klabels, spin_path
-   
+        return bands, sampled_kpath, boundaries, path.klabels, spin_path   
+    
     def _expand_spin_to_full_bz(self, spin_ibz):
         """
         Expand S_z from IBZ to full BZ applying symmetry transformations.
@@ -373,32 +418,27 @@ class ExcitonDispersion():
 
 
     def get_spin_along_path(self, exc_indexes_full, nstates,
-                            save_dir='SAVE', bse_dir='BSE', contribution='b'):
-        """exc_indexes_full: full BZ indices for each path point."""
-        spin_ibz  = self._compute_spin_ibz(nstates, save_dir, bse_dir, contribution)
-        spin_full = self._expand_spin_to_full_bz(spin_ibz)
-        return spin_full[exc_indexes_full]   # (npath, nstates)
-
+                            save_dir='SAVE', bse_dir='BSE', contribution='b',
+                            dmat_mode='run', dmat_file='Dmats.npy'):
+        spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir, contribution,
+                                                dmat_mode=dmat_mode, dmat_file=dmat_file)
+        return spin_full[exc_indexes_full]
 
     def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
                                 title="Exciton dispersion", save_dir='SAVE', bse_dir='BSE',
-                                contribution='b', show_spin=False, interpolate=False):
-        """
-        Plot exciton dispersion along a BZ path.
-        - interpolate=False: snap to nearest q-point (fast, steppy for coarse mesh)
-        - interpolate=True:  linear interpolation between 2 nearest q-points (smoother)
-        - show_spin=True:    color bands by S_z expectation value
-        """
+                                contribution='b', show_spin=False, interpolate=False,
+                                dmat_mode='run', dmat_file='Dmats.npy'):
         if interpolate:
             bands, distances, boundaries, labels, spin = self.get_dispersion_interpolated(
-                path=path, show_spin=show_spin,
-                save_dir=save_dir, bse_dir=bse_dir, contribution=contribution
+                path=path, show_spin=show_spin, save_dir=save_dir, bse_dir=bse_dir,
+                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file
             )
         else:
             bands, distances, boundaries, labels, exc_indexes_full = self.get_dispersion(path=path)
-            spin = self.get_spin_along_path(exc_indexes_full, bands.shape[1],
-                                            save_dir=save_dir, bse_dir=bse_dir,
-                                            contribution=contribution) if show_spin else None
+            spin = self.get_spin_along_path(
+                exc_indexes_full, bands.shape[1], save_dir=save_dir, bse_dir=bse_dir,
+                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file
+            ) if show_spin else None
 
         fig, ax = plt.subplots(figsize=figsize)
 
