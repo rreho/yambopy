@@ -5,7 +5,7 @@ import atexit
 
 # Global citation registry
 _CITATIONS_USED = set()
-
+_SUCCESS = False
 
 def citation(ref: str):
     """
@@ -65,6 +65,9 @@ def print_citations():
     --------
     Typical output:: Run this script.
     """
+    if not _SUCCESS:
+        return
+
     if not _CITATIONS_USED:
         return
 
