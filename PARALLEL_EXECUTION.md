@@ -14,14 +14,18 @@ Notice however that this is not always guaranteed to speed up execution.
 
 ## Tasks | openMPI/mpich | distributed memory
 Very few functions support MPI parallelization via the package `mpi4py`.
+It is useless if you don't plan on running them.
 
-Take care when installing this package that the correct environment is used.
+MPI-supporting functions:
+1. `exciton_phonon_matelem`
+
+Take care when installing the `mpi4py` package that the correct environment is used.
 For example, for mpirun/mpiexec (i.e., openMPI), you can install it as
 ```
 conda install -c conda-forge mpi4py openmpi
 ```
 Or using `pip` as
 ```
-pip install mpi4py XXXX
+pip install mpi4py openmpi
 ```
 
