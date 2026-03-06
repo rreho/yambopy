@@ -103,6 +103,7 @@ class Xn_from_freqmix(Xn_from_signal):
             return (self.freqs, out)
 
     def reconstruct_signal(self,out,to_file=True):
+        NX,MX = self.X_order[:]
         Seff = np.zeros((self.n_runs, 3, len(self.time)), dtype=np.cdouble)
         for i_f in tqdm(range(self.n_runs)):
             for i_d in range(3):
