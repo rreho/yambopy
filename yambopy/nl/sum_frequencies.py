@@ -1,4 +1,4 @@
-# Copyright (c) 2023, Mike Nico Pionteck and Claudio Attaccalite
+# Copyright (c) 2023, Mike Nico Pionteck, Myrta Gruning and Claudio Attaccalite
 # All rights reserved.
 #
 # This file is part of the yambopy project

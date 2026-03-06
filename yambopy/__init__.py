@@ -45,12 +45,11 @@ import numpy as np
 from yambopy.tools.jsonencoder import *
 from yambopy.tools.types import *
 from yambopy.units import *
+from yambopy.zeros import *
 
 #lattice-related operations
 from yambopy.lattice import *
 
-#kpoint mesh operations
-from yambopy.kpoints import *
 
 #skw interpolator (adapted from abipy version)
 from yambopy.tools.skw import *
@@ -72,6 +71,9 @@ from yambopy.dbs.elphondb import *
 from yambopy.dbs.bsekerneldb import *
 from yambopy.dbs.excphondb import *
 from yambopy.dbs.kqgridsdb import *
+
+#kpoint mesh operations
+from yambopy.kpoints import *
 
 #input/output files
 from yambopy.io.inputfile import *
@@ -116,8 +118,8 @@ from yambopy.nl.linear_optics import *
 from yambopy.nl.fft_interp import *
 from yambopy.nl.external_efield import *
 from yambopy.nl.damp_it import *
-from yambopy.nl.harmonic_analysis import *
-from yambopy.nl.sum_frequencies import *
+# from yambopy.nl.harmonic_analysis import *
+# from yambopy.nl.sum_frequencies import *
 from yambopy.nl.hhg_tools import *
 from yambopy.nl.nl_analysis import *
 from yambopy.nl.sin_analysis import *
@@ -133,3 +135,8 @@ from yambopy.gkkp.descreen_gkkp import *
 
 #data
 from yambopy.data import *
+
+#exciton-phonon 
+from yambopy.exciton_phonon.excph_input_data import *
+from yambopy.exciton_phonon.excph_matrix_elements import *
+from yambopy.exciton_phonon.excph_luminescence import *
