@@ -175,9 +175,9 @@ def exciton_phonon_matelem_iQ(elphdb,wfdb,Dmats,BSE_dir,BSE_Lin_dir=None,
 
     # Allocate global array on rank 0
     if rank==0: exph_mat = np.zeros([elphdb.nq]+inside_dims,dtype=complex)
-    else:      exph_mat = None
+    else:       exph_mat = None
     #print(rank,rank_exph.shape)
-    if rank==0: print(counts,displs,exph_mat.shape)
+    #if rank==0: print(counts,displs,exph_mat.shape)
     # Finally, gather call to rank 0
     comm.Gatherv(rank_exph,[exph_mat,counts,displs,MPI.DOUBLE_COMPLEX],root=0)
 
