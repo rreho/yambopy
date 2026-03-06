@@ -82,7 +82,8 @@ Requirements
 - spglib: https://spglib.readthedocs.io/en/latest/python-interface.html
 - spgrep: https://pypi.org/project/spgrep/
 - pykdtree: https://pypi.org/project/pykdtree/
-- [optional] mpi4py : https://pypi.org/project/mpi4py/ (see PARALLEL\_EXECUTION.md)
+- mpi4py : https://pypi.org/project/mpi4py/ (see PARALLEL\_EXECUTION.md)
+- joblib : https://pypi.org/project/joblib/
 
 Yambopy works for the following DFT/MBPT codes:
 - yambo (>=5.0): https://www.yambo-code.eu/

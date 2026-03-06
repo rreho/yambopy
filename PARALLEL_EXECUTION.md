@@ -29,3 +29,9 @@ Or using `pip` as
 pip install mpi4py openmpi
 ```
 
+## Tasks | pipeline jobs with joblib
+Very few functions support process-based parallelization via the package `joblib`.
+
+`joblib`-supporting functions:
+1. `exc_ph_luminescence`
+

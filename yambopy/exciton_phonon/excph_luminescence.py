@@ -7,14 +7,13 @@ from yambopy.units import ha2ev
 from yambopy.tools.funcs import bose,boltzman_f
 from tqdm import tqdm
 from yambopy.tools.citations import citation
-#from numba import prange#,njit
+from joblib import Parallel, delayed
 
-#@njit(cache=True, nogil=True, parallel=True)
 @citation("M. Zanfrognini et al. Phys. Rev. Lett. 131, 206902 (2023)")
 def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_el,\
                         exc_energies_in=None,exc_temp=None,ph_channels='b',\
                         PL_energy_prefactor='PT',nexc_out='all',nexc_in='all',\
-                        emin=0,emax=10,estep=0.01,broad=0.1,broad_0=None):
+                        emin=0,emax=10,estep=0.01,broad=0.1,broad_0=None,njobs=1):
     """
     This function calculates the phonon-assisted satellites (phonon replica) in the 
     luminescence of indirect materials (i.e., phonon-mediated exciton recombination process).
@@ -71,6 +70,9 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
         Broadening parameter in eV.
     broad_0 : float
         Broadening parameter used inside satellite oscillator strengths in eV. Default is broad.
+    njobs : int
+        Number of joblib processes. Default is 1 (serial)
+
     """
     def get_PL_satellite(W,ph_sign=-1):
         """ Actual calculation of PL satellites at each frequency.
@@ -118,6 +120,11 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
         # Putting everything together
         return np.einsum('qmo,qmo->', E, T, optimize=True) 
 
+    # Called by joblib
+    def PL_loop_emission(W):   return get_PL_satellite(W,ph_sign=-1)
+    def PL_loop_absorption(W): return get_PL_satellite(W,ph_sign=+1)
+    def PL_loop(W): return get_PL_satellite(W,ph_sign=-1)+get_PL_satellite(W,ph_sign=+1)
+
     # Checks
     assert exc_energies.shape[0]==ph_energies.shape[0], "Q-point mismatch between excitons and phonons"
     Nqpts = ph_energies.shape[0]
@@ -156,14 +163,18 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
     light_energies_Ha = light_energies/ha2ev#light_energies[None,None,None,:]/ha2ev
     broad_Ha = broad/ha2ev
 
+    # Parallel check
+    if njobs>nfreqs:
+        raise ValueError(f"[PARALLEL][ERROR] You have {njobs} processes for {nfreqs} iterations.")
+
     # Calculation
-    PL_satellites = np.zeros(nfreqs)
-    for w in tqdm(range(nfreqs),desc="Luminescence"):
-        # Accumulate phonon emission satellites
-        if ph_channels=='e' or ph_channels=='b': 
-            PL_satellites[w] += get_PL_satellite(light_energies_Ha[w],ph_sign=-1)
-        # Accumulate phonon absorption satellites
-        if ph_channels=='a' or ph_channels=='b': 
-            PL_satellites[w] += get_PL_satellite(light_energies_Ha[w],ph_sign=+1)
+    # We use joblib for parallel accumulation coupled with tqdm for progress
+    if ph_channels=='b':
+        # accumulated                   #time #split jobs
+        PL_satellites = np.array( list( tqdm( Parallel(return_as="generator",n_jobs=njobs)(delayed(PL_loop)(light_energies_Ha[w]) for w in range(nfreqs)), total=nfreqs, desc="Phonon-assisted luminescence" ) ) )
+    if ph_channels=='e': 
+        PL_satellites = np.array( list( tqdm( Parallel(return_as="generator",n_jobs=njobs)(delayed(PL_loop_emission)(light_energies_Ha[w]) for w in range(nfreqs)), total=nfreqs, desc="Phonon-assisted luminescence (emission)" ) ) )
+    if ph_channels=='a':
+        PL_satellites = np.array( list( tqdm( Parallel(return_as="generator",n_jobs=njobs)(delayed(PL_loop_absorption)(light_energies_Ha[w]) for w in range(nfreqs)), total=nfreqs, desc="Phonon-assisted luminescence (absorption)" ) ) )
 
     return light_energies, PL_satellites

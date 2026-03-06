@@ -75,7 +75,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=[0,1],BSE_dir='bse',BSE_Lin_
     # and returns <Lin(Q)|dV_ph(q)|Lout(Q+q)> for each q
     for iQ in range(Qrange[0],Qrange[1]):
         Q_in = wfdb.kBZ[iQ]
-        print(f'Calculating EXCPH matrix elements... Q={Q_in}')
+        #print(f'Calculating EXCPH matrix elements... Q={Q_in}')
         exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,Dmats,\
                          BSE_dir=BSE_dir,BSE_Lin_dir=BSE_Lin_dir,\
                          Q_in=Q_in,nexc_in=nexc_in,nexc_out=nexc_out) )
@@ -157,7 +157,7 @@ def exciton_phonon_matelem_iQ(elphdb,wfdb,Dmats,BSE_dir,BSE_Lin_dir=None,
     # Start of MPI partial loop
     rank_start = sum(chunks[:rank]) # q-index where each rank starts
     # Progress bar just for serial execution
-    if ntasks==1: rank_range = tqdm(range(rank_chunk))
+    if ntasks==1: rank_range = tqdm(range(rank_chunk),desc=f"Exc-ph matrix element Q={Q_in}")
     else:         rank_range = range(rank_chunk)
     # Now the calculation starts
     for rank_iq in rank_range:
