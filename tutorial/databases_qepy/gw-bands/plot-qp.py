@@ -1,5 +1,5 @@
-from yambopy import YamboLatticeDB,YamboQPDB
-from qepy import Path
+from yambopy import YamboLatticeDB,YamboQPDB # Load yambo netcdf databases
+from qepy import Path                        # Define path in k-space
 import numpy as np
 import matplotlib.pyplot as plt
 from math import sqrt
