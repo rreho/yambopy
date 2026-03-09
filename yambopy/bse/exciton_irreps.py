@@ -131,7 +131,7 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     #
     filename = 'ndb.BS_diago_Q%d' % (iqpt)
     excdb = YamboExcitonDB.from_db_file(lattice, filename=filename,
-                                             folder=os.path.join(path, bse_dir),
+                                             folder=bse_dir,
                                              Load_WF=True, neigs=nstates_read)
     # Load the wavefunction database
     wfdb = YamboWFDB(path=path, latdb=lattice,
