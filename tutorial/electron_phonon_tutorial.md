@@ -12,7 +12,7 @@ In particular we treat the following classes:
 In addition, there is a tutorial on how to run the LetzElPhC code to produce the matrix elements: this requires compilation of both Quantum Espresso and LetzElPhC on the machine.
 
 # Download databases
-The scripts provided are self-explanatory. In order to run them on a simple system, you can download the relative databases for monolayer MoS2 (6x6x1 k and q-grid, including spin-orbit interaction) [here](www.yambo-code.org/educational/tutorials/files/databases\_yambopy.tar) from the yambo website, or by simply typing:
+The scripts provided are self-explanatory. In order to run them on a simple system, you can download the relative databases for monolayer MoS2 (6x6x1 k and q-grid, including spin-orbit interaction) [here](www.yambo-code.org/educational/tutorials/files/yambopy\_electron\_phonon.tar.gz) from the yambo website, or by simply typing:
 > wget www.yambo-code.org/educational/tutorials/files/databases\_yambopy.tar
 
 # Yambo wiki
