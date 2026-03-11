@@ -311,7 +311,7 @@ class YamboExcitonDB(object):
         self.Akcv = eig_wfcs_returned
         return self.Akcv
     
-    def real_wf_to_cube(self, iexe, wfdb, fixed_postion=[0,0,0], supercell=[1,1,1], degen_tol=1e-2,
+    def real_wf_to_cube(self, iexe, wfdb, fixed_position=[0,0,0], supercell=[1,1,1], degen_tol=1e-2,
                         wfcCutoffRy=-1, fix_particle='h', phase=False, block_size=256):
         """
         Function to compute and save real-space exciton wavefunctions and 
@@ -320,7 +320,7 @@ class YamboExcitonDB(object):
         Args:
             iexe: index of excitonic states (python indexing. so starts with 0)
             wfcb: wavefunction database.
-            fixed_postion (list): Position of fixed particle in crystal coordinates
+            fixed_position (list): Position of fixed particle in crystal coordinates
             supercell (list): Supercell dimensions [nx,ny,nz]
             degen_tol (float): degeneracy threshold (in eV). default 0.01 eV
             fix_particle (str): 'e' to fix electron, 'h' to fix hole (default)
@@ -355,7 +355,7 @@ class YamboExcitonDB(object):
 
         print('Computing exciton wavefunction (%s density) to real space.' %(name_file))
         sc_latvecs, atom_nums, atom_pos, real_wfc = ex_wf2Real(Akcv, Qpt, wfdb, [np.min(self.table[:, 1]),
-                                                    np.max(self.table[:, 2])], fixed_postion=fixed_postion,
+                                                    np.max(self.table[:, 2])], fixed_position=fixed_position,
                                                     fix_particle=fix_particle, supercell=supercell,
                                                     wfcCutoffRy=wfcCutoffRy, block_size=block_size)
         # Compute the absoulte^2
