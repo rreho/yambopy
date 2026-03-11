@@ -50,8 +50,6 @@ from yambopy.zeros import *
 #lattice-related operations
 from yambopy.lattice import *
 
-#kpoint mesh operations
-from yambopy.kpoints import *
 
 #skw interpolator (adapted from abipy version)
 from yambopy.tools.skw import *
@@ -73,6 +71,9 @@ from yambopy.dbs.elphondb import *
 from yambopy.dbs.bsekerneldb import *
 from yambopy.dbs.excphondb import *
 from yambopy.dbs.kqgridsdb import *
+
+#kpoint mesh operations
+from yambopy.kpoints import *
 
 #input/output files
 from yambopy.io.inputfile import *
@@ -117,10 +118,13 @@ from yambopy.nl.linear_optics import *
 from yambopy.nl.fft_interp import *
 from yambopy.nl.external_efield import *
 from yambopy.nl.damp_it import *
-from yambopy.nl.harmonic_analysis import *
-from yambopy.nl.sum_frequencies import *
+# from yambopy.nl.harmonic_analysis import *
+# from yambopy.nl.sum_frequencies import *
 from yambopy.nl.hhg_tools import *
-
+from yambopy.nl.nl_analysis import *
+from yambopy.nl.sin_analysis import *
+from yambopy.nl.freqmix_analysis import *
+from yambopy.nl.pulse_analysis import *
 #doublegrid files
 from yambopy.double_grid.dg_convergence import *
 
