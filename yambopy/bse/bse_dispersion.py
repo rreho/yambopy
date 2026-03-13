@@ -413,24 +413,25 @@ class ExcitonDispersion():
 
         raise RuntimeError("All RBF kernels failed")
     
+    
     def get_dispersion_interpolated(self, path, show_spin=False,
-                                 save_dir='SAVE', bse_dir='BSE', contribution='b',
-                                 dmat_mode='run', dmat_file='Dmats.npy',
-                                 use_skw=True, lpratio=5, spin_method='Rzz'):
+                                    save_dir='SAVE', bse_dir='BSE', contribution='b',
+                                    dmat_mode='run', dmat_file='Dmats.npy',
+                                    use_skw=True, lpratio=5, spin_method='Rzz'):
 
         red_kpoints, ktree = self._get_full_bz_qpoints()
-        sampled_car, sampled_kpath, boundaries = self._sample_path_cartesian(path)
+        car_kpts, red_kpts_folded, sampled_kpath, boundaries = self._sample_path_cartesian(path)
 
         nstates     = self.exc_energies.shape[1]
         eigens_full = self._expand_ibz_to_full_bz(self.exc_energies)
         spin_path   = None
+        bands       = None
 
-        # --- Interpolate energies ---
-        bands = None
+        # --- Interpolate energies: SKW -> RBF -> NN ---
         if use_skw:
             try:
                 from yambopy.tools.skw import SkwInterpolator
-                sampled_red = car_red(sampled_car, self.rlat)
+                sampled_red = car_red(car_kpts, self.rlat)
                 skw = SkwInterpolator(
                     lpratio    = lpratio,
                     kpts       = self.red_qpoints,
@@ -451,34 +452,36 @@ class ExcitonDispersion():
             except Exception as e:
                 print(f"SKW failed ({e}), trying RBF...")
                 try:
-                    bands = self._interpolate_rbf(sampled_car, self.exc_energies)
+                    bands = self._interpolate_rbf(car_kpts, self.exc_energies)
                     print("RBF interpolation succeeded")
                 except Exception as e2:
                     print(f"RBF failed ({e2}), falling back to NN")
 
+        # --- NN fallback ---
         if bands is None:
             if show_spin:
                 spin_full        = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
                                                             contribution, dmat_mode=dmat_mode,
                                                             dmat_file=dmat_file, method=spin_method)
-                bands, spin_path = self._nn_interpolate(sampled_car, eigens_full, spin_full)
+                bands, spin_path = self._nn_interpolate(car_kpts, red_kpts_folded,
+                                                        eigens_full, spin_full)
             else:
-                bands,           = self._nn_interpolate(sampled_car, eigens_full)
+                bands,           = self._nn_interpolate(car_kpts, red_kpts_folded, eigens_full)
             return bands, sampled_kpath, boundaries, path.klabels, spin_path
 
+        # --- Spin interpolation (when bands came from SKW or RBF) ---
         if show_spin:
             spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
                                                     contribution, dmat_mode=dmat_mode,
                                                     dmat_file=dmat_file, method=spin_method)
             try:
-                spin_path = self._interpolate_rbf(sampled_car, None, eigens_full_bz=spin_full)
+                spin_path = self._interpolate_rbf(car_kpts, None, eigens_full_bz=spin_full)
                 print("RBF spin interpolation succeeded")
             except Exception as e:
                 print(f"RBF spin failed ({e}), falling back to NN")
-                spin_path, = self._nn_interpolate(sampled_car, spin_full)
+                spin_path, = self._nn_interpolate(car_kpts, red_kpts_folded, spin_full)
 
         return bands, sampled_kpath, boundaries, path.klabels, spin_path
-
 
     def _expand_spin_to_full_bz(self, spin_ibz):
         """
