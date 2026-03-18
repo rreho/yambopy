@@ -26,7 +26,7 @@ if __name__ == "__main__":
     ylat = YamboLatticeDB.from_db_file(filename=save_path+'/SAVE/ns.db1')
 
     # Read exciton data at Q=iQ
-    yexc = YamboExcitonDB.from_db_file(ylat,filename=bse_path+'/ndb.BS_diago_Q%d'%iQ)
+    yexc = YamboExcitonDB.from_db_file(ylat,filename=bse_path+'/ndb.BS_diago_Q%d'%iQ,is_2D=True)
 
     #
     # Spectrum of the dielectric function (optical absorption at q=0)
