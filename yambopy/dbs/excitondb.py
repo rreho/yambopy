@@ -1243,10 +1243,13 @@ class YamboExcitonDB(object):
 
         # dimensionality: we return epsilon in 3D and alpha in 2D
         if self.dim=="3D": return w, epsilon
-        ## WARNING: assuming nonperiodic direction is z 
         elif self.dim=="2D":
-            Lz = self.lattice.lat[2,2] # interlayer separation in bohr
-            alpha = (epsilon - 1.) * Lz / (4.*np.pi)
+            if   " x" in self.cutoff: idir=0
+            elif " y" in self.cutoff: idir=1
+            elif " z" in self.cutoff: idir=2
+            else:                     idir=2 # Assume 'cutoff z' by default
+            L = self.lattice.lat[idir,idir] # interlayer separation in bohr
+            alpha = (epsilon - 1.) * L / (4.*np.pi)
             return w, alpha
         ## So far 1D and 0D not implemented, give 3D epsilon
         else:
