@@ -1698,8 +1698,8 @@ class YamboExcitonDB(object):
         lines = []; app = lines.append
         app( marquee(self.__class__.__name__,mark=mark) )
         app( "BSE solved at Q:            %s"%self.Qpt )
-        app( "number of excitons:         %d"%self.nexcitons )
         app( "dimensionality:             %s system"%self.dim )
+        app( "number of excitons:         %d"%self.nexcitons )
         if self.Lkind is not None:
             app("L kind:                     %s"%self.Lkind)
         if self.table is not None: 
