@@ -15,7 +15,7 @@ from itertools import product
 from yambopy.units import ha2ev, I
 from yambopy.plot.plotting import add_fig_kwargs,BZ_Wigner_Seitz
 from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red, red_car
-from yambopy.kpoints import get_path, get_path_car
+from yambopy.kpoints import get_path, get_path_car, check_kgrid
 from yambopy.tools.funcs import gaussian, lorentzian, boltzman_f, abs2
 from yambopy.tools.string import marquee
 from yambopy.tools.types import CmplxType
@@ -70,7 +70,7 @@ class YamboExcitonDB(object):
         Exciton eigenvectors are arranged as eigenvectors[i_exc, i_kvc]
         Transitions are unpacked in table[ i_k, i_v, i_c, i_s_c, i_s_v ] (last two are spin indices)
     """
-    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',is_2D=False,car_qpoint=None,Lkind=None,table=None,eigenvectors=None):
+    def __init__(self,lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol='no',cutoff=None,car_qpoint=None,Lkind=None,table=None,eigenvectors=None):
         if not isinstance(lattice,YamboLatticeDB):
             raise ValueError('Invalid type for lattice argument. It must be YamboLatticeDB')
 
@@ -87,10 +87,11 @@ class YamboExcitonDB(object):
             self.bs_bands = np.array([np.min(self.table[:,1]),np.max(self.table[:,2])]) # set range of bse bands
         self.eigenvectors = eigenvectors
         self.spin_pol = spin_pol
-        self.is_2D    = is_2D
+        self.cutoff   = cutoff
+        self.dim      = self.check_dim(cutoff)
 
     @classmethod
-    def from_db_file(cls,lattice,filename='ndb.BS_diago_Q1',folder='.',Load_WF=True, is_2D=False, neigs=-1):
+    def from_db_file(cls,lattice,filename='ndb.BS_diago_Q1',folder='.',Load_WF=True, neigs=-1):
         """ 
         Initialize this class from a file
 
@@ -99,7 +100,6 @@ class YamboExcitonDB(object):
         If neigs < 0 ; all eigen values (vectors) are loaded or else first neigs are loaded 
         " In case of non-TDA, we load right eigenvectors.
 
-        Set `is_2D = True` if dealing with 2D systems to get alpha2D instead of epsilon3D
         """
         path_filename = os.path.join(folder,filename)
         if not os.path.isfile(path_filename):
@@ -176,7 +176,11 @@ class YamboExcitonDB(object):
             else:
                spin_pol = 'no'
 
-        return cls(lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol,is_2D=is_2D,car_qpoint=car_qpoint,Lkind=Lkind,table=table,eigenvectors=eigenvectors)
+            #check Coulomb cutoff
+            if 'W_Cutoff' in database.variables:
+                cutoff = str(database.variables['W_Cutoff'][:][0],'UTF-8').strip()
+
+        return cls(lattice,Qpt,eigenvalues,l_residual,r_residual,spin_pol,cutoff=cutoff,car_qpoint=car_qpoint,Lkind=Lkind,table=table,eigenvectors=eigenvectors)
 
     @property
     def unique_vbands(self):
@@ -1238,13 +1242,17 @@ class YamboExcitonDB(object):
         epsilon = 1. + cofactor * vcoulomb * chi
 
         # dimensionality: we return epsilon in 3D and alpha in 2D
-        if not self.is_2D: return w, epsilon
+        if self.dim=="3D": return w, epsilon
         ## WARNING: assuming nonperiodic direction is z 
-        if self.is_2D:
+        elif self.dim=="2D":
             Lz = self.lattice.lat[2,2] # interlayer separation in bohr
             alpha = (epsilon - 1.) * Lz / (4.*np.pi)
             return w, alpha
-    
+        ## So far 1D and 0D not implemented, give 3D epsilon
+        else:
+            print(f"[WARNING] Detected system is {self.dim}. Returning 3D epsilon.")
+            return w, epsilon
+
     def get_pl(self,dipoles=None,dir=0,emin=0,emax=10,estep=0.01,broad=0.1,q0norm=1e-5, nexcitons='all',spin_degen=2,verbose=0,Boltz_Temp=300,**kwargs):
         """
         Calculate PL_0  using excitonic states
@@ -1326,8 +1334,8 @@ class YamboExcitonDB(object):
     def plot_chi_ax(self,ax,reim='im',n_brightest=-1,**kwargs):
         """Plot chi on a matplotlib axes"""
         w,chi = self.get_chi(**kwargs)
-        if self.is_2D: abs_label = 'alpha'
-        else:          abs_label = 'epsilon'
+        if self.dim=='2D': abs_label = 'alpha'
+        else:              abs_label = 'epsilon'
         #cleanup kwargs variables
         cleanup_vars = ['dipoles','dir','emin','emax','estep','broad',
                         'q0norm','nexcitons','spin_degen','verbose']
@@ -1672,12 +1680,26 @@ class YamboExcitonDB(object):
     #  END SPIN DEPENDENT PART UNDER DEVELOPMENT #
     ##############################################
 
+    def check_dim(self,cutoff):
+        """
+        - If no Coulomb cutoff is used, system is assumed 3D
+        - If cutoff is detected:
+            - no. of 1s in kpoint grid is assumed no. of aperiodic directions
+        """
+        if 'none' in cutoff: 
+            return '3D'
+        else:
+            kpts  = self.lattice.get_ibz_kpoints(units='red')
+            Ngrid = check_kgrid( kpts, self.lattice.rlat )[0]
+            dim   = 3 - Ngrid.count(1)
+            return f"{dim}D"
+
     def get_string(self,mark="="):
         lines = []; app = lines.append
         app( marquee(self.__class__.__name__,mark=mark) )
         app( "BSE solved at Q:            %s"%self.Qpt )
         app( "number of excitons:         %d"%self.nexcitons )
-        app( "dimensionality:             %s system"%('2D' if self.is_2D else '3D') )
+        app( "dimensionality:             %s system"%self.dim )
         if self.Lkind is not None:
             app("L kind:                     %s"%self.Lkind)
         if self.table is not None: 
