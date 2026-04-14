@@ -140,7 +140,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
     print('Calculating EXCPH matrix elements...')
     exph_mat = []
     Q_points = []
-    for iQ in tqdm(Q_indices):
+    for iQ in Q_indices:
         Q_in = wfdb.kBZ[iQ]
         Q_points.append(Q_in)
         exph_mat.append( exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,\
@@ -245,7 +245,7 @@ def exciton_phonon_matelem_iQ(elphdb,wfdb,exdbs,Dmats,BSE_Lin_dir=None,
     # Compute ex-ph
     exph_mat = []
     bse_bnds_range = [wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands]
-    for iq in range(elphdb.nq):
+    for iq in tqdm(range(elphdb.nq), desc='computing phonon momentum'):
         ph_eig, elph_mat = elphdb.read_iq(iq,bands_range=bse_bnds_range,convention='standard')
         elph_mat = elph_mat.transpose(1,0,2,4,3)
         #
