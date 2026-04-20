@@ -417,7 +417,7 @@ class ExcitonDispersion():
     def get_dispersion_interpolated(self, path, show_spin=False,
                                     save_dir='SAVE', bse_dir='BSE', contribution='b',
                                     dmat_mode='run', dmat_file='Dmats.npy',
-                                    use_skw=True, lpratio=5, spin_method='Rzz'):
+                                    use_skw=True, lpratio=6, spin_method='Rzz'):
 
         red_kpoints, ktree = self._get_full_bz_qpoints()
         car_kpts, red_kpts_folded, sampled_kpath, boundaries = self._sample_path_cartesian(path)
@@ -426,6 +426,10 @@ class ExcitonDispersion():
         eigens_full = self._expand_ibz_to_full_bz(self.exc_energies)
         spin_path   = None
         bands       = None
+        latnp = self.lattice.lat
+        lat_inv = np.linalg.inv(self.lattice.lat)
+        sym_car = self.lattice.sym_car
+        sym_rel = np.stack([np.round(lat_inv @ s @ latnp) for s in sym_car])
 
         # --- Interpolate energies: SKW -> RBF -> NN ---
         if use_skw:
@@ -436,11 +440,11 @@ class ExcitonDispersion():
                     lpratio    = lpratio,
                     kpts       = self.red_qpoints,
                     eigens     = self.exc_energies[np.newaxis, :, :],
-                    fermie     = 0.0, nelect = 0,
+                    fermie     = 0.0, nelect = 26,
                     cell       = (self.lattice.lat,
                                 self.lattice.red_atomic_positions,
                                 self.lattice.atomic_numbers),
-                    symrel     = self.lattice.sym_red,
+                    symrel     = sym_rel,
                     has_timrev = bool(self.lattice.time_rev),
                     verbose    = 1
                 )
