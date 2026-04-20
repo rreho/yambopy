@@ -514,7 +514,7 @@ class ExcitonDispersion():
     def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
                                 title="Exciton dispersion", save_dir='SAVE', bse_dir='BSE',
                                 contribution='b', show_spin=False, interpolate=False,
-                                dmat_mode='save', dmat_file='Dmats.npy',spin_method='rotate_Ak',lpratio=30):
+                                dmat_mode='save', dmat_file='Dmats.npy',spin_method='rotate_Ak',lpratio=30,s=8):
         if interpolate:
             bands, distances, boundaries, labels, spin = self.get_dispersion_interpolated(
                 path=path, show_spin=show_spin, save_dir=save_dir, bse_dir=bse_dir,
@@ -535,7 +535,7 @@ class ExcitonDispersion():
             cmap = plt.cm.RdBu
             for ib in range(bands.shape[1]):
                 sc = ax.scatter(distances, bands[:, ib], c=spin[:, ib],
-                                cmap=cmap, norm=norm, s=8, linewidths=0,
+                                cmap=cmap, norm=norm, s=s, linewidths=0,
                                 zorder=2, label=f"Exciton {ib+1}")
             cbar = plt.colorbar(sc, ax=ax, pad=0.02)
             cbar.set_label(r"$\langle S_z \rangle$")
