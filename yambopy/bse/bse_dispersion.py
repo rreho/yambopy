@@ -514,11 +514,12 @@ class ExcitonDispersion():
     def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
                                 title="Exciton dispersion", save_dir='SAVE', bse_dir='BSE',
                                 contribution='b', show_spin=False, interpolate=False,
-                                dmat_mode='save', dmat_file='Dmats.npy',spin_method='rotate_Ak'):
+                                dmat_mode='save', dmat_file='Dmats.npy',spin_method='rotate_Ak',lpratio=30):
         if interpolate:
             bands, distances, boundaries, labels, spin = self.get_dispersion_interpolated(
                 path=path, show_spin=show_spin, save_dir=save_dir, bse_dir=bse_dir,
-                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file, spin_method=spin_method
+                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file, spin_method=spin_method,
+                lpratio=lpratio
             )
         else:
             bands, distances, boundaries, labels, exc_indexes_full = self.get_dispersion(path=path)
