@@ -556,6 +556,7 @@ class ExcitonDispersion():
             ax.set_ylim(ylim)
         ax.set_ylabel("Exciton energy (eV)")
         ax.set_title(title)
+        ax.set_facecolor('black')
         plt.tight_layout()
         plt.show()
         return fig, ax
