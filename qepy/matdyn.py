@@ -230,6 +230,9 @@ class Matdyn(object):
         else:
             raise ValueError('Unit %s not known'%unit)
 
+        if n==0:
+            raise ValueError('Error! Phonon modes start from 1')
+
         return self.eig[iq][n-1]*factor
 
     def normalize(self):
