@@ -12,575 +12,782 @@ from glob import glob
 from qepy.lattice import Path
 from yambopy import *
 from yambopy.units import *
-from yambopy.plot.plotting import add_fig_kwargs,BZ_Wigner_Seitz
-from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red
+from yambopy.plot.plotting import add_fig_kwargs, BZ_Wigner_Seitz, shifted_grids_2D
+from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red, red_car
+from yambopy.dbs.latticedb import YamboLatticeDB
 from yambopy.kpoints import get_path
-from yambopy.tools.funcs import gaussian, lorentzian
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 class ExcitonDispersion():
     """
-    Class to obtain exciton information at all momenta
+    Exciton band structure at finite momentum Q.
 
-    - Dispersion plot (under development)
-    - Plots of exciton weights in q-space
+    Reads ndb.BS_diago_Q* databases and provides:
+      - Scatter plot of computed Q-points along a path (no interpolation)
+      - Interpolated band structure (cubic spline, RBF, SKW, or NN)
+      - Spin expectation values along the path
 
-    :: Lattice is an instance of YamboLatticeDB
-    :: nexcitons is the number of excitonic states - by default it is taken from the Q=1 database
+    Parameters
+    ----------
+    lattice           : YamboLatticeDB
+    nexcitons         : int, optional — exciton eigenstates to load (default: all)
+    folder            : str — folder containing ndb.BS_diago_Q* files
+    load_eigenvectors : bool — load A_kcv coefficients (required for spin)
 
-    NB: so far does not support spin-polarised exciton plots (should be implemented when needed!)
-    NB: only supports BSEBands option in yambo bse input, not BSEEhEny
+    Attributes
+    ----------
+    ntransitions       : BSE basis size  (nk * nv * nc)
+    nexcitons_available: eigenstates stored in the databases
+    nexcitons          : eigenstates actually loaded
     """
 
-    def __init__(self,lattice,nexcitons=None,folder='.'):
+    def __init__(self, lattice, nexcitons=None, folder='.', load_eigenvectors=False):
+        if not isinstance(lattice, YamboLatticeDB):
+            raise ValueError('lattice must be a YamboLatticeDB instance')
 
-        if not isinstance(lattice,YamboLatticeDB):
-            raise ValueError('Invalid type for lattice argument. It must be YamboLatticeDB')
-        
-        files   = glob(folder+'/ndb.BS_diago_Q*')
-        nqpoints  = len(files)
+        files    = glob(folder + '/ndb.BS_diago_Q*')
+        nqpoints = len(files)
+        if nqpoints != lattice.ibz_nkpoints:
+            raise ValueError("Incomplete Q-point list (%d / %d)" % (nqpoints, lattice.ibz_nkpoints))
 
-        # Check
-        if not nqpoints==lattice.ibz_nkpoints :
-            raise ValueError("Incomplete list of qpoints (%d/%d)"%(nqpoints,lattice.ibz_nkpoints)) 
-    
-        dbs_are_consistent, spin_is_there = self.db_check(lattice,nqpoints,folder)
-        if nexcitons is None: nexcitons = self.ntransitions
+        self._db_check(lattice, nqpoints, folder)
 
-        # Read
-        car_qpoints         = np.zeros((nqpoints,3))
-        exc_energies        = np.zeros((nqpoints,nexcitons))
-        exc_eigenvectors    = np.zeros((nqpoints,nexcitons,self.ntransitions),dtype=complex)
-        exc_tables          = np.zeros((nqpoints,self.ntransitions,5),dtype=int)
+        if nexcitons is None:
+            nexcitons = self.nexcitons_available
+        elif nexcitons > self.nexcitons_available:
+            raise ValueError(
+                "Requested %d excitons but only %d available" % (nexcitons, self.nexcitons_available)
+            )
+
+        car_qpoints      = np.zeros((nqpoints, 3))
+        exc_energies     = np.zeros((nqpoints, nexcitons))
+        exc_eigenvectors = (
+            np.zeros((nqpoints, nexcitons, self.ntransitions), dtype=complex)
+            if load_eigenvectors else None
+        )
+
         for iQ in range(nqpoints):
-            exc_obj = YamboExcitonDB.from_db_file(lattice,filename=folder+'/ndb.BS_diago_Q%d'%(iQ+1))
-            if iQ==0: car_qpoints[iQ] = np.array([0.,0.,0.])
-            else:     car_qpoints[iQ] = exc_obj.car_qpoint
-            exc_energies[iQ,:]        = exc_obj.eigenvalues[:nexcitons].real
-            exc_eigenvectors[iQ,:]    = exc_obj.eigenvectors[:nexcitons]    
-            exc_tables[iQ,:]          = exc_obj.table
+            exc_obj = YamboExcitonDB.from_db_file(
+                lattice, filename=folder + '/ndb.BS_diago_Q%d' % (iQ + 1),
+                Load_WF=load_eigenvectors
+            )
+            car_qpoints[iQ]  = np.array([0., 0., 0.]) if iQ == 0 else exc_obj.car_qpoint
+            exc_energies[iQ] = exc_obj.eigenvalues[:nexcitons].real
+            if load_eigenvectors:
+                exc_eigenvectors[iQ] = exc_obj.eigenvectors[:nexcitons]
 
-        # Set up variables
-        self.folder = folder
-        self.nqpoints     = nqpoints
-        self.nexcitons    = nexcitons
-        self.car_qpoints  = car_qpoints
-        self.red_qpoints  = car_red(car_qpoints,lattice.rlat)
-        self.lattice      = lattice
-        self.exc_energies = exc_energies
-        self.exc_tables   = exc_tables
+        self.folder           = folder
+        self.nqpoints         = nqpoints
+        self.nexcitons        = nexcitons
+        self.car_qpoints      = car_qpoints
+        self.red_qpoints      = car_red(car_qpoints, lattice.rlat)
+        self.lattice          = lattice
+        self.exc_energies     = exc_energies
+        self.exc_eigenvectors = exc_eigenvectors
+        self.alat             = lattice.alat
+        self.rlat             = lattice.rlat
 
-        # Reshape eigenvectors if possible
-        if dbs_are_consistent and not spin_is_there: self.exc_eigenvectors = self.reshape_eigenvectors(exc_eigenvectors)
-        else:                                        self.exc_eigenvectors = exc_eigenvectors
+    # ------------------------------------------------------------------
+    # Database validation
+    # ------------------------------------------------------------------
 
-        # Necessary lattice information
-        self.alat = lattice.alat
-        self.rlat = lattice.rlat
+    def _db_check(self, lattice, nqpoints, folder):
+        """Validate ntransitions and nexcitons consistency across Q-points."""
+        nexcitons_list    = np.zeros(nqpoints, dtype=int)
+        ntransitions_list = np.zeros(nqpoints, dtype=int)
 
-    def db_check(self,lattice,nqpoints,folder):
-        """
-        Check nexcitons and ntransitions in each database
-        """
-        nexcitons_each_Q    = np.zeros(nqpoints,dtype=int)
         for iQ in range(nqpoints):
-            exc_obj = YamboExcitonDB.from_db_file(lattice,filename=folder+'/ndb.BS_diago_Q%d'%(iQ+1))
-            nexcitons_each_Q[iQ] = exc_obj.nexcitons
-            if iQ==0: tbl = exc_obj.table
+            exc_obj = YamboExcitonDB.from_db_file(
+                lattice, filename=folder + '/ndb.BS_diago_Q%d' % (iQ + 1),
+                Load_WF=False
+            )
+            nexcitons_list[iQ]    = exc_obj.nexcitons     # number of solved eigenstates
+            ntransitions_list[iQ] = exc_obj.ntransitions  # BSE basis size = nk*nv*nc
+            if iQ == 0:
+                tbl = exc_obj.table
 
-        is_spin_pol = len(np.unique(tbl[:,3]))>1 or len(np.unique(tbl[:,4]))>1
-        is_consistent = np.all(nexcitons_each_Q==nexcitons_each_Q[0])
-        if not is_consistent: 
-            print("[WARNING] BSE Hamiltonian has different dimensions for some Q.")
-            print("          Taking the minimum number of transitions, be careful.")
-            self.ntransitions = np.min(nexcitons_each_Q)
-        else:
-            if is_spin_pol: print("[WARNING] Spin-polarised excitons, only partially supported")
-            self.ntransitions = nexcitons_each_Q[0]
-            valence_bands    = np.unique(tbl[:,1]) - 1
-            conduction_bands = np.unique(tbl[:,2]) - 1
-            self.nkpoints    = np.max(tbl[:,0])
-            self.nvalence    = len(valence_bands)
-            self.nconduction = len(conduction_bands)
+        if not np.all(ntransitions_list == ntransitions_list[0]):
+            raise ValueError("BSE basis size (ntransitions) is inconsistent across Q-points.")
 
-        return is_consistent, is_spin_pol
+        if not np.all(nexcitons_list == nexcitons_list[0]):
+            print("[WARNING] Number of exciton eigenstates differs across Q-points. Taking minimum.")
 
-    def reshape_eigenvectors(self,eigenvectors):
+        self.nexcitons_available = int(np.min(nexcitons_list))
+        self.ntransitions        = int(ntransitions_list[0])
+        self.nkpoints            = int(np.max(tbl[:, 0]))
+        self.nvalence            = len(np.unique(tbl[:, 1]))
+        self.nconduction         = len(np.unique(tbl[:, 2]))
+        self.exc_table           = tbl
+
+        is_spin_pol = len(np.unique(tbl[:, 3])) > 1 or len(np.unique(tbl[:, 4])) > 1
+        if is_spin_pol:
+            print("[WARNING] Spin-polarised system detected (partially supported)")
+
+    # ------------------------------------------------------------------
+    # Eigenvector reshape (optional, needed for spin)
+    # ------------------------------------------------------------------
+
+    def reshape_eigenvectors(self):
         """
-        eigenvectors in:  [nqpoints, nexcitons, ntransitions]
-        eigenvectors out: [nqpoints, nexcitons, nkpoints, nvalence, nconduction]
-
-        TODO: Extend to spin-polarised case
+        Return eigenvectors reshaped from [nq, nexcitons, ntransitions]
+        to [nq, nexcitons, nkpoints, nvalence, nconduction].
+        Requires load_eigenvectors=True.
         """
-        nq, nexc, nk, nv, nc = self.nqpoints, self.nexcitons, self.nkpoints, self.nvalence, self.nconduction
-        reshaped_eigenvectors = np.zeros((nq,nexc,nk,nv,nc),dtype=complex)
-        #print(eigenvectors[2,5,2])
-        for iQ in range(nq):
-            for i_exc in range(nexc): 
-                reshaped_eigenvectors[iQ,i_exc,:,:,:] = eigenvectors[iQ,i_exc,:].reshape([nk,nv,nc])
-        #print(reshaped_eigenvectors[2,5,0,1,0])    
+        if self.exc_eigenvectors is None:
+            raise RuntimeError("Eigenvectors not loaded. Use load_eigenvectors=True.")
+        nq, nexc = self.nqpoints, self.nexcitons
+        nk, nv, nc = self.nkpoints, self.nvalence, self.nconduction
+        return self.exc_eigenvectors.reshape(nq, nexc, nk, nv, nc)
 
-        return reshaped_eigenvectors
+    # ------------------------------------------------------------------
+    # BZ weight plot
+    # ------------------------------------------------------------------
 
     @add_fig_kwargs
-    def plot_Aweights(self,data,plt_show=False,plt_cbar=False,**kwargs):
+    def plot_Aweights(self, data, plt_show=False, plt_cbar=False, **kwargs):
         """
-        2D scatterplot in the q-BZ of the quantity A_{iq}(iexc,ik,ic,iv).
-
-        Any real quantity which is a function of only the q-grid may be supplied.
-        The indices iq,inu,ib1,ib2 are user-specified.
-
-        - if plt_show plot is shown
-        - if plt_cbar colorbar is shown
-        - kwargs example: marker='H', s=300, cmap='viridis', etc.
-
-        NB: So far requires a 2D system.
-            Can be improved to plot BZ planes at constant k_z for 3D systems.
+        2D scatter in the IBZ q-BZ of any scalar quantity on the q-grid.
+        NB: requires a 2D system.
         """
+        if len(data) != len(self.car_qpoints):
+            raise ValueError(
+                'data length (%d) != number of qpoints (%d)' % (len(data), len(self.car_qpoints))
+            )
 
-        qpts = self.car_qpoints
+        fig, ax = plt.subplots(1, 1)
+        c_BZ = 'black' if self.nqpoints < self.nkpoints else 'white'
+        ax.add_patch(BZ_Wigner_Seitz(self.lattice, color=c_BZ))
+        lim = 1.05 * np.linalg.norm(self.rlat[0])
+        ax.set_xlim(-lim, lim)
+        ax.set_ylim(-lim, lim)
 
-        # Input check
-        if len(data)!=len(qpts):
-            raise ValueError('Something wrong in data dimensions (%d data vs %d qpts)'%(len(data),len(qpts)))
-
-        # Global plot stuff
-        self.fig, self.ax = plt.subplots(1, 1)
-        if self.nqpoints<self.nkpoints:  c_BZ_borders='black'
-        if self.nqpoints==self.nkpoints: c_BZ_borders='white'
-        self.ax.add_patch(BZ_Wigner_Seitz(self.lattice,color=c_BZ_borders))
-
+        BZs = shifted_grids_2D(self.car_qpoints, self.rlat)
+        for qpts_s in BZs:
+            plot = ax.scatter(qpts_s[:, 0], qpts_s[:, 1], c=data, **kwargs)
 
         if plt_cbar:
-            if 'cmap' in kwargs.keys(): color_map = plt.get_cmap(kwargs['cmap'])
-            else:                       color_map = plt.get_cmap('viridis')
-        lim = 1.05*np.linalg.norm(self.rlat[0])
-        self.ax.set_xlim(-lim,lim)
-        self.ax.set_ylim(-lim,lim)
-
-        # Reproduce plot also in adjacent BZs
-        BZs = shifted_grids_2D(qpts,self.rlat)
-        for qpts_s in BZs: plot=self.ax.scatter(qpts_s[:,0],qpts_s[:,1],c=data,**kwargs)
-
-        if plt_cbar: self.fig.colorbar(plot)
-
+            fig.colorbar(plot)
         plt.gca().set_aspect('equal')
+        if plt_show:
+            plt.show()
+        return fig
 
-        if plt_show: plt.show()
-        else: print("Plot ready.\nYou can customise adding savefig, title, labels, text, show, etc...")
-    #####################################
-    # Excition dispersion along BZ path #
-    #####################################
-    def _sample_path_cartesian(self, path):
-        from yambopy.kpoints import make_kpositive
+    # ------------------------------------------------------------------
+    # Path geometry helpers
+    # ------------------------------------------------------------------
+
+    def _path_geometry(self, path):
+        """
+        Extract segment endpoints (Cartesian) and cumulative boundary distances
+        from a Path object.
+
+        Returns
+        -------
+        seg_ends   : (n_seg+1, 3) Cartesian endpoints
+        seg_lens   : (n_seg,) length of each segment in Ang^-1
+        boundaries : (n_seg+1,) cumulative distances at high-symmetry points
+        labels     : list of high-symmetry labels
+        """
         klist    = path.get_klist()
-        red_kpts = klist[:, :3]
+        car_kpts = red_car(klist[:, :3], self.rlat)
 
-        # Unfolded Cartesian for correct path geometry and distances
-        car_kpts = red_car(red_kpts, self.rlat)
-
-        diffs      = np.linalg.norm(np.diff(car_kpts, axis=0), axis=1)
-        cumulative = np.concatenate([[0], np.cumsum(diffs)])
-
-        boundary_distances = [0.0]
+        boundary_idx = [0]
         idx = 0
         for npts in path.intervals:
             idx += npts
-            boundary_distances.append(cumulative[idx])
+            boundary_idx.append(idx)
 
-        # Folded reduced coords for NN search
-        red_kpts_folded = make_kpositive(red_kpts)
+        seg_ends   = car_kpts[np.array(boundary_idx)]
+        seg_lens   = np.linalg.norm(np.diff(seg_ends, axis=0), axis=1)
+        boundaries = np.concatenate([[0.], np.cumsum(seg_lens)])
+        return seg_ends, seg_lens, boundaries, path.klabels
 
-        return car_kpts, red_kpts_folded, cumulative, np.array(boundary_distances)
-    
-    def _get_full_bz_qpoints(self):
-        from yambopy.kpoints import build_ktree
-        red_kpoints = self.lattice.red_kpoints
-        ktree       = build_ktree(red_kpoints)
-        return red_kpoints, ktree
-
-
-    def _expand_ibz_to_full_bz(self, data_ibz):
+    def _dense_path(self, path, npts=300):
         """
-        Expand a scalar quantity from IBZ to full BZ using kpoints_indexes.
-        data_ibz: (nq_ibz, ...) -> data_full: (nq_full, ...)
-        For scalars (energy) this is just indexing.
-        """
-        return data_ibz[self.lattice.kpoints_indexes]
-    
-    def _compute_spin_ibz(self, nstates, save_dir, bse_dir, contribution,
-                        sz=0.5 * np.array([[1, 0], [0, -1]])):
-        """
-        Compute S_z expectation values for all IBZ q-points.
-        Loads wfdb and elec_sz once, then loops over IBZ q-points.
-        Returns spin_ibz of shape (nq_ibz, nstates).
-        """
-        from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
-        from yambopy.dbs.wfdb import YamboWFDB
+        Generate `npts` points uniformly spaced along the path.
 
-        nq_ibz   = len(self.red_qpoints)
-        spin_ibz = np.zeros((nq_ibz, nstates))
+        Returns
+        -------
+        dense_x   : (npts,) 1D path distances
+        dense_car : (npts, 3) Cartesian coordinates
+        dense_red : (npts, 3) reduced coordinates
+        """
+        seg_ends, _, boundaries, _ = self._path_geometry(path)
+        dense_x   = np.linspace(0., boundaries[-1], npts)
+        dense_car = np.array([
+            np.interp(dense_x, boundaries, seg_ends[:, i]) for i in range(3)
+        ]).T
+        return dense_x, dense_car, car_red(dense_car, self.rlat)
 
-        # Load excdb once just to get bands_range
-        excdb_q1 = YamboExcitonDB.from_db_file(
-            self.lattice,
-            filename='ndb.BS_diago_Q1',
-            folder=bse_dir,
-            Load_WF=True, neigs=nstates
+    def _project_qpts_onto_path(self, path, tol=1e-3, expand_bz=True):
+        """
+        Project Q-points onto the path, collecting every point within `tol`
+        (Cartesian Ang^-1) of any segment.
+
+        Two issues handled explicitly:
+
+        * BZ-wrapping: the full-BZ Q-points from expand_kpoints are stored in raw
+          Cartesian (sym * k), which can differ from the path convention by a
+          reciprocal lattice vector.  All 27 first-shell periodic images are tried
+          so that, e.g., M at (0, -0.5, 0) is matched to the path point M at
+          (0, 0.5, 0) via a G-vector shift.
+
+        * Endpoint duplicates: a point like Gamma that sits at BOTH the start and
+          end of a path \Gamma→…→\Gamma is added at each boundary independently, so it
+          appears in the scatter/spline at x=0 AND x=total_length.
+
+        When expand_bz=False only the directly-computed IBZ Q-points are considered.
+        When expand_bz=True (default) the full BZ is used and is_ibz marks which
+        points were directly computed vs symmetry-expanded.
+
+        Returns
+        -------
+        path_coords : (N,) 1D distances along path
+        q_indices   : (N,) indices into the full-BZ Q-point array
+        is_ibz      : (N,) bool — True = directly computed, False = symmetry-expanded
+        boundaries  : (n_seg+1,) cumulative distances at high-symmetry points
+        labels      : high-symmetry labels
+        """
+        from scipy.spatial import cKDTree
+
+        seg_ends, seg_lens, boundaries, labels = self._path_geometry(path)
+        car_qpoints_full = red_car(self.lattice.red_kpoints, self.rlat)
+
+        # IBZ detection via coordinate comparison (robust for all symmetry orderings
+        # and for special points like Gamma that are invariant under every operation).
+        ibz_tree     = cKDTree(self.car_qpoints)
+        dists_ibz, _ = ibz_tree.query(car_qpoints_full)
+        is_ibz_full  = dists_ibz < 1e-4  # fixed small tolerance for identity check
+
+        # First-shell reciprocal-lattice images to handle BZ-wrapping mismatches
+        images = np.array([
+            i * self.rlat[0] + j * self.rlat[1] + k * self.rlat[2]
+            for i in (-1, 0, 1) for j in (-1, 0, 1) for k in (-1, 0, 1)
+        ])
+
+        path_coords, q_indices, is_ibz = [], [], []
+
+        for iq, qpt in enumerate(car_qpoints_full):
+            if not expand_bz and not is_ibz_full[iq]:
+                continue
+
+            # Collect all distinct path coordinates this Q-point maps to
+            hits = {}  # rounded_coord -> exact coord
+
+            for G in images:
+                qpt_img = qpt + G
+
+                # Segment endpoints — checked exactly so that Gamma (or any HS
+                # point) registers at EVERY boundary where it sits.
+                for i, hs_pt in enumerate(seg_ends):
+                    if np.linalg.norm(qpt_img - hs_pt) < tol:
+                        key = round(boundaries[i], 12)
+                        hits[key] = boundaries[i]
+
+                # Segment interiors — t strictly in (0, 1) to avoid double-counting
+                # with the endpoint check above.
+                for i, (A, B) in enumerate(zip(seg_ends[:-1], seg_ends[1:])):
+                    if seg_lens[i] < 1e-10:
+                        continue
+                    seg = B - A
+                    t   = np.dot(qpt_img - A, seg) / seg_lens[i]**2
+                    if t <= 1e-10 or t >= 1. - 1e-10:
+                        continue
+                    perp = np.linalg.norm(qpt_img - A - t * seg)
+                    if perp < tol:
+                        coord = boundaries[i] + t * seg_lens[i]
+                        key   = round(coord, 10)
+                        hits[key] = coord
+
+            for coord in hits.values():
+                path_coords.append(coord)
+                q_indices.append(iq)
+                is_ibz.append(is_ibz_full[iq])
+
+        if not path_coords:
+            msg = "No Q-points found within tol=%.4g" % tol
+            if not expand_bz:
+                msg += ". Try expand_bz=True to include symmetry-equivalent points"
+            raise ValueError(msg + ". Check path alignment or increase tolerance.")
+
+        path_coords = np.array(path_coords)
+        q_indices   = np.array(q_indices, dtype=int)
+        is_ibz      = np.array(is_ibz, dtype=bool)
+        order       = np.argsort(path_coords)
+        return path_coords[order], q_indices[order], is_ibz[order], boundaries, labels
+
+    # ------------------------------------------------------------------
+    # Interpolation helpers
+    # ------------------------------------------------------------------
+
+    def _interp_cubic_spline(self, scatter_x, scatter_energies, dense_x):
+        """1D cubic spline along the path distance coordinate, per band."""
+        from scipy.interpolate import CubicSpline
+
+        # Average duplicates then sort
+        unique_x, inv = np.unique(np.round(scatter_x, decimals=10), return_inverse=True)
+        nbands  = scatter_energies.shape[1]
+        counts  = np.bincount(inv, minlength=len(unique_x)).astype(float)
+        unique_e = np.zeros((len(unique_x), nbands))
+        for ib in range(nbands):
+            unique_e[:, ib] = (
+                np.bincount(inv, weights=scatter_energies[:, ib], minlength=len(unique_x)) / counts
+            )
+
+        if len(unique_x) < 3:
+            raise ValueError(
+                "Too few Q-points on path for cubic spline (%d found, need >= 3). "
+                "Increase tol or use method='nn'." % len(unique_x)
+            )
+
+        dense_e = np.zeros((len(dense_x), nbands))
+        for ib in range(nbands):
+            dense_e[:, ib] = CubicSpline(unique_x, unique_e[:, ib])(dense_x)
+        return dense_e
+
+    def _interp_rbf(self, car_pts_target, eigens_ibz=None, eigens_full=None):
+        """RBF interpolation in the 2D BZ plane. Tries kernels in order until one succeeds."""
+        from scipy.interpolate import RBFInterpolator
+
+        car_qpts_full = red_car(self.lattice.red_kpoints, self.rlat)
+        if eigens_full is None:
+            eigens_full = self.exc_energies[self.lattice.kpoints_indexes]
+
+        # Fold both source and target to [-0.5, 0.5) for BZ-boundary consistency
+        def fold_to_2d(car_pts):
+            red = car_red(car_pts, self.rlat)
+            return red_car((red + 0.5) % 1.0 - 0.5, self.rlat)[:, :2]
+
+        pts_2d    = fold_to_2d(car_qpts_full)
+        target_2d = fold_to_2d(car_pts_target)
+        nbands    = eigens_full.shape[1]
+        result    = np.zeros((len(car_pts_target), nbands))
+
+        for kernel in ['linear', 'thin_plate_spline', 'multiquadric', 'gaussian']:
+            try:
+                for ib in range(nbands):
+                    result[:, ib] = RBFInterpolator(
+                        pts_2d, eigens_full[:, ib], kernel=kernel, smoothing=0.
+                    )(target_2d)
+                print("RBF kernel '%s' succeeded" % kernel)
+                return result
+            except Exception as e:
+                print("RBF kernel '%s' failed: %s" % (kernel, e))
+
+        raise RuntimeError("All RBF kernels failed")
+
+    def _interp_skw(self, red_kpts_target, lpratio=6, nelect=1):
+        """Star-function Wannier–Fourier interpolation (SKW)."""
+        from yambopy.tools.skw import SkwInterpolator
+
+        latnp   = self.lattice.lat
+        sym_rel = np.stack([
+            np.round(np.linalg.inv(latnp) @ s @ latnp)
+            for s in self.lattice.sym_car
+        ])
+
+        skw = SkwInterpolator(
+            lpratio    = lpratio,
+            kpts       = self.red_qpoints,
+            eigens     = self.exc_energies[np.newaxis, :, :],  # (1, nq_ibz, nbands)
+            fermie     = 0.0,
+            nelect     = nelect,
+            cell       = (self.lattice.lat,
+                          self.lattice.red_atomic_positions,
+                          self.lattice.atomic_numbers),
+            symrel     = sym_rel,
+            has_timrev = bool(self.lattice.time_rev),
+            verbose    = 0,
         )
-        bands_range = [np.min(excdb_q1.table[:, 1]) - 1,
-                    np.max(excdb_q1.table[:, 2])]
+        print("SKW MAE = %.3f meV" % skw.mae)
+        return skw.interp_kpts(red_kpts_target).eigens[0]  # (npts, nbands)
 
-        # Load wfdb and elec_sz once — these don't depend on q-point
-        wfdb    = YamboWFDB(path=save_dir, latdb=self.lattice, bands_range=bands_range)
-        elec_sz = wfdb.get_spin_m_e_BZ(s_z=sz)
+    def _interp_nn(self, red_kpts_target, eigens_full):
+        """Nearest-neighbour interpolation on the full-BZ grid."""
+        from scipy.spatial import cKDTree
+        _, idx = cKDTree(self.lattice.red_kpoints).query(red_kpts_target)
+        return eigens_full[idx]
 
-        # Now loop over IBZ q-points, reusing wfdb and elec_sz
-        for iq in range(nq_ibz):
-            if iq == 0:
-                excdb = excdb_q1   # already loaded
-            else:
-                excdb = YamboExcitonDB.from_db_file(
-                    self.lattice,
-                    filename=f'ndb.BS_diago_Q{iq + 1}',
-                    folder=bse_dir,
-                    Load_WF=True, neigs=nstates
-                )
+    # ------------------------------------------------------------------
+    # Dispersion (scatter — no interpolation)
+    # ------------------------------------------------------------------
 
-            smat   = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
-                                        contribution=contribution, diagonal=False)
-            smat   = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
-
-            ss_tmp = []
-            for i in smat:
-                ss_tmp += list(i)
-            spin_ibz[iq] = np.array(ss_tmp)[:nstates].real
-
-        return spin_ibz
-    def _compute_spin_full_bz(self, nstates, save_dir, bse_dir, contribution,
-                           sz=0.5 * np.array([[1, 0], [0, -1]]),
-                           dmat_mode='run', dmat_file='Dmats.npy',
-                           method='rotate_Ak'):
+    def get_dispersion(self, path, tol=1e-3, expand_bz=True):
         """
-        Compute S_z for full BZ.
-        method='Rzz'        : apply Rzz symmetry transformation to IBZ spin (fast)
-        method='rotate_Ak'  : rotate exciton wavefunction to full BZ q-point (slow)
+        Return Q-points along the path and their energies.
+
+        Parameters
+        ----------
+        path      : Path object
+        tol       : maximum Cartesian distance (Ang^-1) to accept a Q-point
+        expand_bz : if True, include symmetry-equivalent Q-points beyond the IBZ
+
+        Returns
+        -------
+        path_coords : (N,) 1D distances along path
+        energies    : (N, nexcitons)
+        is_ibz      : (N,) bool — True = directly computed, False = symmetry-expanded
+        boundaries  : (n_seg+1,) cumulative distances at high-symmetry points
+        labels      : list of high-symmetry labels
+        """
+        path_coords, q_indices, is_ibz, boundaries, labels = \
+            self._project_qpts_onto_path(path, tol=tol, expand_bz=expand_bz)
+        energies_full = self.exc_energies[self.lattice.kpoints_indexes]
+        return path_coords, energies_full[q_indices], is_ibz, boundaries, labels
+
+    # ------------------------------------------------------------------
+    # Dispersion (interpolated)
+    # ------------------------------------------------------------------
+
+    def get_dispersion_interpolated(self, path, method='cubic_spline', npts=300, tol=1e-3,
+                                    lpratio=6, nelect=1, expand_bz=True):
+        """
+        Interpolate the exciton dispersion along the path.
+
+        Parameters
+        ----------
+        path      : Path object
+        method    : 'cubic_spline' | 'rbf' | 'skw' | 'nn'
+        npts      : number of dense points for the interpolated line
+        tol       : tolerance for projecting Q-points onto path (scatter overlay)
+        expand_bz : include symmetry-equivalent Q-points in the scatter overlay
+        lpratio, nelect : SKW-specific parameters
+
+        Returns
+        -------
+        dense_x          : (npts,) path coordinates
+        dense_energies   : (npts, nexcitons) interpolated energies
+        scatter_x        : (N,) path coordinates of Q-points used for scatter overlay
+        scatter_energies : (N, nexcitons) energies at those Q-points
+        is_ibz           : (N,) bool — True = directly computed, False = symmetry-expanded
+        boundaries       : (n_seg+1,) cumulative distances at high-symmetry points
+        labels           : list of high-symmetry labels
+        """
+        scatter_x, q_indices, is_ibz, boundaries, labels = \
+            self._project_qpts_onto_path(path, tol=tol, expand_bz=expand_bz)
+        energies_full    = self.exc_energies[self.lattice.kpoints_indexes]
+        scatter_energies = energies_full[q_indices]
+
+        dense_x, dense_car, dense_red = self._dense_path(path, npts)
+
+        if method == 'cubic_spline':
+            dense_energies = self._interp_cubic_spline(scatter_x, scatter_energies, dense_x)
+        elif method == 'rbf':
+            dense_energies = self._interp_rbf(dense_car, eigens_ibz=self.exc_energies)
+        elif method == 'skw':
+            dense_energies = self._interp_skw(dense_red, lpratio=lpratio, nelect=nelect)
+        elif method == 'nn':
+            dense_energies = self._interp_nn(dense_red, energies_full)
+        else:
+            raise ValueError(
+                "method must be 'cubic_spline', 'rbf', 'skw', or 'nn' — got '%s'" % method
+            )
+
+        return dense_x, dense_energies, scatter_x, scatter_energies, is_ibz, boundaries, labels
+
+    # ------------------------------------------------------------------
+    # Spin
+    # ------------------------------------------------------------------
+
+    def _make_wfdb(self, save_dir, bands_range):
+        """
+        Instantiate YamboWFDB from a SAVE path that may be bare ('SAVE') or nested
+        ('run/SAVE', '/abs/path/SAVE').  YamboWFDB expects path=<parent> and
+        save=<folder_name> separately, so we split here.
+        """
+        from yambopy.dbs.wfdb import YamboWFDB
+        parent    = os.path.dirname(save_dir) or '.'
+        save_name = os.path.basename(save_dir) or save_dir
+        return YamboWFDB(path=parent, save=save_name, latdb=self.lattice, bands_range=bands_range)
+
+    def _compute_spin_ibz(self, save_dir, bse_dir, contribution,
+                          sz=0.5 * np.array([[1, 0], [0, -1]])):
+        """
+        Compute S_z expectation values at all IBZ Q-points.
+        Returns spin_ibz of shape (nq_ibz, nexcitons).
         """
         from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
-        from yambopy.dbs.wfdb import YamboWFDB
 
-        nq_ibz  = len(self.red_qpoints)
-        nq_full = len(self.lattice.kpoints_indexes)
-
-        # --- Load wfdb and elec_sz once ---
         excdb_q1 = YamboExcitonDB.from_db_file(
             self.lattice, filename='ndb.BS_diago_Q1',
-            folder=bse_dir, Load_WF=True, neigs=nstates
+            folder=bse_dir, Load_WF=True, neigs=self.nexcitons
         )
-        bands_range = [np.min(excdb_q1.table[:, 1]) - 1,
-                    np.max(excdb_q1.table[:, 2])]
-        wfdb    = YamboWFDB(path=save_dir, latdb=self.lattice, bands_range=bands_range)
+        bands_range = [np.min(excdb_q1.table[:, 1]) - 1, np.max(excdb_q1.table[:, 2])]
+        wfdb    = self._make_wfdb(save_dir, bands_range)
         elec_sz = wfdb.get_spin_m_e_BZ(s_z=sz)
 
-        # --- Load all IBZ exciton dbs ---
-        exdbs = [excdb_q1]
-        for iq in range(1, nq_ibz):
-            exdbs.append(YamboExcitonDB.from_db_file(
-                self.lattice, filename=f'ndb.BS_diago_Q{iq + 1}',
-                folder=bse_dir, Load_WF=True, neigs=nstates
-            ))
-
-        # --- Compute spin at IBZ q-points ---
-        spin_ibz = np.zeros((nq_ibz, nstates))
-        for iq, excdb in enumerate(exdbs):
-            smat = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
-                                        contribution=contribution, diagonal=False)
+        spin_ibz = np.zeros((self.nqpoints, self.nexcitons))
+        for iq in range(self.nqpoints):
+            excdb = excdb_q1 if iq == 0 else YamboExcitonDB.from_db_file(
+                self.lattice, filename='ndb.BS_diago_Q%d' % (iq + 1),
+                folder=bse_dir, Load_WF=True, neigs=self.nexcitons
+            )
+            smat = compute_exciton_spin(
+                self.lattice, excdb, wfdb, elec_sz, contribution=contribution, diagonal=False
+            )
             smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
-            ss_tmp = []
-            for i in smat:
-                ss_tmp += list(i)
-            spin_ibz[iq] = np.array(ss_tmp)[:nstates].real
+            vals = [v for group in smat for v in group]
+            spin_ibz[iq] = np.array(vals)[:self.nexcitons].real
 
-        # --- Expand to full BZ ---
-        spin_full = np.zeros((nq_full, nstates))
+        return spin_ibz
+
+    def _expand_spin_to_full_bz(self, spin_ibz):
+        """
+        Expand S_z from IBZ to full BZ.
+        S_z is a pseudovector component: S_z -> R_zz * S_z under symmetry R.
+        """
+        nq_full   = len(self.lattice.kpoints_indexes)
+        spin_full = np.zeros((nq_full, self.nexcitons))
+        for iq_full, (iq_ibz, isym) in enumerate(
+            zip(self.lattice.kpoints_indexes, self.lattice.symmetry_indexes)
+        ):
+            Rzz = self.lattice.sym_red[isym][2, 2]
+            spin_full[iq_full] = Rzz * spin_ibz[iq_ibz]
+        return spin_full
+
+    def _compute_spin_full_bz(self, save_dir, bse_dir, contribution,
+                               sz=0.5 * np.array([[1, 0], [0, -1]]),
+                               dmat_mode='run', dmat_file='Dmats.npy',
+                               method='Rzz'):
+        """
+        Compute S_z at all full-BZ Q-points.
+
+        method : 'Rzz'       — fast, applies R_zz symmetry transformation to IBZ spin
+                 'rotate_Ak' — slow, rotates exciton wavefunctions to each full-BZ Q-point
+        """
+        from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
+
+        excdb_q1 = YamboExcitonDB.from_db_file(
+            self.lattice, filename='ndb.BS_diago_Q1',
+            folder=bse_dir, Load_WF=True, neigs=self.nexcitons
+        )
+        bands_range = [np.min(excdb_q1.table[:, 1]) - 1, np.max(excdb_q1.table[:, 2])]
+        wfdb    = self._make_wfdb(save_dir, bands_range)
+        elec_sz = wfdb.get_spin_m_e_BZ(s_z=sz)
+
+        exdbs = [excdb_q1] + [
+            YamboExcitonDB.from_db_file(
+                self.lattice, filename='ndb.BS_diago_Q%d' % (iq + 1),
+                folder=bse_dir, Load_WF=True, neigs=self.nexcitons
+            )
+            for iq in range(1, self.nqpoints)
+        ]
+
+        spin_ibz = np.zeros((self.nqpoints, self.nexcitons))
+        for iq, excdb in enumerate(exdbs):
+            smat = compute_exciton_spin(
+                self.lattice, excdb, wfdb, elec_sz, contribution=contribution, diagonal=False
+            )
+            smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
+            vals = [v for group in smat for v in group]
+            spin_ibz[iq] = np.array(vals)[:self.nexcitons].real
 
         if method == 'Rzz':
-            for iq_full, (iq_ibz, isym) in enumerate(zip(self.lattice.kpoints_indexes,
-                                                        self.lattice.symmetry_indexes)):
-                Rzz = self.lattice.sym_red[isym][2, 2]
-                spin_full[iq_full] = Rzz * spin_ibz[iq_ibz]
+            return self._expand_spin_to_full_bz(spin_ibz)
 
         elif method == 'rotate_Ak':
             from yambopy.exciton_phonon.excph_matrix_elements import rotate_Akcv_Q, save_or_load_dmat
-            from scipy.spatial import cKDTree
-
-            Dmats = save_or_load_dmat(wfdb, mode=dmat_mode, dmat_file=dmat_file)
+            nq_full   = len(self.lattice.kpoints_indexes)
+            spin_full = np.zeros((nq_full, self.nexcitons))
+            Dmats     = save_or_load_dmat(wfdb, mode=dmat_mode, dmat_file=dmat_file)
 
             for iq_full in range(nq_full):
                 Qpt    = self.lattice.red_kpoints[iq_full]
                 rot_Ak = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=None)
+                iq_ibz = self.lattice.kpoints_indexes[iq_full]
+                excdb  = exdbs[iq_ibz]
 
-                iq_ibz          = self.lattice.kpoints_indexes[iq_full]
-                excdb           = exdbs[iq_ibz]
                 original_get_Akcv = excdb.get_Akcv
-                excdb.get_Akcv  = lambda: rot_Ak
-
-                smat = compute_exciton_spin(self.lattice, excdb, wfdb, elec_sz,
-                                            contribution=contribution, diagonal=False)
+                excdb.get_Akcv    = lambda: rot_Ak
+                smat = compute_exciton_spin(
+                    self.lattice, excdb, wfdb, elec_sz, contribution=contribution, diagonal=False
+                )
                 smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
-
                 excdb.get_Akcv = original_get_Akcv
 
-                ss_tmp = []
-                for i in smat:
-                    ss_tmp += list(i)
-                spin_full[iq_full] = np.array(ss_tmp)[:nstates].real
+                vals = [v for group in smat for v in group]
+                spin_full[iq_full] = np.array(vals)[:self.nexcitons].real
+
+            return spin_full
 
         else:
-            raise ValueError(f"Unknown method '{method}', use 'Rzz' or 'rotate_Ak'")
+            raise ValueError("method must be 'Rzz' or 'rotate_Ak' — got '%s'" % method)
 
-        return spin_full
-    
-
-    def get_dispersion(self, path):
-        from yambopy.kpoints import make_kpositive
-        red_kpoints, ktree = self._get_full_bz_qpoints()
-
-        car_kpts, red_kpts_folded, sampled_kpath, boundaries = self._sample_path_cartesian(path)
-
-        _, exc_indexes = ktree.query(red_kpts_folded, k=1)
-
-        unique, counts = np.unique(exc_indexes, return_counts=True)
-        print(f"Unique q-points on path: {len(unique)} / {len(self.red_qpoints)}")
-
-        energies_full = self._expand_ibz_to_full_bz(self.exc_energies)
-        bands         = energies_full[exc_indexes]
-
-        return bands, sampled_kpath, boundaries, path.klabels, exc_indexes
-
-
-    def _nn_interpolate(self, car_kpts, red_kpts_folded, *data_full):
-        red_kpoints, ktree = self._get_full_bz_qpoints()
-
-        dists, nn_indices = ktree.query(red_kpts_folded, k=2)
-        d0, d1 = dists[:, 0], dists[:, 1]
-        total  = d0 + d1
-        exact  = total < 1e-10
-        w0 = np.where(exact, 1.0, d1 / total)[:, np.newaxis]
-        w1 = np.where(exact, 0.0, d0 / total)[:, np.newaxis]
-
-        idx0, idx1 = nn_indices[:, 0], nn_indices[:, 1]
-        return [w0 * d[idx0] + w1 * d[idx1] for d in data_full]
-        
-    def _interpolate_rbf(self, sampled_car, eigens, eigens_full_bz=None,
-                        enforce_symmetry_points=None):
-        from scipy.interpolate import RBFInterpolator
-
-        # Fold full BZ q-points into [-0.5, 0.5) to ensure consistent representation
-
-
-        car_qpoints_full   = red_car(self.lattice.red_kpoints, self.rlat)
-
-        if eigens_full_bz is not None:
-            eigens_full = eigens_full_bz
-        else:
-            eigens_full = self._expand_ibz_to_full_bz(eigens)
-
-        # Also fold the sampled path points
-        sampled_red    = car_red(sampled_car, self.rlat)
-        sampled_folded = (sampled_red + 0.5) % 1.0 - 0.5
-        sampled_car_folded = red_car(sampled_folded, self.rlat)
-
-        pts_2d    = car_qpoints_full[:, :2]
-        sample_2d = sampled_car_folded[:, :2]
-        nbands    = eigens_full.shape[1]
-        result    = np.zeros((len(sampled_car), nbands))
-
-        kernels = ['linear', 'thin_plate_spline', 'multiquadric', 'gaussian']
-        for kernel in kernels:
-            try:
-                for ib in range(nbands):
-                    rbf = RBFInterpolator(
-                        pts_2d, eigens_full[:, ib],
-                        kernel=kernel, smoothing=0.0, degree=-1
-                    )
-                    result[:, ib] = rbf(sample_2d)
-                print(f"RBF succeeded with kernel='{kernel}'")
-                return result
-            except Exception as e:
-                print(f"RBF kernel '{kernel}' failed ({e}), trying next...")
-
-        raise RuntimeError("All RBF kernels failed")
-    
-    
-    def get_dispersion_interpolated(self, path, show_spin=False,
-                                    save_dir='SAVE', bse_dir='BSE', contribution='b',
-                                    dmat_mode='run', dmat_file='Dmats.npy',
-                                    use_skw=True, lpratio=6, spin_method='Rzz'):
-
-        red_kpoints, ktree = self._get_full_bz_qpoints()
-        car_kpts, red_kpts_folded, sampled_kpath, boundaries = self._sample_path_cartesian(path)
-
-        nstates     = self.exc_energies.shape[1]
-        eigens_full = self._expand_ibz_to_full_bz(self.exc_energies)
-        spin_path   = None
-        bands       = None
-        latnp = self.lattice.lat
-        lat_inv = np.linalg.inv(self.lattice.lat)
-        sym_car = self.lattice.sym_car
-        sym_rel = np.stack([np.round(lat_inv @ s @ latnp) for s in sym_car])
-
-        # --- Interpolate energies: SKW -> RBF -> NN ---
-        if use_skw:
-            try:
-                from yambopy.tools.skw import SkwInterpolator
-                sampled_red = car_red(car_kpts, self.rlat)
-                skw = SkwInterpolator(
-                    lpratio    = lpratio,
-                    kpts       = self.red_qpoints,
-                    eigens     = self.exc_energies[np.newaxis, :, :],
-                    fermie     = 0.0, nelect = 26,
-                    cell       = (self.lattice.lat,
-                                self.lattice.red_atomic_positions,
-                                self.lattice.atomic_numbers),
-                    symrel     = sym_rel,
-                    has_timrev = bool(self.lattice.time_rev),
-                    verbose    = 1
-                )
-                if skw.mae > 10.0:
-                    raise ValueError(f"SKW MAE too large ({skw.mae:.1f} meV)")
-                bands = skw.interp_kpts(sampled_red).eigens[0]
-                print(f"SKW succeeded, MAE={skw.mae:.3f} meV")
-
-            except Exception as e:
-                print(f"SKW failed ({e}), trying RBF...")
-                try:
-                    bands = self._interpolate_rbf(car_kpts, self.exc_energies)
-                    print("RBF interpolation succeeded")
-                except Exception as e2:
-                    print(f"RBF failed ({e2}), falling back to NN")
-
-        # --- NN fallback ---
-        if bands is None:
-            if show_spin:
-                spin_full        = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
-                                                            contribution, dmat_mode=dmat_mode,
-                                                            dmat_file=dmat_file, method=spin_method)
-                bands, spin_path = self._nn_interpolate(car_kpts, red_kpts_folded,
-                                                        eigens_full, spin_full)
-            else:
-                bands,           = self._nn_interpolate(car_kpts, red_kpts_folded, eigens_full)
-            return bands, sampled_kpath, boundaries, path.klabels, spin_path
-
-        # --- Spin interpolation (when bands came from SKW or RBF) ---
-        if show_spin:
-            spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir,
-                                                    contribution, dmat_mode=dmat_mode,
-                                                    dmat_file=dmat_file, method=spin_method)
-            try:
-                spin_path = self._interpolate_rbf(car_kpts, None, eigens_full_bz=spin_full)
-                print("RBF spin interpolation succeeded")
-            except Exception as e:
-                print(f"RBF spin failed ({e}), falling back to NN")
-                spin_path, = self._nn_interpolate(car_kpts, red_kpts_folded, spin_full)
-
-        return bands, sampled_kpath, boundaries, path.klabels, spin_path
-
-    def _expand_spin_to_full_bz(self, spin_ibz):
-        """
-        Expand S_z from IBZ to full BZ applying symmetry transformations.
-        S_z transforms as a pseudovector: S_z -> sym_red[isym][2,2] * S_z
-        """
-        sym_red   = self.lattice.sym_red
-        nq_full   = len(self.lattice.kpoints_indexes)
-        spin_full = np.zeros((nq_full, spin_ibz.shape[1]))
-
-        for iq_full, (iq_ibz, isym) in enumerate(zip(self.lattice.kpoints_indexes,
-                                                    self.lattice.symmetry_indexes)):
-            Rzz = sym_red[isym][2, 2]
-            spin_full[iq_full] = Rzz * spin_ibz[iq_ibz]
-
-        return spin_full
-
-
-    def get_spin_along_path(self, exc_indexes_full, nstates,
+    def get_spin_along_path(self, path, tol=1e-3, expand_bz=True,
                             save_dir='SAVE', bse_dir='BSE', contribution='b',
-                            dmat_mode='save', dmat_file='Dmats.npy', spin_method='rotate_Ak'):
-        spin_full = self._compute_spin_full_bz(nstates, save_dir, bse_dir, contribution,
-                                                dmat_mode=dmat_mode, dmat_file=dmat_file, method=spin_method)
-        return spin_full[exc_indexes_full]
+                            method='Rzz', dmat_mode='run', dmat_file='Dmats.npy'):
+        """
+        Compute S_z expectation values at the Q-points that lie along the path.
 
-    def plot_exciton_dispersion(self, path, ylim=None, figsize=(8, 5),
-                                title="Exciton dispersion", save_dir='SAVE', bse_dir='BSE',
-                                contribution='b', show_spin=False, interpolate=False,
-                                dmat_mode='save', dmat_file='Dmats.npy',spin_method='rotate_Ak',lpratio=30,s=8):
-        if interpolate:
-            bands, distances, boundaries, labels, spin = self.get_dispersion_interpolated(
-                path=path, show_spin=show_spin, save_dir=save_dir, bse_dir=bse_dir,
-                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file, spin_method=spin_method,
-                lpratio=lpratio
+        Parameters
+        ----------
+        expand_bz : must match the value used in get_dispersion / get_dispersion_interpolated
+                    so that the returned array aligns with the scatter data
+
+        Returns
+        -------
+        spin : (N, nexcitons) where N matches the scatter points from get_dispersion*
+        """
+        if self.lattice.spinor_components == 1:
+            raise ValueError(
+                "Spin-projected exciton dispersion requires a spinor (non-collinear) "
+                "calculation (spinor_components=2). For collinear systems the exciton "
+                "spin is not a meaningful observable."
             )
-        else:
-            bands, distances, boundaries, labels, exc_indexes_full = self.get_dispersion(path=path)
-            spin = self.get_spin_along_path(
-                exc_indexes_full, bands.shape[1], save_dir=save_dir, bse_dir=bse_dir,
-                contribution=contribution, dmat_mode=dmat_mode, dmat_file=dmat_file, spin_method=spin_method
-            ) if show_spin else None
+        _, q_indices, _, _, _ = self._project_qpts_onto_path(path, tol=tol, expand_bz=expand_bz)
+        spin_full = self._compute_spin_full_bz(
+            save_dir, bse_dir, contribution,
+            dmat_mode=dmat_mode, dmat_file=dmat_file, method=method
+        )
+        return spin_full[q_indices]
 
+    def _interp_spin_dense(self, scatter_x, spin_band, dense_x):
+        """
+        Interpolate per-band S_z from scatter Q-points onto the dense path grid.
+        Duplicated x-positions are averaged before spline fitting.
+        """
+        from scipy.interpolate import CubicSpline
+        unique_x, inv = np.unique(np.round(scatter_x, decimals=10), return_inverse=True)
+        counts   = np.bincount(inv, minlength=len(unique_x)).astype(float)
+        unique_s = np.bincount(inv, weights=spin_band, minlength=len(unique_x)) / counts
+        if len(unique_x) < 2:
+            return np.full(len(dense_x), unique_s[0])
+        return CubicSpline(unique_x, unique_s, extrapolate=True)(dense_x)
+
+    # ------------------------------------------------------------------
+    # Plotting
+    # ------------------------------------------------------------------
+
+    def plot_exciton_dispersion(self, path, interpolate=False, method='cubic_spline',
+                                npts=300, tol=1e-3, expand_bz=True,
+                                ylim=None, figsize=(8, 5), title="Exciton dispersion",
+                                spin_data=None, lpratio=6, nelect=1, s=80):
+        """
+        Plot the exciton dispersion.
+
+        Parameters
+        ----------
+        path        : Path object
+        interpolate : False → big filled dots at Q-points (no line)
+                      True  → interpolated line + empty dots at Q-points
+        method      : 'cubic_spline' (default) | 'rbf' | 'skw' | 'nn'
+        npts        : number of dense points for the interpolated line
+        tol         : tolerance for projecting Q-points onto path (Ang^-1)
+        expand_bz   : include symmetry-expanded Q-points (shown as triangles ▲)
+        ylim        : (ymin, ymax) energy window in eV
+        spin_data   : (N, nexcitons) S_z values from get_spin_along_path()
+                      — dots colored red (up) / blue (down), norm vmin=-0.5 vmax=0.5
+                      — interpolated line colored by S_z splined onto the dense grid
+        s           : marker size
+        lpratio, nelect : SKW parameters
+        """
         fig, ax = plt.subplots(figsize=figsize)
 
-        if show_spin and spin is not None:
-            norm = plt.Normalize(vmin=-0.5, vmax=0.5)
-            cmap = plt.cm.RdBu
-            for ib in range(bands.shape[1]):
-                sc = ax.scatter(distances, bands[:, ib], c=spin[:, ib],
-                                cmap=cmap, norm=norm, s=s, linewidths=0,
-                                zorder=2, label=f"Exciton {ib+1}")
-            cbar = plt.colorbar(sc, ax=ax, pad=0.02)
-            cbar.set_label(r"$\langle S_z \rangle$")
-            cbar.set_ticks([-0.5, 0, 0.5])
+        spin_norm = plt.Normalize(vmin=-0.5, vmax=0.5)
+        spin_cmap = plt.cm.bwr  # blue = spin down (−0.5), red = spin up (+0.5)
+
+        def _scatter_band(x, y, is_ibz, color=None, c=None):
+            """Draw computed points as circles, expanded points as triangles."""
+            kw_shared = dict(s=s, linewidths=0, zorder=3)
+            for mask, marker in [(is_ibz, 'o'), (~is_ibz, '^')]:
+                if not mask.any():
+                    continue
+                if c is not None:
+                    ax.scatter(x[mask], y[mask], c=c[mask],
+                               cmap=spin_cmap, norm=spin_norm,
+                               marker=marker, **kw_shared)
+                else:
+                    ax.scatter(x[mask], y[mask], color=color,
+                               marker=marker, **kw_shared)
+
+        if interpolate:
+            dense_x, dense_e, scatter_x, scatter_e, is_ibz, boundaries, labels = \
+                self.get_dispersion_interpolated(
+                    path, method=method, npts=npts, tol=tol, expand_bz=expand_bz,
+                    lpratio=lpratio, nelect=nelect
+                )
+            if spin_data is not None and spin_data.shape[0] != len(scatter_x):
+                raise ValueError(
+                    "spin_data has %d points but scatter has %d. "
+                    "Call get_spin_along_path with the same tol and expand_bz=%s."
+                    % (spin_data.shape[0], len(scatter_x), expand_bz)
+                )
+            if spin_data is not None:
+                from matplotlib.collections import LineCollection
+                for ib in range(self.nexcitons):
+                    ax.plot(dense_x, dense_e[:, ib], color='black', lw=2.5,
+                            ls='dotted', zorder=1)
+                for ib in range(self.nexcitons):
+                    # Interpolate spin onto the dense grid so the line tracks S_z
+                    dense_spin = self._interp_spin_dense(scatter_x, spin_data[:, ib], dense_x)
+                    pts  = np.array([dense_x, dense_e[:, ib]]).T.reshape(-1, 1, 2)
+                    segs = np.concatenate([pts[:-1], pts[1:]], axis=1)
+                    lc   = LineCollection(segs, cmap=spin_cmap, norm=spin_norm, lw=2.5, zorder=2)
+                    lc.set_array(dense_spin)
+                    ax.add_collection(lc)
+                for ib in range(self.nexcitons):
+                    _scatter_band(scatter_x, scatter_e[:, ib], is_ibz,
+                                  c=spin_data[:, ib])
+                sm = plt.cm.ScalarMappable(cmap=spin_cmap, norm=spin_norm)
+                sm.set_array([])
+                cbar = fig.colorbar(sm, ax=ax, pad=0.02)
+                cbar.set_label(r"$\langle S_z \rangle$")
+                cbar.set_ticks([-0.5, 0., 0.5])
+            else:
+                for ib in range(self.nexcitons):
+                    ax.plot(dense_x, dense_e[:, ib], color='black', lw=2.5, zorder=1)
+                for ib in range(self.nexcitons):
+                    # empty dots: use facecolors='none' manually instead of _scatter_band
+                    for mask, marker in [(is_ibz, 'o'), (~is_ibz, '^')]:
+                        if not mask.any():
+                            continue
+                        ax.scatter(scatter_x[mask], scatter_e[mask, ib],
+                                   s=s, marker=marker, zorder=3,
+                                   facecolors='none', edgecolors='black', linewidths=1.5)
         else:
-            colors = plt.cm.viridis(np.linspace(0, 0.85, bands.shape[1]))
-            for ib in range(bands.shape[1]):
-                ax.plot(distances, bands[:, ib], color=colors[ib], lw=1.5,
-                        label=f"Exciton {ib+1}")
-            ax.legend(fontsize=8)
+            scatter_x, scatter_e, is_ibz, boundaries, labels = \
+                self.get_dispersion(path, tol=tol, expand_bz=expand_bz)
+
+            if spin_data is not None and spin_data.shape[0] != len(scatter_x):
+                raise ValueError(
+                    "spin_data has %d points but scatter has %d. "
+                    "Call get_spin_along_path with the same tol and expand_bz=%s."
+                    % (spin_data.shape[0], len(scatter_x), expand_bz)
+                )
+            if spin_data is not None:
+                for ib in range(self.nexcitons):
+                    _scatter_band(scatter_x, scatter_e[:, ib], is_ibz,
+                                  c=spin_data[:, ib])
+                sm = plt.cm.ScalarMappable(cmap=spin_cmap, norm=spin_norm)
+                sm.set_array([])
+                cbar = fig.colorbar(sm, ax=ax, pad=0.02)
+                cbar.set_label(r"$\langle S_z \rangle$")
+                cbar.set_ticks([-0.5, 0., 0.5])
+            else:
+                for ib in range(self.nexcitons):
+                    _scatter_band(scatter_x, scatter_e[:, ib], is_ibz, color='black')
 
         for x in boundaries:
-            ax.axvline(x, color='gray', lw=0.8, ls='--')
+            ax.axvline(x, color='gray', lw=1.5, ls='--')
         ax.set_xticks(boundaries)
         ax.set_xticklabels(labels)
-        ax.set_xlim(distances[0], distances[-1])
-        if ylim:
+        ax.set_xlim(boundaries[0], boundaries[-1])
+        if ylim is not None:
             ax.set_ylim(ylim)
         ax.set_ylabel("Exciton energy (eV)")
         ax.set_title(title)
-        ax.set_facecolor('black')
         plt.tight_layout()
-        plt.show()
         return fig, ax
-    
-    def plot_exciton_disp_ax(self,ax,path,**kwargs):
-        ybs_disp = self.get_dispersion(path)
-        print(ybs_disp.nbands)
-        print(ybs_disp.nkpoints)
-        print(ybs_disp._xlim)
-        return ybs_disp.plot_ax(ax) 
 
-    @add_fig_kwargs
-    def plot_exciton_disp(self,path,**kwargs):
-        import matplotlib.pyplot as plt
-        fig = plt.figure()
-        ax = fig.add_subplot(1,1,1)
-        self.plot_exciton_disp_ax(ax,path)
-        return fig
+    # ------------------------------------------------------------------
 
-    
     def __str__(self):
         lines = []; app = lines.append
-        app(" Exciton Dispersion ")
-        app(" Number of qpoints:                    %d"%self.nqpoints)
-        app(" Number of exciton branches read:      %d"%self.nexcitons)
-        app(" Total number of excitons/transitions: %d"%self.ntransitions)
+        app(" Exciton Dispersion")
+        app(" Q-points (IBZ):              %d" % self.nqpoints)
+        app(" BSE basis size (nk*nv*nc):   %d" % self.ntransitions)
+        app(" Exciton states available:     %d" % self.nexcitons_available)
+        app(" Exciton states loaded:        %d" % self.nexcitons)
         return "\n".join(lines)
