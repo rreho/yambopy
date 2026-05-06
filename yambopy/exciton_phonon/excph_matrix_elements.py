@@ -48,11 +48,11 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         If True, the matrix elements will be saved in .npz file `exph_file` with metadata. Default is True.
     overwrite : bool, optional
         If False and `exph_file` is found, the matrix elements will be loaded from file. Default is False.
-    save_excitons : bool, optional
+    save_excitons : str, optional
         If True, save all BSE eigenvectors and energies for the full BZ in a single `excitons.nc` file. Default is False.
     save_lattice : bool, optional
         If True, save lattice and symmetry information in a single `lattice.nc` file. Default is False.
-    save_dipoles : bool, optional
+    save_dipoles : str, optional
         If True, save expanded dipoles in `dipoles.nc` and exciton dipoles in `excitons.nc`. Default is False.
     """
     if Qrange is None: Qrange = [0,1]
@@ -131,7 +131,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              # Use the bands from the first exciton DB in the list
              bse_bands = exdbs[0].bs_bands
              dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=True,debug=False)
-             dipdb.save_nc('dipoles.nc')
+             dipdb.save_nc(save_dipoles)
         else:
              print('[WARNING] ndb.dipoles not found. Dipoles will not be saved.')
              save_dipoles = False
@@ -151,7 +151,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
     
     if save_excitons:
         bse_bnds_range = [wfdb.min_bnd, wfdb.min_bnd + wfdb.nbands]
-        YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, 'excitons.nc', dipdb=dipdb if save_dipoles else None, bands_range=bse_bnds_range)
+        YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, save_excitons, dipdb=dipdb if save_dipoles else None, bands_range=bse_bnds_range)
     
     if save_lattice:
         print('Saving lattice to lattice.nc...')
