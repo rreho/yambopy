@@ -502,62 +502,16 @@ class ExcitonDispersion():
         save_name = os.path.basename(save_dir) or save_dir
         return YamboWFDB(path=parent, save=save_name, latdb=self.lattice, bands_range=bands_range)
 
-    def _compute_spin_ibz(self, save_dir, bse_dir, contribution,
-                          sz=0.5 * np.array([[1, 0], [0, -1]])):
-        """
-        Compute S_z expectation values at all IBZ Q-points.
-        Returns spin_ibz of shape (nq_ibz, nexcitons).
-        """
-        from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
-
-        excdb_q1 = YamboExcitonDB.from_db_file(
-            self.lattice, filename='ndb.BS_diago_Q1',
-            folder=bse_dir, Load_WF=True, neigs=self.nexcitons
-        )
-        bands_range = [np.min(excdb_q1.table[:, 1]) - 1, np.max(excdb_q1.table[:, 2])]
-        wfdb    = self._make_wfdb(save_dir, bands_range)
-        elec_sz = wfdb.get_spin_m_e_BZ(s_z=sz)
-
-        spin_ibz = np.zeros((self.nqpoints, self.nexcitons))
-        for iq in range(self.nqpoints):
-            excdb = excdb_q1 if iq == 0 else YamboExcitonDB.from_db_file(
-                self.lattice, filename='ndb.BS_diago_Q%d' % (iq + 1),
-                folder=bse_dir, Load_WF=True, neigs=self.nexcitons
-            )
-            smat = compute_exciton_spin(
-                self.lattice, excdb, wfdb, elec_sz, contribution=contribution, diagonal=False
-            )
-            smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
-            vals = [v for group in smat for v in group]
-            spin_ibz[iq] = np.array(vals)[:self.nexcitons].real
-
-        return spin_ibz
-
-    def _expand_spin_to_full_bz(self, spin_ibz):
-        """
-        Expand S_z from IBZ to full BZ.
-        S_z is a pseudovector component: S_z -> R_zz * S_z under symmetry R.
-        """
-        nq_full   = len(self.lattice.kpoints_indexes)
-        spin_full = np.zeros((nq_full, self.nexcitons))
-        for iq_full, (iq_ibz, isym) in enumerate(
-            zip(self.lattice.kpoints_indexes, self.lattice.symmetry_indexes)
-        ):
-            Rzz = self.lattice.sym_red[isym][2, 2]
-            spin_full[iq_full] = Rzz * spin_ibz[iq_ibz]
-        return spin_full
-
     def _compute_spin_full_bz(self, save_dir, bse_dir, contribution,
                                sz=0.5 * np.array([[1, 0], [0, -1]]),
-                               dmat_mode='run', dmat_file='Dmats.npy',
-                               method='Rzz'):
+                               dmat_mode='run', dmat_file='Dmats.npy'):
         """
-        Compute S_z at all full-BZ Q-points.
-
-        method : 'Rzz'       — fast, applies R_zz symmetry transformation to IBZ spin
-                 'rotate_Ak' — slow, rotates exciton wavefunctions to each full-BZ Q-point
+        Compute S_z at all full-BZ Q-points by explicitly rotating the exciton
+        wavefunctions to each symmetry-equivalent Q-point.
+        Returns spin_full of shape (nq_full, nexcitons).
         """
         from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
+        from yambopy.exciton_phonon.excph_matrix_elements import rotate_Akcv_Q, save_or_load_dmat
 
         excdb_q1 = YamboExcitonDB.from_db_file(
             self.lattice, filename='ndb.BS_diago_Q1',
@@ -575,49 +529,32 @@ class ExcitonDispersion():
             for iq in range(1, self.nqpoints)
         ]
 
-        spin_ibz = np.zeros((self.nqpoints, self.nexcitons))
-        for iq, excdb in enumerate(exdbs):
+        nq_full   = len(self.lattice.kpoints_indexes)
+        spin_full = np.zeros((nq_full, self.nexcitons))
+        Dmats     = save_or_load_dmat(wfdb, mode=dmat_mode, dmat_file=dmat_file)
+
+        for iq_full in range(nq_full):
+            Qpt    = self.lattice.red_kpoints[iq_full]
+            rot_Ak = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=None)
+            iq_ibz = self.lattice.kpoints_indexes[iq_full]
+            excdb  = exdbs[iq_ibz]
+
+            original_get_Akcv = excdb.get_Akcv
+            excdb.get_Akcv    = lambda: rot_Ak
             smat = compute_exciton_spin(
                 self.lattice, excdb, wfdb, elec_sz, contribution=contribution, diagonal=False
             )
             smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
+            excdb.get_Akcv = original_get_Akcv
+
             vals = [v for group in smat for v in group]
-            spin_ibz[iq] = np.array(vals)[:self.nexcitons].real
+            spin_full[iq_full] = np.array(vals)[:self.nexcitons].real
 
-        if method == 'Rzz':
-            return self._expand_spin_to_full_bz(spin_ibz)
-
-        elif method == 'rotate_Ak':
-            from yambopy.exciton_phonon.excph_matrix_elements import rotate_Akcv_Q, save_or_load_dmat
-            nq_full   = len(self.lattice.kpoints_indexes)
-            spin_full = np.zeros((nq_full, self.nexcitons))
-            Dmats     = save_or_load_dmat(wfdb, mode=dmat_mode, dmat_file=dmat_file)
-
-            for iq_full in range(nq_full):
-                Qpt    = self.lattice.red_kpoints[iq_full]
-                rot_Ak = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=None)
-                iq_ibz = self.lattice.kpoints_indexes[iq_full]
-                excdb  = exdbs[iq_ibz]
-
-                original_get_Akcv = excdb.get_Akcv
-                excdb.get_Akcv    = lambda: rot_Ak
-                smat = compute_exciton_spin(
-                    self.lattice, excdb, wfdb, elec_sz, contribution=contribution, diagonal=False
-                )
-                smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
-                excdb.get_Akcv = original_get_Akcv
-
-                vals = [v for group in smat for v in group]
-                spin_full[iq_full] = np.array(vals)[:self.nexcitons].real
-
-            return spin_full
-
-        else:
-            raise ValueError("method must be 'Rzz' or 'rotate_Ak' — got '%s'" % method)
+        return spin_full
 
     def get_spin_along_path(self, path, tol=1e-3, expand_bz=True,
                             save_dir='SAVE', bse_dir='BSE', contribution='b',
-                            method='Rzz', dmat_mode='run', dmat_file='Dmats.npy'):
+                            dmat_mode='run', dmat_file='Dmats.npy'):
         """
         Compute S_z expectation values at the Q-points that lie along the path.
 
@@ -639,7 +576,7 @@ class ExcitonDispersion():
         _, q_indices, _, _, _ = self._project_qpts_onto_path(path, tol=tol, expand_bz=expand_bz)
         spin_full = self._compute_spin_full_bz(
             save_dir, bse_dir, contribution,
-            dmat_mode=dmat_mode, dmat_file=dmat_file, method=method
+            dmat_mode=dmat_mode, dmat_file=dmat_file
         )
         return spin_full[q_indices]
 
