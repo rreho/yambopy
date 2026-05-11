@@ -719,6 +719,149 @@ class ExcitonDispersion():
         return fig, ax
 
     # ------------------------------------------------------------------
+    # Orbital-projected exciton dispersion
+    # ------------------------------------------------------------------
+
+    def get_orbital_weights(self, projwfc, selected_orbitals, contribution='both'):
+        """
+        Compute orbital-projected exciton weights.
+
+        For each Q-point and exciton state S, computes:
+            W^S(Q) = sum_{kvc} |A^S_{kvc}(Q)|^2 * w_orb(k, v, c)
+        where w_orb is the sum of |<psi_kn|phi_o>|^2 over selected_orbitals,
+        with n = v, c, or their average depending on `contribution`.
+
+        Parameters
+        ----------
+        projwfc           : ProjwfcXML — QE orbital projections (same k-grid as yambo)
+        selected_orbitals : list of int — state indices (0-based, from get_states_helper)
+        contribution      : 'valence' | 'conduction' | 'both' (default)
+
+        Returns
+        -------
+        weights : (nqpoints, nexcitons) float array
+        """
+        if self.exc_eigenvectors is None:
+            raise RuntimeError("Eigenvectors not loaded. Use load_eigenvectors=True.")
+
+        w_qe = projwfc.get_weights(selected_orbitals=selected_orbitals)  # (nk, nbands)
+
+        k_idx = self.exc_table[:, 0] - 1  # (ntransitions,) 0-based
+        v_idx = self.exc_table[:, 1] - 1
+        c_idx = self.exc_table[:, 2] - 1
+
+        if contribution == 'valence':
+            w_t = w_qe[k_idx, v_idx]
+        elif contribution == 'conduction':
+            w_t = w_qe[k_idx, c_idx]
+        elif contribution == 'both':
+            w_t = 0.5 * (w_qe[k_idx, v_idx] + w_qe[k_idx, c_idx])
+        else:
+            raise ValueError("contribution must be 'valence', 'conduction', or 'both'")
+
+        A2 = np.abs(self.exc_eigenvectors) ** 2          # (nq, nexcitons, ntransitions)
+        return np.einsum('qst,t->qs', A2, w_t)           # (nq, nexcitons)
+
+    def plot_orbital_projected_dispersion(
+        self, path, projwfc, orbital_groups,
+        contribution='both', tol=1e-3, expand_bz=True,
+        interpolate=False, method='cubic_spline', npts=300, lpratio=6, nelect=1,
+        s=200, lw=1.5, line_color='black', ylim=None, figsize=(8, 5), title=None,
+    ):
+        """
+        Exciton dispersion with marker size proportional to orbital character.
+
+        Orbital weights are only shown on the computed Q-points (scatter).
+        When interpolate=True, a thin line connects the energies to guide the eye
+        but the line is NOT orbital-projected (interpolating weights is unreliable).
+
+        Parameters
+        ----------
+        path          : Path object
+        projwfc       : ProjwfcXML — QE orbital projections
+        orbital_groups: list of dicts, each with:
+                          'orbitals' : list of state indices (from get_states_helper)
+                          'color'    : matplotlib color
+                          'label'    : legend label
+        contribution  : 'valence' | 'conduction' | 'both' (default)
+        tol           : Q-point path tolerance in Ang^-1
+        expand_bz     : include symmetry-expanded Q-points (shown as triangles)
+        interpolate   : if True, draw interpolated line beneath the scatter dots
+        method        : interpolation method — 'cubic_spline' | 'rbf' | 'skw' | 'nn'
+        npts          : number of dense points for the interpolated line
+        lpratio, nelect : SKW parameters
+        s             : base marker area (weight=1.0 → area=s)
+        lw            : line width for the interpolated line
+        line_color    : color of the interpolated line
+        ylim          : (ymin, ymax) energy window in eV
+        figsize, title: figure layout
+
+        Example
+        -------
+        groups = [
+            {'orbitals': proj.get_states_helper(['Mo'], ['d']), 'color': 'red',  'label': 'Mo-d'},
+            {'orbitals': proj.get_states_helper(['S'],  ['p']), 'color': 'blue', 'label': 'S-p'},
+        ]
+        fig, ax = exc_disp.plot_orbital_projected_dispersion(path, proj, groups,
+                                                             interpolate=True)
+        """
+        fig, ax = plt.subplots(figsize=figsize)
+
+        if interpolate:
+            dense_x, dense_e, scatter_x, scatter_e, is_ibz, boundaries, labels = \
+                self.get_dispersion_interpolated(
+                    path, method=method, npts=npts, tol=tol, expand_bz=expand_bz,
+                    lpratio=lpratio, nelect=nelect,
+                )
+            for ib in range(self.nexcitons):
+                ax.plot(dense_x, dense_e[:, ib], color=line_color, lw=lw, zorder=1)
+            _, q_indices, _, _, _ = self._project_qpts_onto_path(
+                path, tol=tol, expand_bz=expand_bz
+            )
+        else:
+            scatter_x, q_indices, is_ibz, boundaries, labels = \
+                self._project_qpts_onto_path(path, tol=tol, expand_bz=expand_bz)
+            energies_full = self.exc_energies[self.lattice.kpoints_indexes]
+            scatter_e     = energies_full[q_indices]      # (N, nexcitons)
+
+        for group in orbital_groups:
+            orb_weights  = self.get_orbital_weights(
+                projwfc, group['orbitals'], contribution=contribution
+            )                                             # (nq_ibz, nexcitons)
+            weights_full = orb_weights[self.lattice.kpoints_indexes]
+            scatter_w    = weights_full[q_indices]        # (N, nexcitons)
+
+            color = group.get('color', 'black')
+            label = group.get('label', '')
+
+            for ib in range(self.nexcitons):
+                for mask, marker in [(is_ibz, 'o'), (~is_ibz, '^')]:
+                    if not mask.any():
+                        continue
+                    lab = label if (ib == 0 and marker == 'o') else '_' + label
+                    ax.scatter(
+                        scatter_x[mask], scatter_e[mask, ib],
+                        s=scatter_w[mask, ib] * s,
+                        color=color, marker=marker, label=lab,
+                        edgecolors='none', linewidths=0, zorder=3,
+                    )
+
+        for x in boundaries:
+            ax.axvline(x, color='gray', lw=1.5, ls='--')
+        ax.set_xticks(boundaries)
+        ax.set_xticklabels(labels)
+        ax.set_xlim(boundaries[0], boundaries[-1])
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        ax.set_ylabel("Exciton energy (eV)")
+        if title is None:
+            title = "Orbital-projected exciton dispersion (%s)" % contribution
+        ax.set_title(title)
+        ax.legend()
+        plt.tight_layout()
+        return fig, ax
+
+    # ------------------------------------------------------------------
 
     def __str__(self):
         lines = []; app = lines.append
