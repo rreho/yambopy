@@ -746,9 +746,14 @@ class ExcitonDispersion():
 
         w_qe = projwfc.get_weights(selected_orbitals=selected_orbitals)  # (nk, nbands)
 
-        k_idx = self.exc_table[:, 0] - 1  # (ntransitions,) 0-based
+        k_idx = self.exc_table[:, 0] - 1  # (ntransitions,) 0-based, full-BZ indices
         v_idx = self.exc_table[:, 1] - 1
         c_idx = self.exc_table[:, 2] - 1
+
+        # If projwfc was run on the IBZ only, map full-BZ k-indices to IBZ.
+        # Orbital projections are invariant under crystal symmetry operations.
+        if w_qe.shape[0] == self.lattice.ibz_nkpoints and hasattr(self.lattice, 'kpoints_indexes'):
+            k_idx = self.lattice.kpoints_indexes[k_idx]
 
         if contribution == 'valence':
             w_t = w_qe[k_idx, v_idx]
