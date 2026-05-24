@@ -153,7 +153,23 @@ class YamboDipolesDB():
             spin = database.variables['SPIN_VARS'][0].astype(int)
             min_band, max_band, indexv, indexc = database.variables['PARS'][:4].astype(int)
             dip_bands_ordered = database.variables['PARS'][8].astype(int)
-            
+
+            # db_min_band / db_indexv / db_indexc are the values stored in the DB header
+            # (Fortran 1-indexed).  They must NOT be overwritten because all slice indices
+            # into the on-disk array are relative to db_min_band, not to absolute band 1.
+            #
+            # Fortran storage (io_DIPOLES.F):
+            #   DIP_size = (2, 3, nc_db, nv_db)  with
+            #     nv_db = db_ib_lim(1) - db_ib(1)   + 1  =  db_indexv  - db_min_band + 1
+            #     nc_db = db_ib(2)     - db_ib_lim(2)+ 1  =  db_max_band - db_indexc  + 1
+            # NetCDF/Python reverses dims → array shape per (spin,k): (nv_db, nc_db, 3, 2)
+            # Band `b` (Fortran 1-indexed) lives at Python index  b - db_min_band  in the v dim
+            # and at Python index  b - db_indexc  in the c dim.
+            db_min_band = min_band   # PARS[0] = db_ib(1)
+            db_max_band = max_band   # PARS[1] = db_ib(2)
+            db_indexv   = indexv     # PARS[2] = db_ib_lim(1) — top valence  (Fortran 1-indexed)
+            db_indexc   = indexc     # PARS[3] = db_ib_lim(2) — bottom cond  (Fortran 1-indexed)
+
             # Determine the number of bands to read
             # We have four cases:
             # 1. full  range and     bands_ordered -> dipoles[0:Nv,0:Nc]
@@ -167,21 +183,25 @@ class YamboDipolesDB():
 
             # Cases 3. and 4.
             if len(bands_range) != 0:  # Custom selection of bands range
-                if bands_range[0] not in range(min_band,indexv+1) or bands_range[1] not in range(indexc,max_band+1):
-                    raise ValueError(f"[ERROR] invalid bands_range, db contains [{min_band},{max_band}]")
-                
+                if bands_range[0] not in range(db_min_band,db_indexv+1) or bands_range[1] not in range(db_indexc,db_max_band+1):
+                    raise ValueError(f"[ERROR] invalid bands_range, db contains [{db_min_band},{db_max_band}]")
+
                 min_band = min(bands_range)
                 max_band = max(bands_range)
-                nbands   = max_band-min_band+1  
+                nbands   = max_band-min_band+1
 
-                if dip_bands_ordered: # Standard case  
-                    nbandsv = indexv-min_band+1
-                    nbandsc = max_band-indexc+1
-                    indexv = indexv-1
-                    indexc = indexc-1 
+                if dip_bands_ordered: # Standard case
+                    nbandsv = db_indexv-min_band+1
+                    nbandsc = max_band-db_indexc+1
+                    indexv = db_indexv-1
+                    indexc = db_indexc-1
                     nbands1, nbands2 = [nbandsv, nbandsc]
-                    start_idx_v, start_idx_c = [bands_range[0]-1,0]
-                    end_idx_v, end_idx_c = [indexv+1, nbandsc]
+                    # Slice indices are RELATIVE to db_min_band (the first band stored in the DB).
+                    # Using absolute Python indices (bands_range[0]-1) only works when db_min_band==1.
+                    start_idx_v = bands_range[0] - db_min_band
+                    start_idx_c = 0
+                    end_idx_v   = db_indexv - db_min_band + 1   # = nv_db (always read up to top-val)
+                    end_idx_c   = nbandsc
 
                 if not dip_bands_ordered: # Yambo calculation with DipBandsALl
                     nbandsv = lattice.nbandsv-min_band+1
@@ -189,8 +209,10 @@ class YamboDipolesDB():
                     indexv  = nbandsv-1
                     indexc  = nbandsv
                     nbands1, nbands2 = [nbands, nbands]
-                    start_idx_v, start_idx_c = [bands_range[0]-1,bands_range[0]-1]
-                    end_idx_v, end_idx_c = [bands_range[1], bands_range[1]]
+                    start_idx_v = bands_range[0] - db_min_band
+                    start_idx_c = bands_range[0] - db_min_band
+                    end_idx_v   = bands_range[1] - db_min_band + 1
+                    end_idx_c   = bands_range[1] - db_min_band + 1
 
             # Cases 1. and 2.
             if len(bands_range) == 0:    # Read full database
@@ -216,6 +238,7 @@ class YamboDipolesDB():
                     end_idx_v, end_idx_c = [nbands, nbands]
 
             if debug: # headache
+                print(f"db_min_band: {db_min_band}  db_max_band: {db_max_band}  db_indexv: {db_indexv}  db_indexc: {db_indexc}")
                 print(f"max_band: {max_band}")
                 print(f"min_band: {min_band}")
                 print(f"spin: {spin}")
