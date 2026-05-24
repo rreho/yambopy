@@ -146,11 +146,21 @@ def exc_dipoles_pol(lattice_path,dipoles_path=None,bse_path=None,save_files=True
 
 def quick_read_dipoles(filename,bands_range,nbandsv,dip_type='iR'):
     """
-    Quickly read unprojected, unexpanded dipoles without worrying
-    for compatibility with other classes
+    Quickly read unprojected, unexpanded dipoles <c|dip_type|v> without
+    going through YamboDipolesDB (robust fallback for edge cases).
 
-    :: bands_range is mandatory, as well as nbandsv
+    Handles both dip_bands_ordered=True and False.
 
+    DB array layout in NetCDF (Fortran col-major reversed to C row-major):
+      bands_ordered=True:  (spin, nk, nv_db, nc_db, 3, 2)
+      bands_ordered=False: (spin, nk, nbands_db, nbands_db, 3, 2)
+    All dimensions are relative to db_min_band (PARS[0]), NOT absolute band indices.
+    Band b (Fortran 1-indexed) lives at Python index  b - db_min_band  in the array.
+
+    :: bands_range  mandatory, Fortran 1-indexed [min_band, max_band]
+    :: nbandsv      kept for backward compatibility (unused; db_indexv read from PARS)
+
+    Returns dipoles with shape (nk, 3, nc, nv) [spin=1] or (2, nk, 3, nc, nv) [spin=2].
     """
     from yambopy.tools.types import CmplxType
     with Dataset(filename) as database:
@@ -158,23 +168,41 @@ def quick_read_dipoles(filename,bands_range,nbandsv,dip_type='iR'):
         nq_ibz, nq_bz, nk_ibz, nk_bz = database.variables['HEAD_R_LATT'][:].astype(int)
         spin = database.variables['SPIN_VARS'][0].astype(int)
 
-        # We assume the not_band_ordered case:
-        # We read dipoles[i_v:f_c,i_v:f_c] 
+        # DB header: all Fortran 1-indexed
+        db_min_band, db_max_band, db_indexv, db_indexc = database.variables['PARS'][:4].astype(int)
+        dip_bands_ordered = database.variables['PARS'][8].astype(int)
 
         min_band = min(bands_range)
         max_band = max(bands_range)
-        nbands   = max_band-min_band+1
 
-        i_v = bands_range[0]-1
-        f_c = bands_range[1]
-        n_v_included = nbandsv-i_v
+        if dip_bands_ordered:
+            # DB array: (spin, nk, nv_db, nc_db, 3, 2)
+            #   nv_db = db_indexv  - db_min_band + 1
+            #   nc_db = db_max_band - db_indexc   + 1
+            # Slice indices relative to db_min_band (valence) / db_indexc (conduction)
+            sv = min_band  - db_min_band          # first valence index in array
+            ev = db_indexv - db_min_band + 1      # last+1  (= nv_db, always up to top-val)
+            sc = 0                                # conduction always starts at db_indexc
+            ec = max_band  - db_indexc   + 1      # last+1 conduction index in array
+            nv = db_indexv - min_band    + 1      # valence  bands in output
+            nc = max_band  - db_indexc   + 1      # conduction bands in output
 
-        dipoles = database[f'DIP_{dip_type}'][:,:,i_v:f_c,i_v:f_c,:].data # Read as nk,nv,nc,ir
-        dipoles = dipoles.view(dtype=CmplxType(dipoles)).reshape((spin,nk_ibz,nbands,nbands,3))
+            raw = database[f'DIP_{dip_type}'][:,:,sv:ev,sc:ec,:].data
+            dipoles = raw.view(dtype=CmplxType(raw)).reshape((spin,nk_ibz,nv,nc,3))
+
+        else:
+            # DB array: (spin, nk, nbands_db, nbands_db, 3, 2)  (square, all transitions)
+            # Slice to requested range; indices relative to db_min_band
+            sb     = min_band - db_min_band
+            eb     = max_band - db_min_band + 1
+            nbands = max_band - min_band + 1
+            nv     = db_indexv - min_band + 1     # valence bands within requested range
+
+            raw = database[f'DIP_{dip_type}'][:,:,sb:eb,sb:eb,:].data
+            dipoles = raw.view(dtype=CmplxType(raw)).reshape((spin,nk_ibz,nbands,nbands,3))
+            dipoles = dipoles[...,nv:,:nv]        # cv only: (spin, nk, nc, nv, 3)
 
     if spin==1: dipoles = np.squeeze(dipoles,axis=0)
-    dipoles = np.swapaxes(dipoles,spin,spin+2) # Swap indices
-    
-    dipoles = dipoles[...,n_v_included:,:n_v_included] # cv only
+    dipoles = np.swapaxes(dipoles,spin,spin+2)    # → (nk, 3, nc, nv) or (2, nk, 3, nc, nv)
 
     return dipoles
