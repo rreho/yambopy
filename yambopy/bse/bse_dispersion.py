@@ -600,7 +600,8 @@ class ExcitonDispersion():
     def plot_exciton_dispersion(self, path, interpolate=False, method='cubic_spline',
                                 npts=300, tol=1e-3, expand_bz=True,
                                 ylim=None, figsize=(8, 5), title="Exciton dispersion",
-                                spin_data=None, lpratio=6, nelect=1, s=80):
+                                spin_data=None, lpratio=6, nelect=1, s=80,
+                                alpha=0.7, **scatter_kw):
         """
         Plot the exciton dispersion.
 
@@ -618,6 +619,8 @@ class ExcitonDispersion():
                       — dots colored red (up) / blue (down), norm vmin=-0.5 vmax=0.5
                       — interpolated line colored by S_z splined onto the dense grid
         s           : marker size
+        alpha       : marker transparency (default 0.7); pass 1.0 for fully opaque
+        scatter_kw  : extra keyword arguments forwarded to ax.scatter
         lpratio, nelect : SKW parameters
         """
         fig, ax = plt.subplots(figsize=figsize)
@@ -627,7 +630,7 @@ class ExcitonDispersion():
 
         def _scatter_band(x, y, is_ibz, color=None, c=None):
             """Draw computed points as circles, expanded points as triangles."""
-            kw_shared = dict(s=s, linewidths=0, zorder=3)
+            kw_shared = dict(s=s, linewidths=0, zorder=3, alpha=alpha, **scatter_kw)
             for mask, marker in [(is_ibz, 'o'), (~is_ibz, '^')]:
                 if not mask.any():
                     continue
@@ -681,8 +684,9 @@ class ExcitonDispersion():
                         if not mask.any():
                             continue
                         ax.scatter(scatter_x[mask], scatter_e[mask, ib],
-                                   s=s, marker=marker, zorder=3,
-                                   facecolors='none', edgecolors='black', linewidths=1.5)
+                                   s=s, marker=marker, zorder=3, alpha=alpha,
+                                   facecolors='none', edgecolors='black', linewidths=1.5,
+                                   **scatter_kw)
         else:
             scatter_x, scatter_e, is_ibz, boundaries, labels = \
                 self.get_dispersion(path, tol=tol, expand_bz=expand_bz)
@@ -772,6 +776,7 @@ class ExcitonDispersion():
         contribution='both', tol=1e-3, expand_bz=True,
         interpolate=False, method='cubic_spline', npts=300, lpratio=6, nelect=1,
         s=200, lw=1.5, line_color='black', ylim=None, figsize=(8, 5), title=None,
+        alpha=0.7, **scatter_kw,
     ):
         """
         Exciton dispersion with marker size proportional to orbital character.
@@ -796,6 +801,8 @@ class ExcitonDispersion():
         npts          : number of dense points for the interpolated line
         lpratio, nelect : SKW parameters
         s             : base marker area (weight=1.0 → area=s)
+        alpha         : marker transparency (default 0.7); pass 1.0 for fully opaque
+        scatter_kw    : extra keyword arguments forwarded to ax.scatter
         lw            : line width for the interpolated line
         line_color    : color of the interpolated line
         ylim          : (ymin, ymax) energy window in eV
@@ -849,6 +856,7 @@ class ExcitonDispersion():
                         s=scatter_w[mask, ib] * s,
                         color=color, marker=marker, label=lab,
                         edgecolors='none', linewidths=0, zorder=3,
+                        alpha=alpha, **scatter_kw,
                     )
 
         for x in boundaries:
