@@ -16,6 +16,10 @@ from yambopy.plot.plotting import add_fig_kwargs, BZ_Wigner_Seitz, shifted_grids
 from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red, red_car
 from yambopy.dbs.latticedb import YamboLatticeDB
 from yambopy.kpoints import get_path
+from yambopy.tools.band_interpolation import (
+    interp_cubic_spline_1d, interp_rbf_2d, interp_skw, interp_nn,
+    interp_spin_along_1d_path
+)
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -319,96 +323,8 @@ class ExcitonDispersion():
         return path_coords[order], q_indices[order], is_ibz[order], boundaries, labels
 
     # ------------------------------------------------------------------
-    # Interpolation helpers
+    # Interpolation (via generalized utilities in tools.band_interpolation)
     # ------------------------------------------------------------------
-
-    def _interp_cubic_spline(self, scatter_x, scatter_energies, dense_x):
-        """1D cubic spline along the path distance coordinate, per band."""
-        from scipy.interpolate import CubicSpline
-
-        # Average duplicates then sort
-        unique_x, inv = np.unique(np.round(scatter_x, decimals=10), return_inverse=True)
-        nbands  = scatter_energies.shape[1]
-        counts  = np.bincount(inv, minlength=len(unique_x)).astype(float)
-        unique_e = np.zeros((len(unique_x), nbands))
-        for ib in range(nbands):
-            unique_e[:, ib] = (
-                np.bincount(inv, weights=scatter_energies[:, ib], minlength=len(unique_x)) / counts
-            )
-
-        if len(unique_x) < 3:
-            raise ValueError(
-                "Too few Q-points on path for cubic spline (%d found, need >= 3). "
-                "Increase tol or use method='nn'." % len(unique_x)
-            )
-
-        dense_e = np.zeros((len(dense_x), nbands))
-        for ib in range(nbands):
-            dense_e[:, ib] = CubicSpline(unique_x, unique_e[:, ib])(dense_x)
-        return dense_e
-
-    def _interp_rbf(self, car_pts_target, eigens_ibz=None, eigens_full=None):
-        """RBF interpolation in the 2D BZ plane. Tries kernels in order until one succeeds."""
-        from scipy.interpolate import RBFInterpolator
-
-        car_qpts_full = red_car(self.lattice.red_kpoints, self.rlat)
-        if eigens_full is None:
-            eigens_full = self.exc_energies[self.lattice.kpoints_indexes]
-
-        # Fold both source and target to [-0.5, 0.5) for BZ-boundary consistency
-        def fold_to_2d(car_pts):
-            red = car_red(car_pts, self.rlat)
-            return red_car((red + 0.5) % 1.0 - 0.5, self.rlat)[:, :2]
-
-        pts_2d    = fold_to_2d(car_qpts_full)
-        target_2d = fold_to_2d(car_pts_target)
-        nbands    = eigens_full.shape[1]
-        result    = np.zeros((len(car_pts_target), nbands))
-
-        for kernel in ['linear', 'thin_plate_spline', 'multiquadric', 'gaussian']:
-            try:
-                for ib in range(nbands):
-                    result[:, ib] = RBFInterpolator(
-                        pts_2d, eigens_full[:, ib], kernel=kernel, smoothing=0.
-                    )(target_2d)
-                print("RBF kernel '%s' succeeded" % kernel)
-                return result
-            except Exception as e:
-                print("RBF kernel '%s' failed: %s" % (kernel, e))
-
-        raise RuntimeError("All RBF kernels failed")
-
-    def _interp_skw(self, red_kpts_target, lpratio=6, nelect=1):
-        """Star-function Wannier–Fourier interpolation (SKW)."""
-        from yambopy.tools.skw import SkwInterpolator
-
-        latnp   = self.lattice.lat
-        sym_rel = np.stack([
-            np.round(np.linalg.inv(latnp) @ s @ latnp)
-            for s in self.lattice.sym_car
-        ])
-
-        skw = SkwInterpolator(
-            lpratio    = lpratio,
-            kpts       = self.red_qpoints,
-            eigens     = self.exc_energies[np.newaxis, :, :],  # (1, nq_ibz, nbands)
-            fermie     = 0.0,
-            nelect     = nelect,
-            cell       = (self.lattice.lat,
-                          self.lattice.red_atomic_positions,
-                          self.lattice.atomic_numbers),
-            symrel     = sym_rel,
-            has_timrev = bool(self.lattice.time_rev),
-            verbose    = 0,
-        )
-        print("SKW MAE = %.3f meV" % skw.mae)
-        return skw.interp_kpts(red_kpts_target).eigens[0]  # (npts, nbands)
-
-    def _interp_nn(self, red_kpts_target, eigens_full):
-        """Nearest-neighbour interpolation on the full-BZ grid."""
-        from scipy.spatial import cKDTree
-        _, idx = cKDTree(self.lattice.red_kpoints).query(red_kpts_target)
-        return eigens_full[idx]
 
     # ------------------------------------------------------------------
     # Dispersion (scatter — no interpolation)
@@ -473,13 +389,24 @@ class ExcitonDispersion():
         dense_x, dense_car, dense_red = self._dense_path(path, npts)
 
         if method == 'cubic_spline':
-            dense_energies = self._interp_cubic_spline(scatter_x, scatter_energies, dense_x)
+            dense_energies = interp_cubic_spline_1d(scatter_x, scatter_energies, dense_x)
         elif method == 'rbf':
-            dense_energies = self._interp_rbf(dense_car, eigens_ibz=self.exc_energies)
+            car_qpts_full = red_car(self.lattice.red_kpoints, self.rlat)
+            dense_energies = interp_rbf_2d(car_qpts_full, energies_full, dense_car, self.rlat)
         elif method == 'skw':
-            dense_energies = self._interp_skw(dense_red, lpratio=lpratio, nelect=nelect)
+            latnp = self.lattice.lat
+            sym_rel = np.stack([
+                np.round(np.linalg.inv(latnp) @ s @ latnp)
+                for s in self.lattice.sym_car
+            ])
+            dense_energies = interp_skw(
+                self.red_qpoints, self.exc_energies, dense_red,
+                (self.lattice.lat, self.lattice.red_atomic_positions, self.lattice.atomic_numbers),
+                sym_rel, has_timrev=bool(self.lattice.time_rev),
+                lpratio=lpratio, nelect=nelect, verbose=0
+            )
         elif method == 'nn':
-            dense_energies = self._interp_nn(dense_red, energies_full)
+            dense_energies = interp_nn(self.lattice.red_kpoints, energies_full, dense_red)
         else:
             raise ValueError(
                 "method must be 'cubic_spline', 'rbf', 'skw', or 'nn' — got '%s'" % method
@@ -581,17 +508,8 @@ class ExcitonDispersion():
         return spin_full[q_indices]
 
     def _interp_spin_dense(self, scatter_x, spin_band, dense_x):
-        """
-        Interpolate per-band S_z from scatter Q-points onto the dense path grid.
-        Duplicated x-positions are averaged before spline fitting.
-        """
-        from scipy.interpolate import CubicSpline
-        unique_x, inv = np.unique(np.round(scatter_x, decimals=10), return_inverse=True)
-        counts   = np.bincount(inv, minlength=len(unique_x)).astype(float)
-        unique_s = np.bincount(inv, weights=spin_band, minlength=len(unique_x)) / counts
-        if len(unique_x) < 2:
-            return np.full(len(dense_x), unique_s[0])
-        return CubicSpline(unique_x, unique_s, extrapolate=True)(dense_x)
+        """Interpolate per-band S_z from scatter Q-points onto the dense path grid."""
+        return interp_spin_along_1d_path(scatter_x, spin_band, dense_x)
 
     # ------------------------------------------------------------------
     # Plotting

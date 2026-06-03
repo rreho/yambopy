@@ -286,14 +286,19 @@ class YamboQPDB():
         fermie = kwargs.pop('fermie',0)
 
         #consistency check with lattice points
-        if len(lattice.iku_kpoints)!=len(self.kpoints_iku):
-            print(len(lattice.iku_kpoints),len(self.kpoints_iku))
-            raise ValueError("The QP database is not consistent with the lattice")
+        if len(lattice.iku_kpoints) != len(self.kpoints_iku):
+            raise ValueError(
+                "QP database has %d k-points but lattice has %d. Incompatible k-grids."
+                % (len(self.kpoints_iku), len(lattice.iku_kpoints))
+            )
 
-        if not np.isclose(lattice.iku_kpoints,self.kpoints_iku).all():
-            print(lattice.iku_kpoints)
-            print(self.kpoints_iku)
-            raise ValueError("The QP database is not consistent with the lattice")
+        # Check k-points match (order-agnostic, with tolerance for numerical precision)
+        lat_kpts_sorted = np.sort(lattice.iku_kpoints.view(np.void), axis=0).view(np.float64).reshape(-1, 3)
+        qp_kpts_sorted = np.sort(self.kpoints_iku.view(np.void), axis=0).view(np.float64).reshape(-1, 3)
+        if not np.allclose(lat_kpts_sorted, qp_kpts_sorted, atol=1e-6):
+            raise ValueError(
+                "QP k-points do not match lattice k-points. Check that both come from the same calculation."
+            )
 
         #interpolate the dft eigenvalues
         kpoints = lattice.red_kpoints
