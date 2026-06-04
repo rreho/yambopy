@@ -275,111 +275,146 @@ class YamboQPDB():
 
         return ks_bandstructure, qp_bandstructure
 
-    def interpolate(self,lattice,path,what='QP+KS',lpratio=5,valence=None,verbose=1,**kwargs):
+    def interpolate(self, lattice, path, what='QP+KS', npts=300, method='cubic_spline',
+                    valence=None, verbose=1, **kwargs):
         """
-        Interpolate the QP bandstrcture on a k-point path, requires the lattice structure with Expand=False
+        Interpolate QP band structure along a k-path using cubic spline (robust, no SKW MAE issues).
+
+        Parameters
+        ----------
+        lattice : YamboLatticeDB
+        path : qepy.lattice.Path
+        what : str, 'QP+KS' | 'QP' | 'KS' (eigenvalues to interpolate)
+        npts : int, dense points along path
+        method : str, interpolation method (currently only 'cubic_spline')
+        valence : int, optional (for setting Fermi level)
         """
-        from yambopy.tools.band_interpolation import interp_skw
+        from yambopy.tools.band_interpolation import interp_cubic_spline_1d
+        from scipy.interpolate import CubicSpline
 
-        cell = (lattice.lat, lattice.red_atomic_positions, lattice.atomic_numbers)
-        nelect = 0
-        fermie = kwargs.pop('fermie',0)
-
-        #consistency check with lattice points
-        if len(lattice.iku_kpoints) != len(self.kpoints_iku):
+        # Validate k-grids
+        lat_nkpts = lattice.ibz_nkpoints if hasattr(lattice, 'ibz_nkpoints') else len(lattice.ibz_kpoints)
+        if lat_nkpts != self.nkpoints:
             raise ValueError(
-                "QP database has %d k-points but lattice has %d. Incompatible k-grids."
-                % (len(self.kpoints_iku), len(lattice.iku_kpoints))
+                "QP database has %d k-points but lattice IBZ has %d. Incompatible k-grids."
+                % (self.nkpoints, lat_nkpts)
             )
 
-        #interpolate the dft eigenvalues
-        kpoints = lattice.red_kpoints
-        sym_rec  = lattice.sym_rec
-        if not lattice.mag_syms:
-            symrel = [sym for sym,trev in zip(lattice.sym_rec_red,lattice.time_rev_list) if trev==False ]
-            trev_for_interp = lattice.time_rev
-        # Handle special case of mag_sys + trev (e.g. SOC + ferromagnet, etc)
-        elif lattice.time_rev:
-            symrel = lattice.sym_rec_red
-            trev_for_interp=False
-        
-        band_kpoints_rlu = path.get_klist()[:,:3]
+        # Path geometry
+        klist = path.get_klist()
+        band_kpoints_rlu = klist[:, :3]
+        _, _, path_car = get_path(lattice.car_kpoints, lattice.rlat, lattice.sym_car, path)
+        band_kpoints = red_car(band_kpoints_rlu, lattice.rlat)
 
-        # Obtain quantities in cc needed for plot (since interpolation wants rlu)
-        _, _, path_car = get_path(lattice.car_kpoints,lattice.rlat,lattice.sym_car,path)
-        band_kpoints = red_car(band_kpoints_rlu,lattice.rlat)
+        # High-symmetry point boundaries on path
+        seg_ends = red_car(band_kpoints_rlu[np.concatenate([[0], np.cumsum(path.intervals)])],
+                          lattice.rlat)
+        seg_lens = np.linalg.norm(np.diff(seg_ends, axis=0), axis=1)
+        boundaries = np.concatenate([[0.], np.cumsum(seg_lens)])
 
-        #interpolate KS
+        # Dense path
+        dense_x = np.linspace(0., boundaries[-1], npts)
+
+        # Generate dense k-points along path (for YambopyBandStructure)
+        seg_endpoints_car = red_car(band_kpoints_rlu[np.concatenate([[0], np.cumsum(path.intervals)])],
+                                    lattice.rlat)
+        dense_car = np.array([
+            np.interp(dense_x, boundaries, seg_endpoints_car[:, i])
+            for i in range(3)
+        ]).T
+        dense_red = car_red(dense_car, lattice.rlat)
+
+        # Project QP k-points onto path and get path distance for each
+        car_qp_kpts = red_car(self.kpoints_iku, lattice.rlat)
+        scatter_x = self._project_kpts_to_path_distance(
+            car_qp_kpts, band_kpoints, path
+        )
+
         ks_ebands, qp_ebands = None, None
+
         if 'KS' in what:
-           if self.spin == True:
-              print('Spin-polarized bands DFT')
-              dft_eigens_kpath = interp_skw(
-                  kpoints, self.eigenvalues_dft, band_kpoints_rlu,
-                  cell, symrel, has_timrev=trev_for_interp,
-                  lpratio=lpratio, nelect=nelect, fermie=fermie, verbose=verbose
-              )
-              dft_eigens_up_kpath = dft_eigens_kpath[:,:,0]
-              dft_eigens_dw_kpath = dft_eigens_kpath[:,:,1]
-
-              ks_ebands_up = YambopyBandStructure(dft_eigens_up_kpath,band_kpoints,kpath=path_car,**kwargs)
-              ks_ebands_dw = YambopyBandStructure(dft_eigens_dw_kpath,band_kpoints,kpath=path_car,**kwargs)
-
-           else:
-              print('No spin-polarized bands DFT')
-              dft_eigens_kpath = interp_skw(
-                  kpoints, self.eigenvalues_dft, band_kpoints_rlu,
-                  cell, symrel, has_timrev=trev_for_interp,
-                  lpratio=lpratio, nelect=nelect, fermie=fermie, verbose=verbose
-              )
-              if valence: kwargs['fermie'] = np.max(dft_eigens_kpath[:,:valence])
-              ks_ebands = YambopyBandStructure(dft_eigens_kpath,band_kpoints,kpath=path_car,**kwargs)
-
-        #interpolate QP
-        if 'QP' in what:
-            print('GW eigenvalues are sorted in ascending energy')
             if self.spin == True:
-               print('Spin-polarized bands QP')
-               eigens_sorted = np.array(self.eigenvalues_qp)
-               for ik in range(self.nkpoints):
-                   eigens_sorted[ik,:,0] = np.sort(eigens_sorted[ik,:,0])
-                   eigens_sorted[ik,:,1] = np.sort(eigens_sorted[ik,:,1])
-
-               qp_eigens_kpath = interp_skw(
-                   kpoints, eigens_sorted, band_kpoints_rlu,
-                   cell, symrel, has_timrev=trev_for_interp,
-                   lpratio=lpratio, nelect=nelect, fermie=fermie, verbose=verbose
-               )
-               qp_eigens_up_kpath = qp_eigens_kpath[:,:,0]
-               qp_eigens_dw_kpath = qp_eigens_kpath[:,:,1]
-
-               qp_ebands_up = YambopyBandStructure(qp_eigens_up_kpath,band_kpoints,kpath=path_car,**kwargs)
-               qp_ebands_dw = YambopyBandStructure(qp_eigens_dw_kpath,band_kpoints,kpath=path_car,**kwargs)
-
+                ks_up = interp_cubic_spline_1d(scatter_x, self.eigenvalues_dft[:, :, 0], dense_x)
+                ks_dw = interp_cubic_spline_1d(scatter_x, self.eigenvalues_dft[:, :, 1], dense_x)
+                ks_ebands_up = YambopyBandStructure(ks_up, dense_car, kpath=path_car, **kwargs)
+                ks_ebands_dw = YambopyBandStructure(ks_dw, dense_car, kpath=path_car, **kwargs)
+                ks_ebands = (ks_ebands_up, ks_ebands_dw)
             else:
-               eigens_sorted = np.sort(self.eigenvalues_qp, axis=1)
-               print('No spin-polarized bands QP')
-               qp_eigens_kpath = interp_skw(
-                   kpoints, eigens_sorted, band_kpoints_rlu,
-                   cell, symrel, has_timrev=trev_for_interp,
-                   lpratio=lpratio, nelect=nelect, fermie=fermie, verbose=verbose
-               )
-               if valence: kwargs['fermie'] = np.max(qp_eigens_kpath[:,:valence])
-               qp_ebands = YambopyBandStructure(qp_eigens_kpath,band_kpoints,kpath=path_car,**kwargs)
+                ks_eigens = interp_cubic_spline_1d(scatter_x, self.eigenvalues_dft, dense_x)
+                if valence:
+                    kwargs['fermie'] = np.max(ks_eigens[:, :valence])
+                ks_ebands = YambopyBandStructure(ks_eigens, dense_car, kpath=path_car, **kwargs)
 
-            qp_z_kpath = None
-            if 'Z' in what:
-                qp_z_kpath = interp_skw(
-                    kpoints, self.z, band_kpoints_rlu,
-                    cell, symrel, has_timrev=trev_for_interp,
-                    lpratio=lpratio, nelect=nelect, fermie=fermie, verbose=verbose
-                )
+        if 'QP' in what:
+            if self.spin == True:
+                qp_up = interp_cubic_spline_1d(scatter_x, self.eigenvalues_qp[:, :, 0], dense_x)
+                qp_dw = interp_cubic_spline_1d(scatter_x, self.eigenvalues_qp[:, :, 1], dense_x)
+                qp_ebands_up = YambopyBandStructure(qp_up, dense_car, kpath=path_car, **kwargs)
+                qp_ebands_dw = YambopyBandStructure(qp_dw, dense_car, kpath=path_car, **kwargs)
+                qp_ebands = (qp_ebands_up, qp_ebands_dw)
+            else:
+                qp_eigens = interp_cubic_spline_1d(scatter_x, self.eigenvalues_qp, dense_x)
+                if valence:
+                    kwargs['fermie'] = np.max(qp_eigens[:, :valence])
+                qp_ebands = YambopyBandStructure(qp_eigens, dense_car, kpath=path_car, **kwargs)
                 
 
         if self.spin == True:
-           return ks_ebands_up, ks_ebands_dw , qp_ebands_up, qp_ebands_dw
-        else: 
-           return ks_ebands, qp_ebands
+            if isinstance(ks_ebands, tuple):
+                ks_ebands_up, ks_ebands_dw = ks_ebands
+            if isinstance(qp_ebands, tuple):
+                qp_ebands_up, qp_ebands_dw = qp_ebands
+            return ks_ebands_up, ks_ebands_dw, qp_ebands_up, qp_ebands_dw
+        else:
+            return ks_ebands, qp_ebands
+
+    def _project_kpts_to_path_distance(self, car_kpts, band_kpoints, path):
+        """
+        Project k-points onto path and return distance along path for each k-point.
+
+        Returns
+        -------
+        path_distances : (nkpts,) distance along path for each k-point
+        """
+        # Build path segments
+        cumulative_pts = np.concatenate([[0], np.cumsum(path.intervals)])
+        seg_endpoints = band_kpoints[cumulative_pts[:-1]]  # start of each segment
+        seg_endpoints_next = band_kpoints[np.minimum(cumulative_pts[1:], len(band_kpoints)-1)]  # end
+        seg_lens = np.linalg.norm(seg_endpoints_next - seg_endpoints, axis=1)
+        seg_boundaries = np.concatenate([[0.], np.cumsum(seg_lens)])
+
+        path_distances = np.zeros(len(car_kpts))
+
+        for i, kpt in enumerate(car_kpts):
+            # Find closest segment
+            best_dist = np.inf
+            best_path_dist = 0.
+
+            for seg_idx in range(len(seg_endpoints)):
+                A = seg_endpoints[seg_idx]
+                B = seg_endpoints_next[seg_idx]
+                seg_len = seg_lens[seg_idx]
+
+                if seg_len < 1e-10:
+                    dist = np.linalg.norm(kpt - A)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_path_dist = seg_boundaries[seg_idx]
+                else:
+                    # Project k onto segment AB
+                    AB = B - A
+                    t = np.dot(kpt - A, AB) / (seg_len**2)
+                    t = np.clip(t, 0, 1)
+                    proj = A + t * AB
+                    dist = np.linalg.norm(kpt - proj)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_path_dist = seg_boundaries[seg_idx] + t * seg_len
+
+            path_distances[i] = best_path_dist
+
+        return path_distances
+
 
     def interpolate_QP_corrections(self,yel_coarse,yel_dense,lpratio=20,verbose=1,**kwargs):
         """
