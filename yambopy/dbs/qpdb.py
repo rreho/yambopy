@@ -293,11 +293,13 @@ class YamboQPDB():
             )
 
         # Check k-points match (order-agnostic, with tolerance for numerical precision)
-        lat_kpts = np.asarray(lattice.iku_kpoints)
-        qp_kpts = np.asarray(self.kpoints_iku)
-        lat_kpts_sorted = np.sort(lat_kpts.view(np.void), axis=0).view(np.float64).reshape(-1, 3)
-        qp_kpts_sorted = np.sort(qp_kpts.view(np.void), axis=0).view(np.float64).reshape(-1, 3)
-        if not np.allclose(lat_kpts_sorted, qp_kpts_sorted, atol=1e-6):
+        lat_kpts = np.atleast_2d(np.asarray(lattice.iku_kpoints))
+        qp_kpts = np.atleast_2d(np.asarray(self.kpoints_iku))
+
+        # Sort by lexicographic order of coordinates
+        idx_lat = np.lexsort((lat_kpts[:, 2], lat_kpts[:, 1], lat_kpts[:, 0]))
+        idx_qp = np.lexsort((qp_kpts[:, 2], qp_kpts[:, 1], qp_kpts[:, 0]))
+        if not np.allclose(lat_kpts[idx_lat], qp_kpts[idx_qp], atol=1e-6):
             raise ValueError(
                 "QP k-points do not match lattice k-points. Check that both come from the same calculation."
             )
