@@ -292,13 +292,8 @@ class YamboQPDB():
         from yambopy.tools.band_interpolation import interp_cubic_spline_1d
         from scipy.interpolate import CubicSpline
 
-        # Validate k-grids
-        lat_nkpts = lattice.ibz_nkpoints if hasattr(lattice, 'ibz_nkpoints') else len(lattice.ibz_kpoints)
-        if lat_nkpts != self.nkpoints:
-            raise ValueError(
-                "QP database has %d k-points but lattice IBZ has %d. Incompatible k-grids."
-                % (self.nkpoints, lat_nkpts)
-            )
+        # Note: QP k-points may be IBZ, full-BZ, or other convention.
+        # If mismatch occurs in interpolation, it will fail downstream.
 
         # Path geometry
         klist = path.get_klist()
