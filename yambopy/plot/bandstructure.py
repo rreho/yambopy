@@ -170,11 +170,11 @@ class YambopyBandStructure():
     @property
     def distances(self):
         if not hasattr(self,"_distances"):
-            self._distances = [0]
-            distance = 0
+            self._distances = [0.0]
+            distance = 0.0
             for nk in range(1,len(self.kpoints)):
                 distance += np.linalg.norm(self.kpoints[nk]-self.kpoints[nk-1])
-                self._distances.append(distance)
+                self._distances.append(float(distance))
         return self._distances
 
     def as_list(self,bands=None):
