@@ -679,17 +679,47 @@ class YamboExcitonDB(object):
                 
                 # If it's IBZ, we need to expand it to FBZ to be consistent with Ak_rot
                 if not dipdb.expand:
+                    from yambopy.bse.rotate_dipoles import rotate_dipole_vector
+
                     if dipdb.dipoles.ndim == 4:
-                        rot_mats = latdb.sym_car[latdb.kmap[:, 1], ...]
-                        electronic_dipoles = np.einsum('kij,kjcv->kicv', rot_mats, electronic_dipoles_base[latdb.kmap[:, 0]], optimize=True)
-                        time_rev_s = (latdb.kmap[:, 1] >= len(latdb.sym_car) / (1 + int(latdb.time_rev)))
-                        electronic_dipoles[time_rev_s] = electronic_dipoles[time_rev_s].conj()
+                        # Properly rotate dipoles using dedicated function
+                        nk_fbz = len(latdb.kmap)
+                        electronic_dipoles = np.zeros((nk_fbz, 3, nc_bse, nv_bse), dtype=electronic_dipoles_base.dtype)
+
+                        time_rev_list = latdb.time_rev_list if hasattr(latdb, 'time_rev_list') else \
+                                       [i >= len(latdb.sym_car) / (1 + int(latdb.time_rev)) for i in range(len(latdb.sym_car))]
+
+                        for i_fbz in range(nk_fbz):
+                            i_ibz = latdb.kmap[i_fbz, 0]
+                            i_sym = latdb.kmap[i_fbz, 1]
+                            rot_mat = latdb.sym_car[i_sym]
+                            trev = time_rev_list[i_sym]
+
+                            # Rotate dipole for each c-v pair
+                            for ic_idx in range(nc_bse):
+                                for iv_idx in range(nv_bse):
+                                    d_cvk = electronic_dipoles_base[i_ibz, :, ic_idx, iv_idx]
+                                    electronic_dipoles[i_fbz, :, ic_idx, iv_idx] = rotate_dipole_vector(d_cvk, rot_mat, trev)
                     else:
-                        # Spin polarized
-                        rot_mats = latdb.sym_car[latdb.kmap[:, 1], ...]
-                        electronic_dipoles = np.einsum('kij,skjcv->skicv', rot_mats, electronic_dipoles_base[:, latdb.kmap[:, 0]], optimize=True)
-                        time_rev_s = (latdb.kmap[:, 1] >= len(latdb.sym_car) / (1 + int(latdb.time_rev)))
-                        electronic_dipoles[:, time_rev_s] = electronic_dipoles[:, time_rev_s].conj()
+                        # Spin polarized - rotate for each spin
+                        nspin = electronic_dipoles_base.shape[0]
+                        nk_fbz = len(latdb.kmap)
+                        electronic_dipoles = np.zeros((nspin, nk_fbz, 3, nc_bse, nv_bse), dtype=electronic_dipoles_base.dtype)
+
+                        time_rev_list = latdb.time_rev_list if hasattr(latdb, 'time_rev_list') else \
+                                       [i >= len(latdb.sym_car) / (1 + int(latdb.time_rev)) for i in range(len(latdb.sym_car))]
+
+                        for i_fbz in range(nk_fbz):
+                            i_ibz = latdb.kmap[i_fbz, 0]
+                            i_sym = latdb.kmap[i_fbz, 1]
+                            rot_mat = latdb.sym_car[i_sym]
+                            trev = time_rev_list[i_sym]
+
+                            for i_spin in range(nspin):
+                                for ic_idx in range(nc_bse):
+                                    for iv_idx in range(nv_bse):
+                                        d_cvk = electronic_dipoles_base[i_spin, i_ibz, :, ic_idx, iv_idx]
+                                        electronic_dipoles[i_spin, i_fbz, :, ic_idx, iv_idx] = rotate_dipole_vector(d_cvk, rot_mat, trev)
                     
                     # Apply 1/Nk normalization for intensive quantity
                     #electronic_dipoles = electronic_dipoles / latdb.nkpoints
