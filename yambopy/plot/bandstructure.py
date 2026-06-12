@@ -124,6 +124,43 @@ class YambopyBandStructure():
             d = json.load(f)
         return cls.from_dict(d)
 
+    @classmethod
+    def from_npy_files(cls, prefix, kpath=None):
+        """Load band structure from .npy files saved by save_data().
+
+        Parameters
+        ----------
+        prefix : str
+            Prefix for input files (e.g., 'ks_bands')
+        kpath : Path object, optional
+            Path object with high-symmetry points. If None, will try to load from files.
+
+        Returns
+        -------
+        YambopyBandStructure instance
+        """
+        import os
+        kpoints = np.load(f'{prefix}_kpoints.npy')
+        bands = np.load(f'{prefix}_bands.npy')
+        distances = np.load(f'{prefix}_distances.npy')
+        fermie = float(np.load(f'{prefix}_fermie.npy'))
+
+        weights = None
+        if os.path.exists(f'{prefix}_weights.npy'):
+            weights = np.load(f'{prefix}_weights.npy')
+
+        spin_proj = None
+        if os.path.exists(f'{prefix}_spin_proj.npy'):
+            spin_proj = np.load(f'{prefix}_spin_proj.npy')
+
+        if kpath is None and os.path.exists(f'{prefix}_kpath_distances.npy'):
+            kpath_dists = np.load(f'{prefix}_kpath_distances.npy')
+            kpath_labels = np.load(f'{prefix}_kpath_labels.npy', allow_pickle=True)
+            # Reconstruct minimal Path-like info (kpoint, label, distance)
+            kpath = np.column_stack([np.zeros((len(kpath_dists), 3)), kpath_dists])
+
+        return cls(bands, kpoints, kpath=kpath, fermie=fermie, weights=weights, spin_proj=spin_proj)
+
     def as_dict(self):
         """ Return the data of this object as a dictionary
         """
@@ -191,6 +228,54 @@ class YambopyBandStructure():
         self.plot_ax(ax)
         if title: ax.title(title)
         return fig
+
+    def get_data(self):
+        """Extract band structure data as dictionary.
+
+        Returns
+        -------
+        dict with keys:
+            'k_points'     : (nkpoints, 3) k-points in fractional coordinates
+            'bands'        : (nkpoints, nbands) band energies
+            'distances'    : (nkpoints,) cumulative distances along path
+            'fermie'       : Fermi energy shift
+            'kpath'        : Path object with high-symmetry points (if available)
+        """
+        data = {
+            'k_points': self.kpoints,
+            'bands': self.bands,
+            'distances': np.array(self.distances),
+            'fermie': self.fermie,
+        }
+        if self.kpath is not None:
+            data['kpath_distances'] = self.kpath[:, 2]
+            data['kpath_labels'] = [label for pt, label, dist in self.kpath]
+        if self.weights is not None:
+            data['weights'] = self.weights
+        if self.spin_proj is not None:
+            data['spin_proj'] = self.spin_proj
+        return data
+
+    def save_data(self, prefix):
+        """Save band structure data to .npy files.
+
+        Parameters
+        ----------
+        prefix : str
+            Prefix for output files (e.g., 'ks_bands' → 'ks_bands_kpoints.npy', etc.)
+        """
+        data = self.get_data()
+        np.save(f'{prefix}_kpoints.npy', data['k_points'])
+        np.save(f'{prefix}_bands.npy', data['bands'])
+        np.save(f'{prefix}_distances.npy', data['distances'])
+        np.save(f'{prefix}_fermie.npy', data['fermie'])
+        if 'kpath_distances' in data:
+            np.save(f'{prefix}_kpath_distances.npy', data['kpath_distances'])
+            np.save(f'{prefix}_kpath_labels.npy', np.array(data['kpath_labels'], dtype=object))
+        if 'weights' in data:
+            np.save(f'{prefix}_weights.npy', data['weights'])
+        if 'spin_proj' in data:
+            np.save(f'{prefix}_spin_proj.npy', data['spin_proj'])
 
     def set_kwargs(self,**kwargs):
         self.kwargs.update(kwargs)
