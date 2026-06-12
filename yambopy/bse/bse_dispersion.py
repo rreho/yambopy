@@ -519,7 +519,7 @@ class ExcitonDispersion():
                                 npts=300, tol=1e-3, expand_bz=True,
                                 ylim=None, figsize=(8, 5), title="Exciton dispersion",
                                 spin_data=None, lpratio=6, nelect=1, s=80,
-                                alpha=0.7, **scatter_kw):
+                                alpha=0.7, return_data=False, **scatter_kw):
         """
         Plot the exciton dispersion.
 
@@ -538,8 +538,28 @@ class ExcitonDispersion():
                       — interpolated line colored by S_z splined onto the dense grid
         s           : marker size
         alpha       : marker transparency (default 0.7); pass 1.0 for fully opaque
+        return_data : if True, return data dict instead of (fig, ax)
         scatter_kw  : extra keyword arguments forwarded to ax.scatter
         lpratio, nelect : SKW parameters
+
+        Returns
+        -------
+        if return_data=False: (fig, ax)
+        if return_data=True : dict with keys:
+            Main path data (dense interpolated if interpolate=True, else scatter):
+            'k_points'         : (npts, 3) k-points in reciprocal coordinates
+            'distances'        : (npts,) path distances
+            'energies'         : (npts, nexcitons) band energies
+
+            Scatter data (computed Q-points):
+            'scatter_k_points' : (N, 3) k-points of computed Q-points (reciprocal)
+            'scatter_distances': (N,) path distances of computed Q-points
+            'scatter_energies' : (N, nexcitons) energies at computed Q-points
+            'is_ibz'           : (N,) bool array marking IBZ vs expanded points
+
+            Path geometry:
+            'boundaries'       : (n_seg+1,) path distances at high-symmetry points
+            'labels'           : list of high-symmetry point labels
         """
         fig, ax = plt.subplots(figsize=figsize)
 
@@ -638,6 +658,47 @@ class ExcitonDispersion():
         ax.set_ylabel("Exciton energy (eV)")
         ax.set_title(title)
         plt.tight_layout()
+
+        if return_data:
+            car_qpts_full = red_car(self.lattice.red_kpoints, self.rlat)
+            scatter_x, scatter_q_indices, is_ibz, boundaries, labels = \
+                self._project_qpts_onto_path(path, tol=tol, expand_bz=expand_bz)
+            scatter_car = car_qpts_full[scatter_q_indices]
+            scatter_red = car_red(scatter_car, self.rlat)
+            energies_full = self.exc_energies[self.lattice.kpoints_indexes]
+            scatter_e = energies_full[scatter_q_indices]
+
+            if interpolate:
+                dense_x, dense_e, _, _, _, _, _ = \
+                    self.get_dispersion_interpolated(
+                        path, method=method, npts=npts, tol=tol, expand_bz=expand_bz,
+                        lpratio=lpratio, nelect=nelect
+                    )
+                _, dense_car, dense_red = self._dense_path(path, npts)
+            else:
+                dense_x, dense_car, dense_red = self._dense_path(path, npts)
+                dense_e = None
+
+            data = {
+                'scatter_k_points': scatter_red,
+                'scatter_distances': scatter_x,
+                'scatter_energies': scatter_e,
+                'is_ibz': is_ibz,
+                'boundaries': boundaries,
+                'labels': labels,
+            }
+
+            if interpolate:
+                data['k_points'] = dense_red
+                data['distances'] = dense_x
+                data['energies'] = dense_e
+            else:
+                data['k_points'] = scatter_red
+                data['distances'] = scatter_x
+                data['energies'] = scatter_e
+
+            return data
+
         return fig, ax
 
     # ------------------------------------------------------------------
