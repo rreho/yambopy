@@ -545,7 +545,7 @@ class ExcitonDispersion():
         Returns
         -------
         if return_data=False: (fig, ax)
-        if return_data=True : dict with keys:
+        if return_data=True : (fig, ax, data) where data is dict with keys:
             Main path data (dense interpolated if interpolate=True, else scatter):
             'k_points'         : (npts, 3) k-points in reciprocal coordinates
             'distances'        : (npts,) path distances
@@ -697,7 +697,7 @@ class ExcitonDispersion():
                 data['distances'] = scatter_x
                 data['energies'] = scatter_e
 
-            return data
+            return fig, ax, data
 
         return fig, ax
 
