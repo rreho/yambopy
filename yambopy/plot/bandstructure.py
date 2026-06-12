@@ -156,8 +156,10 @@ class YambopyBandStructure():
         if kpath is None and os.path.exists(f'{prefix}_kpath_distances.npy'):
             kpath_dists = np.load(f'{prefix}_kpath_distances.npy')
             kpath_labels = np.load(f'{prefix}_kpath_labels.npy', allow_pickle=True)
-            # Reconstruct minimal Path-like info (kpoint, label, distance)
-            kpath = np.column_stack([np.zeros((len(kpath_dists), 3)), kpath_dists])
+            # Store as list of tuples: (kpoint, label, distance)
+            # This won't be a full Path object but compatible for iteration
+            kpath = [(np.zeros(3), str(label), float(dist))
+                     for label, dist in zip(kpath_labels, kpath_dists)]
 
         return cls(bands, kpoints, kpath=kpath, fermie=fermie, weights=weights, spin_proj=spin_proj)
 
@@ -248,8 +250,13 @@ class YambopyBandStructure():
             'fermie': self.fermie,
         }
         if self.kpath is not None:
-            data['kpath_distances'] = self.kpath[:, 2]
-            data['kpath_labels'] = [label for pt, label, dist in self.kpath]
+            kpath_dists = []
+            kpath_labels = []
+            for pt, label, dist in self.kpath:
+                kpath_dists.append(dist)
+                kpath_labels.append(label)
+            data['kpath_distances'] = np.array(kpath_dists)
+            data['kpath_labels'] = kpath_labels
         if self.weights is not None:
             data['weights'] = self.weights
         if self.spin_proj is not None:
