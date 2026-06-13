@@ -556,8 +556,8 @@ class YamboExcitonDB(object):
         Akcv_flat = Akcv.reshape(neigs, nblks, -1)
         
         for iblk in range(nblks):
-            eigenvectors[:, iblk*ntrans : (iblk+1)*ntrans][:, sort_idx] = Akcv_flat[:, iblk, :]
-            
+            eigenvectors[:, iblk*ntrans : (iblk+1)*ntrans] = Akcv_flat[:, iblk, sort_idx]
+
         return eigenvectors
 
     def compute_exciton_dipoles(self, dipdb, bands_range=None):
