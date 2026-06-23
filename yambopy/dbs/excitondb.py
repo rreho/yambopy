@@ -787,46 +787,35 @@ class YamboExcitonDB(object):
         YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, filename, dipdb=dipdb, bands_range=bands_range, BSE_Lin_dir=BSE_Lin_dir)
 
     @staticmethod
-    def save_ip_approximation(latdb, electronsdb, dipdb=None, bands_range=None, nqpoints=1, filename='ip_approximation.nc', spin_pol='no'):
+    def save_ip_approximation(latdb, electronsdb, dipdb=None, bands_range=None, nqpoints=1,
+                             neigs=-1, filename='ip_approximation.nc', spin_pol='no'):
         """
         Save independent particle (IP) approximation in same format as excitons.nc
 
-        IP energies are computed from single-particle KS/QP energies.
-        For each cv transition: E_cv(k) = E_c(k) - E_v(k)
-
-        Does NOT require BSE calculation files. Table structure is created from band range.
+        IP energies computed from KS/QP: E_cv(k) - E_v(k-q) for finite Q, or E_c(k) - E_v(k) for Q=0.
+        Only first neigs transitions (sorted by energy) are saved as excitons.
+        Full table with all cv transitions is saved for completeness.
 
         Args:
             latdb: YamboLatticeDB object
             electronsdb: YamboElectronsDB or YamboQPDB with KS/QP energies (expanded to FBZ)
             dipdb: optional YamboDipolesDB for electronic dipoles
-            bands_range: [v_start, c_end] indices (0-indexed) for bands to include.
-                         If None, uses 50% of bands as valence, rest as conduction
+            bands_range: [v_min_band, v_max_band, c_min_band, c_max_band] (1-indexed absolute bands).
+                         If None, auto-detect from nbandsv
             nqpoints: number of Q-points to replicate IP data across (default 1 for Q=0)
+            neigs: number of excitons to save (-1 = all, like in BSE)
             filename: output netCDF file path
             spin_pol: 'no' (default) or 'pol' for spin-polarized
 
         Example:
-            from yambopy.dbs.latticedb import YamboLatticeDB
-            from yambopy.dbs.electronsdb import YamboElectronsDB
-            from yambopy.dbs.excitondb import YamboExcitonDB
-            from yambopy.dbs.dipolesdb import YamboDipolesDB
+            latdb = YamboLatticeDB.from_db_file('path/to/ns.db1')
+            electronsdb = YamboElectronsDB.from_db_file('path/to/SAVE', Expand=True)
 
-            latdb = YamboLatticeDB.from_db_file('.')
-            electronsdb = YamboElectronsDB.from_db_file('.', Expand=True)
-            dipdb = YamboDipolesDB.from_db_file('.', expand=False)
-
-            # Create IP approximation with automatic band detection
+            # With explicit valence/conduction band ranges (1-indexed)
             YamboExcitonDB.save_ip_approximation(
-                latdb, electronsdb, dipdb=dipdb,
-                nqpoints=latdb.nkpoints,  # One IP entry per Q-point
-                filename='ip_approximation.nc'
-            )
-
-            # Or with explicit band range
-            YamboExcitonDB.save_ip_approximation(
-                latdb, electronsdb, dipdb=dipdb,
-                bands_range=[4, 9],  # bands 4-9, where 4-6 valence, 7-9 conduction
+                latdb, electronsdb,
+                bands_range=[25, 26, 27, 30],  # v: 25-26, c: 27-30 (like BSE)
+                neigs=8,  # Keep 8 lowest energy excitons
                 nqpoints=latdb.nkpoints,
                 filename='ip_approximation.nc'
             )
@@ -845,78 +834,99 @@ class YamboExcitonDB(object):
 
         nk = latdb.nkpoints
         nspin_el = energies.shape[0]
-        nbands = energies.shape[2]
-
-        # Determine band range for IP calculation
-        if bands_range is None:
-            # Auto-detect: use nbandsv as transition center
-            if hasattr(latdb, 'nbandsv'):
-                nv_el = latdb.nbandsv
-            else:
-                nv_el = nbands // 2
-            # Include a few bands above and below
-            v_start = max(0, nv_el - 3)
-            c_end = min(nbands, nv_el + 3)
-        else:
-            v_start, c_end = bands_range[0], bands_range[1]
-
-        # Number of bands for valence and conduction (they can overlap in band range)
-        nbands_range = c_end - v_start
+        nbands_tot = energies.shape[2]
 
         # Determine spin
         nspin = 1
         if spin_pol == 'pol': nspin = 2
 
-        # Create simple table structure: all cv pairs for each k-point
-        # Format: [k (1-indexed), v (1-indexed absolute), c (1-indexed absolute), spin (1-indexed), reserved]
+        # Parse band range (1-indexed absolute bands like in BSE table)
+        if bands_range is None:
+            # Auto-detect from nbandsv
+            if hasattr(latdb, 'nbandsv'):
+                nv = latdb.nbandsv
+                nc = nbands_tot - nv
+                v_min = 1  # Start from band 1
+                v_max = nv
+                c_min = nv + 1
+                c_max = nbands_tot
+            else:
+                raise ValueError("Cannot auto-detect bands. Provide bands_range=[v_min, v_max, c_min, c_max]")
+        else:
+            v_min, v_max, c_min, c_max = bands_range
+            nv = v_max - v_min + 1
+            nc = c_max - c_min + 1
+
+        # Create table: all cv pairs for each k-point
+        # Format: [k (1-indexed), v (1-indexed absolute), c (1-indexed absolute), spin (1-indexed), reserved=1]
         table = []
         for k_idx in range(nk):
-            for v_rel in range(nbands_range):
-                for c_rel in range(nbands_range):
-                    v_abs = v_start + v_rel + 1  # 1-indexed absolute band
-                    c_abs = v_start + c_rel + 1  # 1-indexed absolute band
-                    # For IP: only include v < c transitions
-                    if v_abs < c_abs:
-                        for s in range(nspin):
-                            table.append([k_idx + 1, v_abs, c_abs, s + 1, 0])
+            for v_band in range(v_min, v_max + 1):
+                for c_band in range(c_min, c_max + 1):
+                    for s in range(nspin):
+                        table.append([k_idx + 1, v_band, c_band, s + 1, 1])
 
         table = np.array(table, dtype=int)
         ntrans = len(table)
 
-        # Compute IP eigenvalues
-        ip_energies = np.zeros(ntrans, dtype=complex)
+        # Compute IP eigenvalues for all transitions
+        # For Q=0: E_cv(k) = E_c(k) - E_v(k)
+        ip_energies_all = np.zeros(ntrans, dtype=complex)
 
         for itrans, row in enumerate(table):
-            k_idx = int(row[0]) - 1  # 0-indexed
-            v_idx = int(row[1]) - 1  # 0-indexed absolute
-            c_idx = int(row[2]) - 1  # 0-indexed absolute
+            k_idx = int(row[0]) - 1  # Convert to 0-indexed
+            v_band = int(row[1]) - 1  # Convert to 0-indexed
+            c_band = int(row[2]) - 1  # Convert to 0-indexed
             s_idx = int(row[3]) - 1 if nspin > 1 else 0  # 0-indexed spin
 
-            # Clamp to available energies
-            k_idx = min(k_idx, energies.shape[1] - 1)
-            v_idx = min(v_idx, energies.shape[2] - 1)
-            c_idx = min(c_idx, energies.shape[2] - 1)
-            s_idx = min(s_idx, energies.shape[0] - 1)
+            # Ensure indices within bounds
+            assert 0 <= k_idx < nk, f"k_idx {k_idx} out of bounds [0, {nk})"
+            assert 0 <= v_band < nbands_tot, f"v_band {v_band} out of bounds [0, {nbands_tot})"
+            assert 0 <= c_band < nbands_tot, f"c_band {c_band} out of bounds [0, {nbands_tot})"
 
-            e_c = energies[s_idx, k_idx, c_idx]
-            e_v = energies[s_idx, k_idx, v_idx]
-            ip_energies[itrans] = e_c - e_v
+            e_c = energies[s_idx, k_idx, c_band]
+            e_v = energies[s_idx, k_idx, v_band]
+            ip_energies_all[itrans] = e_c - e_v
 
-        # Create trivial residuals
-        l_residual = np.ones(ntrans, dtype=complex)
-        r_residual = np.ones(ntrans, dtype=complex)
+        # Sort by energy and select neigs
+        if neigs < 0:
+            neigs = ntrans
+        else:
+            neigs = min(neigs, ntrans)
+
+        # Get indices sorted by energy
+        sorted_idx = np.argsort(ip_energies_all.real)[:neigs]
+        ip_energies = ip_energies_all[sorted_idx]
+
+        # Create trivial residuals (for all transitions, not just selected excitons)
+        l_residual_all = np.ones(ntrans, dtype=complex)
+        r_residual_all = np.ones(ntrans, dtype=complex)
+
+        # But we only save neigs residuals
+        l_residual = l_residual_all[sorted_idx]
+        r_residual = r_residual_all[sorted_idx]
 
         # Compute electronic dipoles once if dipdb provided
         electronic_dipoles = None
         if dipdb is not None:
-            if not dipdb.expand:
+            # Check if dipdb bands match IP band range
+            dip_ibz = dipdb.dipoles
+            if dip_ibz.ndim == 4:
+                nc_dip, nv_dip = dip_ibz.shape[2], dip_ibz.shape[3]
+            else:
+                nc_dip, nv_dip = dip_ibz.shape[3], dip_ibz.shape[4]
+
+            if (nc_dip != nbands_range or nv_dip != nbands_range):
+                print(f"Warning: Dipole bands ({nc_dip}x{nv_dip}) don't match IP range ({nbands_range}x{nbands_range}). "
+                      "Skipping electronic dipoles. Use matching bands_range or exclude dipdb.")
+            elif not dipdb.expand:
                 from yambopy.bse.rotate_dipoles import rotate_dipole_vector
 
-                dip_ibz = dipdb.dipoles
                 nk_fbz = len(latdb.kmap)
 
                 if dip_ibz.ndim == 4:
-                    electronic_dipoles = np.zeros((nk_fbz, 3, nc, nv), dtype=dip_ibz.dtype)
+                    # Non-spin-polarized: (nk_ibz, 3, nc_dip, nv_dip)
+                    electronic_dipoles = np.zeros((nk_fbz, 3, nc_dip, nv_dip), dtype=dip_ibz.dtype)
                     for i_fbz in range(nk_fbz):
                         i_ibz = latdb.kmap[i_fbz, 0]
                         i_sym = latdb.kmap[i_fbz, 1]
@@ -925,13 +935,14 @@ class YamboExcitonDB(object):
                         if trev_list is None:
                             trev_list = [i >= len(latdb.sym_car) / (1 + int(latdb.time_rev)) for i in range(len(latdb.sym_car))]
                         trev = trev_list[i_sym]
-                        for ic_idx in range(nc):
-                            for iv_idx in range(nv):
+                        for ic_idx in range(nc_dip):
+                            for iv_idx in range(nv_dip):
                                 d_cvk = dip_ibz[i_ibz, :, ic_idx, iv_idx]
                                 electronic_dipoles[i_fbz, :, ic_idx, iv_idx] = rotate_dipole_vector(d_cvk, rot_mat, trev)
                 else:
+                    # Spin-polarized: (nspin, nk_ibz, 3, nc_dip, nv_dip)
                     nspin_dip = dip_ibz.shape[0]
-                    electronic_dipoles = np.zeros((nspin_dip, nk_fbz, 3, nc, nv), dtype=dip_ibz.dtype)
+                    electronic_dipoles = np.zeros((nspin_dip, nk_fbz, 3, nc_dip, nv_dip), dtype=dip_ibz.dtype)
                     for i_fbz in range(nk_fbz):
                         i_ibz = latdb.kmap[i_fbz, 0]
                         i_sym = latdb.kmap[i_fbz, 1]
@@ -941,8 +952,8 @@ class YamboExcitonDB(object):
                             trev_list = [i >= len(latdb.sym_car) / (1 + int(latdb.time_rev)) for i in range(len(latdb.sym_car))]
                         trev = trev_list[i_sym]
                         for i_spin in range(nspin_dip):
-                            for ic_idx in range(nc):
-                                for iv_idx in range(nv):
+                            for ic_idx in range(nc_dip):
+                                for iv_idx in range(nv_dip):
                                     d_cvk = dip_ibz[i_spin, i_ibz, :, ic_idx, iv_idx]
                                     electronic_dipoles[i_spin, i_fbz, :, ic_idx, iv_idx] = rotate_dipole_vector(d_cvk, rot_mat, trev)
             else:
