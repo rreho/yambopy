@@ -916,8 +916,8 @@ class YamboExcitonDB(object):
             else:
                 nc_dip, nv_dip = dip_ibz.shape[3], dip_ibz.shape[4]
 
-            if (nc_dip != nbands_range or nv_dip != nbands_range):
-                print(f"Warning: Dipole bands ({nc_dip}x{nv_dip}) don't match IP range ({nbands_range}x{nbands_range}). "
+            if (nc_dip != nc or nv_dip != nv):
+                print(f"Warning: Dipole bands ({nc_dip}x{nv_dip}) don't match IP range ({nc}x{nv}). "
                       "Skipping electronic dipoles. Use matching bands_range or exclude dipdb.")
             elif not dipdb.expand:
                 from yambopy.bse.rotate_dipoles import rotate_dipole_vector
@@ -959,6 +959,41 @@ class YamboExcitonDB(object):
             else:
                 electronic_dipoles = dipdb.dipoles
 
+        # Compute exciton dipoles from selected transitions
+        # For IP: exc_dipole_i = electronic_dipole of transition i
+        exc_dipoles = None
+        if electronic_dipoles is not None:
+            exc_dipoles = np.zeros((3, neigs), dtype=electronic_dipoles.dtype)
+
+            # Get dipole shape and extract for selected transitions
+            if electronic_dipoles.ndim == 4:  # (nk, 3, nc, nv)
+                dip_shape = electronic_dipoles.shape
+                for i_exc, i_trans in enumerate(sorted_idx):
+                    k_idx = int(table[i_trans, 0]) - 1  # 0-indexed
+                    c_idx = int(table[i_trans, 2]) - 1 - c_min  # relative to c_min
+                    v_idx = int(table[i_trans, 1]) - 1 - v_min  # relative to v_min
+
+                    # Bounds check
+                    k_idx = min(k_idx, dip_shape[0] - 1)
+                    c_idx = min(max(c_idx, 0), dip_shape[2] - 1)
+                    v_idx = min(max(v_idx, 0), dip_shape[3] - 1)
+
+                    exc_dipoles[:, i_exc] = electronic_dipoles[k_idx, :, c_idx, v_idx]
+            elif electronic_dipoles.ndim == 5:  # (nspin, nk, 3, nc, nv)
+                dip_shape = electronic_dipoles.shape
+                for i_exc, i_trans in enumerate(sorted_idx):
+                    k_idx = int(table[i_trans, 0]) - 1
+                    s_idx = int(table[i_trans, 3]) - 1
+                    c_idx = int(table[i_trans, 2]) - 1 - c_min
+                    v_idx = int(table[i_trans, 1]) - 1 - v_min
+
+                    k_idx = min(k_idx, dip_shape[1] - 1)
+                    s_idx = min(s_idx, dip_shape[0] - 1)
+                    c_idx = min(max(c_idx, 0), dip_shape[3] - 1)
+                    v_idx = min(max(v_idx, 0), dip_shape[4] - 1)
+
+                    exc_dipoles[:, i_exc] = electronic_dipoles[s_idx, k_idx, :, c_idx, v_idx]
+
         # Create IP exciton DB for each Q-point
         # (IP energies same for all Q, but replicate to match BSE structure)
         ip_exdbs = []
@@ -979,7 +1014,7 @@ class YamboExcitonDB(object):
                 red_qpoint=red_qpoint,
                 table=table,
                 eigenvectors=None,
-                exc_dipoles=None,
+                exc_dipoles=exc_dipoles,
                 electronic_dipoles=electronic_dipoles
             )
             ip_exdbs.append(ip_exdb)
