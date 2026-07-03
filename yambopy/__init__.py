@@ -89,6 +89,7 @@ from yambopy.bse.bse_absorption import *
 from yambopy.bse.bse_dispersion import *
 from yambopy.bse.excitonradiativelifetimes import *
 from yambopy.bse.excitondipoles import *
+from yambopy.bse.circular_basis import circular_basis_matrix, rotate_excdb_to_circular
 
 #em1s/static screening operations files
 from yambopy.em1s.em1s_rotate import *
