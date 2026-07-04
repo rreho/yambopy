@@ -95,7 +95,6 @@ def circular_basis_matrix(eigenvalues, exc_dipoles, atol=1e-4, rtol=0.0,
         # Maximal-sigma+ combination: c_R = conj(p)/|p|.
         # The conjugation is required (Cauchy-Schwarz: |sum_i c_i p_i| is
         # maximal for c = conj(p)/|p|); verified numerically in
-        # yambopy_circular_basis_TODO.md (100% vs 99.64% purity).
         Ublk = np.zeros((n, n), dtype=complex)
         ncol = 0
         if np.linalg.norm(p) > 0:
