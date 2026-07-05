@@ -13,7 +13,8 @@ from yambopy.lattice import red_car
 
 def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_dir=None,
                            neigs=-1,dmat_mode='run',save_files=True,exph_file='Ex-ph.npy',overwrite=False,
-                           save_excitons=False,save_lattice=False,save_dipoles=False):
+                           save_excitons=False,save_lattice=False,save_dipoles=False,
+                           circular_basis=False,dipoles_file=None,degen_atol=1e-4):
     """
     This function calculates the exciton-phonon matrix elements
 
@@ -54,6 +55,16 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
         If True, save lattice and symmetry information in a single `lattice.nc` file. Default is False.
     save_dipoles : str, optional
         If True, save expanded dipoles in `dipoles.nc` and exciton dipoles in `excitons.nc`. Default is False.
+    circular_basis : bool, optional
+        If True, rotate the degenerate Q=Gamma exciton manifolds to the
+        sigma+/sigma- (circular) eigenbasis before computing the matrix
+        elements, so G shares the gauge of circular-basis exciton databases
+        (see yambopy.bse.circular_basis). Requires the BSE dipoles database
+        (`dipoles_file`, default '<BSE_dir>/ndb.dipoles'). Default is False.
+    dipoles_file : str, optional
+        Path to ndb.dipoles used for the circular-basis rotation.
+    degen_atol : float, optional
+        Degeneracy tolerance (eV) for the circular-basis rotation.
     """
     if Qrange is None: Qrange = [0,1]
     
@@ -116,6 +127,26 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
             print("Error: BSE bands mismatch. Given bands range : [%d, %d]. " %(
                 wfdb.min_bnd,wfdb.min_bnd + wfdb.nbands) +
                 "Bse band range found (expected) : [%d %d]" %( min_bnd_bse,max_bnd_bse))
+
+    # Rotate the Q=Gamma degenerate manifolds to the circular (sigma+/-) basis
+    # so the initial/final Gamma states of G match circular-basis exciton dbs.
+    if circular_basis:
+        from yambopy.bse.circular_basis import rotate_excdb_to_circular
+        from yambopy.dbs.dipolesdb import YamboDipolesDB
+        if BSE_Lin_dir is not None:
+            # rotate_Akcv_Q(folder=BSE_Lin_dir) reloads the raw Gamma db from
+            # disk and would bypass the rotation: load it into exdbs[0] here
+            # and drop BSE_Lin_dir downstream instead.
+            gamma_db = YamboExcitonDB.from_db_file(latdb, filename='ndb.BS_diago_Q1',
+                                                   folder=BSE_Lin_dir, Load_WF=True, neigs=neigs)
+            exdbs[0] = gamma_db
+            BSE_Lin_dir = None
+        if dipoles_file is None:
+            dipoles_file = os.path.join(BSE_dir, 'ndb.dipoles')
+        bse_bands = exdbs[0].bs_bands
+        dipdb_circ = YamboDipolesDB.from_db_file(latdb, filename=dipoles_file,
+                                                 bands_range=bse_bands, project=False, expand=False)
+        rotate_excdb_to_circular(exdbs[0], dipdb=dipdb_circ, atol=degen_atol, verbose=True)
 
     # get D matrices
     Dmats = save_or_load_dmat(wfdb,mode=dmat_mode,dmat_file='Dmats.npy')

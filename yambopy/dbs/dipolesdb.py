@@ -175,14 +175,21 @@ class YamboDipolesDB():
                 max_band = max(bands_range)
                 nbands   = max_band-min_band+1  
 
-                if dip_bands_ordered: # Standard case  
+                if dip_bands_ordered: # Standard case
                     nbandsv = indexv-min_band+1
                     nbandsc = max_band-indexc+1
+                    # v-axis of DIP_* covers min_band_db..indexv: anchor the slice
+                    # at the requested min_band, not at the start of the axis
+                    # (they differ when the db was computed with a wider window)
+                    start_idx_v = min_band - min_band_db
+                    end_idx_v   = indexv - min_band_db + 1
+                    # c-axis covers indexc..max_band_db and the requested c range
+                    # always starts at indexc
+                    start_idx_c = 0
+                    end_idx_c   = nbandsc
                     indexv = indexv-1
-                    indexc = indexc-1 
+                    indexc = indexc-1
                     nbands1, nbands2 = [nbandsv, nbandsc]
-                    start_idx_v, start_idx_c = [0,0]
-                    end_idx_v, end_idx_c = [nbandsv, nbandsc]
 
                 if not dip_bands_ordered: # Yambo calculation with DipBandsALl
                     nbandsv = lattice.nbandsv-min_band+1
