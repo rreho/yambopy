@@ -305,7 +305,7 @@ class SkwInterpolator():
             skr_dk2 = self.get_stark_dk2(kpt)
             for jj in range(3):
                 for ii in range(jj + 1):
-                    value = np.matmul(self.coefs[spin, :, :], skr_dk2[ii,jj])
+                    value = np.matmul(self.coefs[spin, :, :], skr_dk2[ii, jj]) * (2 * np.pi) ** 2
                     if not self.iscomplexobj: value = value.real
                     der2[:, ii, jj] = value
                     if ii != jj: der2[jj, ii] = der2[ii, jj]
@@ -403,38 +403,48 @@ class SkwInterpolator():
         srk_dk1 *= 1.j / self.ptg_nsym
         return srk_dk1
 
+
     def get_stark_dk2(self, kpt) -> np.ndarray:
         """
         Compute the 2nd-order derivatives of the star function wrt k.
-
+        
         Args:
-            kpt: K-point in reduced coordinates.
+            kpt: K-point in reduced coordinates (array of shape (3,)).
 
         Return:
-            Complex numpy array of shape [3, 3, self.nr] with the 2nd-order derivatives
-            of the star function wrt k in reduced coordinates.
+            Complex numpy array of shape (3, 3, self.nr) with the 2nd-order derivatives.
         """
+        # Work array: (3, 3, nr)
+        work = np.zeros((3, 3, self.nr), dtype=complex)
+
+        # Loop over symmetry operations
+        for isym in range(self.ptg_nsym):
+            symrel = self.ptg_symrel[isym, :, :]  # 3x3 rotation matrix
+            sk = 2 * np.pi * np.dot(symrel.T, kpt)  # sk = 2π * symrel^T @ kpt
+
+            # Loop over real-space points
+            for ir in range(self.nr):
+                r = self.rpts[ir, :]  # Real-space point (3,)
+                sr = np.dot(symrel, r)  # sr = symrel @ r
+                eiskr = np.exp(1j * np.dot(sk, r))  # Phase factor
+
+                # Accumulate work(ii, jj, ir)
+                for jj in range(3):
+                    for ii in range(jj + 1):
+                        work[ii, jj, ir] += eiskr * sr[ii] * sr[jj]
+
+        # Normalize and negate
+        work = -work / self.ptg_nsym
+
+        # Output array: (3, 3, nr)
         srk_dk2 = np.zeros((3, 3, self.nr), dtype=complex)
-        raise NotImplementedError()
-        #work = zero
-        #do isym=1,self.ptg_nsym
-        #   sk = two_pi * matmul(transpose(self%ptg_symrel(:,:,isym)), kpt)
-        #   do ir=1,self%nr
-        #     sr = matmul(self%ptg_symrel(:,:,isym), self%rpts(:,ir))
-        #     eiskr = exp(j_dpc * dot_product(sk, self%rpts(:,ir)))
-        #     do jj=1,3
-        #        do ii=1,jj
-        #            work(ii,jj,ir) = work(ii,jj,ir) + eiskr * sr(ii) * sr(jj)
-
-        #work = - work / self.ptg_nsym
-
-        #do jj=1,3
-        #   do ii=1,jj
-        #       srk_dk2(:, ii, jj) = work(ii, jj, :)
-        #       if (ii /= jj) srk_dk2(:,jj,ii) = work(:,ii,jj)
+        for jj in range(3):
+            for ii in range(jj + 1):
+                srk_dk2[ii, jj, :] = work[ii, jj, :]  # Fill (ii, jj, :)
+                if ii != jj:
+                    srk_dk2[jj, ii, :] = work[ii, jj, :]  # Symmetrize
 
         return srk_dk2
-
     #def find_stationary_points(self, kmesh, bstart=None, bstop=None, is_shift=None)
     #    k = self.get_sampling(kmesh, is_shift)
     #    if bstart is None: bstart = self.nelect // 2 - 1

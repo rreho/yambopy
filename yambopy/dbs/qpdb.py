@@ -337,7 +337,8 @@ class YamboQPDB():
               eigens  = self.eigenvalues_dft[np.newaxis,:]
               skw = SkwInterpolator(lpratio,kpoints,eigens,fermie,nelect,cell,symrel,trev_for_interp,verbose=verbose)
               #kpoints_path = path.get_klist()[:,:3]
-              dft_eigens_kpath = skw.interp_kpts(band_kpoints_rlu).eigens[0]
+              self.skw = skw
+              dft_eigens_kpath = skw.interp_kpts(band_kpoints_rlu, dk1=True,dk2=True).eigens[0]
               if valence: kwargs['fermie'] = np.max(dft_eigens_kpath[:,:valence])
               ks_ebands = YambopyBandStructure(dft_eigens_kpath,band_kpoints,kpath=path_car,**kwargs)
 
@@ -373,8 +374,10 @@ class YamboQPDB():
                    eigens[0,ik,:] = sorted(aux[0,ik,:])
                #end sorting
                skw = SkwInterpolator(lpratio,kpoints,eigens,fermie,nelect,cell,symrel,trev_for_interp,verbose=verbose)
+               self.skw = skw
                #kpoints_path = path.get_klist()[:,:3]
-               qp_eigens_kpath = skw.interp_kpts(band_kpoints_rlu).eigens[0]
+               interp = skw.interp_kpts(band_kpoints_rlu, dk1=True,dk2=True)
+               qp_eigens_kpath = interp.eigens[0]
                if valence: kwargs['fermie'] = np.max(qp_eigens_kpath[:,:valence])
 
                qp_ebands = YambopyBandStructure(qp_eigens_kpath,band_kpoints,kpath=path_car,**kwargs)
