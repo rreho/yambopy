@@ -265,10 +265,19 @@ class ExcitonDispersion():
         dists_ibz, _ = ibz_tree.query(car_qpoints_full)
         is_ibz_full  = dists_ibz < 1e-4  # fixed small tolerance for identity check
 
-        # First-shell reciprocal-lattice images to handle BZ-wrapping mismatches
+        # Reciprocal-lattice images to handle BZ-wrapping mismatches.
+        # The shell must be wide enough to reach every path point from a Q stored in
+        # the first BZ. One shell is enough for a path inside the first BZ, but an
+        # UNFOLDED path (supercell coordinates, e.g. 2*k_prim) has components well
+        # beyond 1 -- e.g. W of an fcc primitive cell becomes (1, 1/2, 3/2) in a
+        # 2x2x2 supercell basis and needs G=(1,1,2). With a fixed +-1 shell such
+        # points are silently dropped from the dispersion.
+        path_red = car_red(seg_ends, self.rlat)
+        R = int(np.ceil(np.abs(path_red).max())) + 1
+        rng = range(-R, R + 1)
         images = np.array([
             i * self.rlat[0] + j * self.rlat[1] + k * self.rlat[2]
-            for i in (-1, 0, 1) for j in (-1, 0, 1) for k in (-1, 0, 1)
+            for i in rng for j in rng for k in rng
         ])
 
         path_coords, q_indices, is_ibz = [], [], []
