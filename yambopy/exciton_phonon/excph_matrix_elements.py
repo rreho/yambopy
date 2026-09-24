@@ -150,6 +150,7 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
 
     # get D matrices
     Dmats = save_or_load_dmat(wfdb,mode=dmat_mode,dmat_file='Dmats.npy')
+    from yambopy.dbs.dipolesdb import YamboDipolesDB
 
     dipdb = None
     if save_dipoles:
@@ -182,6 +183,8 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
     
     if save_excitons:
         bse_bnds_range = [wfdb.min_bnd, wfdb.min_bnd + wfdb.nbands]
+        dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=False,debug=False)
+
         YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, save_excitons, dipdb=dipdb if save_dipoles else None, bands_range=bse_bnds_range)
     
     if save_lattice:

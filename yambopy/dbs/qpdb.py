@@ -308,15 +308,18 @@ class YamboQPDB():
         elif lattice.time_rev:
             symrel = lattice.sym_rec_red
             trev_for_interp=False
-        
-        band_kpoints_rlu = path.get_klist()[:,:3]
+        if isinstance(path, type):
+            band_kpoints_rlu = path.get_klist()[:,:3]
+            _, _, path_car = get_path(lattice.car_kpoints,lattice.rlat,lattice.sym_car,path)
+            band_kpoints = red_car(band_kpoints_rlu,lattice.rlat)
+        else:
+            band_kpoints_rlu = path
+            band_kpoints = path
 
         # Obtain quantities in cc needed for plot (since interpolation wants rlu)
-        _, _, path_car = get_path(lattice.car_kpoints,lattice.rlat,lattice.sym_car,path)
-        band_kpoints = red_car(band_kpoints_rlu,lattice.rlat)
 
         #interpolate KS
-        ks_ebands, qp_ebands = None, None
+        ks_eigens_kpath, qp_eigens_kpath = None, None
         if 'KS' in what:
            if self.spin == True:
               print('Spin-polarized bands DFT')
@@ -329,9 +332,6 @@ class YamboQPDB():
 
               #if valence: kwargs['fermie'] = np.max(dft_eigens_kpath[:,:valence])
               # tricky 
-              ks_ebands_up = YambopyBandStructure(dft_eigens_up_kpath,band_kpoints,kpath=path_car,**kwargs)
-              ks_ebands_dw = YambopyBandStructure(dft_eigens_dw_kpath,band_kpoints,kpath=path_car,**kwargs)
-
            else:
               print('No spin-polarized bands DFT')
               eigens  = self.eigenvalues_dft[np.newaxis,:]
@@ -340,7 +340,6 @@ class YamboQPDB():
               self.skw = skw
               dft_eigens_kpath = skw.interp_kpts(band_kpoints_rlu, dk1=True,dk2=True).eigens[0]
               if valence: kwargs['fermie'] = np.max(dft_eigens_kpath[:,:valence])
-              ks_ebands = YambopyBandStructure(dft_eigens_kpath,band_kpoints,kpath=path_car,**kwargs)
 
         #interpolate QP
         if 'QP' in what:
@@ -362,8 +361,7 @@ class YamboQPDB():
                qp_eigens_dw_kpath = skw_dw.interp_kpts(band_kpoints_rlu).eigens[0]
                #if valence: kwargs['fermie'] = np.max(dft_eigens_kpath[:,:valence])
                # tricky 
-               qp_ebands_up = YambopyBandStructure(qp_eigens_up_kpath,band_kpoints,kpath=path_car,**kwargs)
-               qp_ebands_dw = YambopyBandStructure(qp_eigens_dw_kpath,band_kpoints,kpath=path_car,**kwargs)
+
 
             else:
                print('No spin-polarized bands DFT')
@@ -379,8 +377,6 @@ class YamboQPDB():
                interp = skw.interp_kpts(band_kpoints_rlu, dk1=True,dk2=True)
                qp_eigens_kpath = interp.eigens[0]
                if valence: kwargs['fermie'] = np.max(qp_eigens_kpath[:,:valence])
-
-               qp_ebands = YambopyBandStructure(qp_eigens_kpath,band_kpoints,kpath=path_car,**kwargs)
                #qp_ebands = YambopyBandStructure(qp_eigens_kpath,kpoints_path,kpath=path,weights=qp_z_kpath,size=0.1,**kwargs)
 
             qp_z_kpath = None
@@ -392,9 +388,9 @@ class YamboQPDB():
                 
 
         if self.spin == True:
-           return ks_ebands_up, ks_ebands_dw , qp_ebands_up, qp_ebands_dw
+            return ks_ebands_up_kpath, ks_ebands_dw_kpath , qp_ebands_up_kpath, qp_ebands_dw_kpath
         else: 
-           return ks_ebands, qp_ebands
+            return ks_eigens_kpath, qp_eigens_kpath
 
 
 #########################################################################################################################
