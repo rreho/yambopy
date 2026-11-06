@@ -139,3 +139,4 @@ from yambopy.exciton_phonon.excph_input_data import *
 from yambopy.exciton_phonon.excph_matrix_elements import *
 from yambopy.exciton_phonon.excph_luminescence import *
 from yambopy.exciton_phonon.spectral_function import *
+from yambopy.exciton_phonon.excph_virtual import *

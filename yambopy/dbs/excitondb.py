@@ -619,7 +619,7 @@ class YamboExcitonDB(object):
         return self.exc_dipoles
 
     @staticmethod
-    def expand_and_save_nc(exdbs, wfdb, Dmats, filename, dipdb=None, bands_range=None,BSE_Lin_dir=None):
+    def expand_and_save_nc(exdbs, wfdb, Dmats, filename, dipdb=None, bands_range=None,BSE_Lin_dir=None, expand=True):
         """
         Expand excitons from IBZ to FBZ and save to netCDF
         """
@@ -628,116 +628,117 @@ class YamboExcitonDB(object):
         latdb = wfdb.ydb
         
         full_exdbs = []
-        for iQ in range(wfdb.nkBZ):
-            Qpt = wfdb.kBZ[iQ] # reduced
-            # Get rotated Akcv
-            Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=BSE_Lin_dir)
-            
-            # Identify IBZ index
-            idx_BZQ = wfdb.kptBZidx(Qpt)
-            iQ_iBZ = latdb.kpoints_indexes[idx_BZQ]
-            ibz_db = exdbs[iQ_iBZ]
-            
-            # Create rotated YamboExcitonDB
-            # Flatten Ak_rot back to eigenvectors format
-            eigenvectors_rot = ibz_db.flatten_Akcv(Ak_rot)
-
-            # Create a temporary DB to compute dipoles at this Q
-            temp_db = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
-                                     ibz_db.l_residual, ibz_db.r_residual,
-                                     spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
-                                     table=ibz_db.table, eigenvectors=eigenvectors_rot)
-            temp_db.Akcv = Ak_rot # Set expanded Akcv directly
-
-            # Compute exciton dipoles at this Q if dipdb is present
-            exc_dipoles_Q = None
-            electronic_dipoles = None
-            if dipdb is not None:
-                # Use bs_bands from the original DB for consistency
-                bse_bands = ibz_db.bs_bands
-                exc_dipoles_Q = temp_db.compute_exciton_dipoles(dipdb, bands_range=bse_bands)
+        if expand:
+            for iQ in range(wfdb.nkBZ):
+                Qpt = wfdb.kBZ[iQ] # reduced
+                # Get rotated Akcv
+                Ak_rot = rotate_Akcv_Q(wfdb, exdbs, Qpt, Dmats, folder=BSE_Lin_dir)
                 
-                # We also want to save the electronic dipoles (cv part)
-                # Use the same logic as in compute_exciton_dipoles to get the correct slice
-                Akcv_tmp = ibz_db.get_Akcv()
-                nc_bse = Akcv_tmp.shape[4]
-                nv_bse = Akcv_tmp.shape[5]
+                # Identify IBZ index
+                idx_BZQ = wfdb.kptBZidx(Qpt)
+                iQ_iBZ = latdb.kpoints_indexes[idx_BZQ]
+                ibz_db = exdbs[iQ_iBZ]
                 
-                # Identify correct slice for transitions
-                if dipdb.dipoles.shape[2:] == (nc_bse, nv_bse):
-                    iv, ic = 0, 0
-                else:
-                    # Always use bse_bands to align dipoles with eigenvectors
-                    iv = bse_bands[0] - dipdb.min_band
-                    ic = (latdb.nbandsv + 1) - dipdb.min_band
-                
-                # dipdb.dipoles can be (nkIBZ, 3, nc, nv) or (nspin, nkIBZ, 3, nc, nv)
-                if dipdb.dipoles.ndim == 4:
-                    electronic_dipoles_base = dipdb.dipoles[:, :, ic:ic+nc_bse, iv:iv+nv_bse]
-                else:
-                    electronic_dipoles_base = dipdb.dipoles[:, :, :, ic:ic+nc_bse, iv:iv+nv_bse]
-                
-                # If it's IBZ, we need to expand it to FBZ to be consistent with Ak_rot
-                if not dipdb.expand:
-                    from yambopy.bse.rotate_dipoles import rotate_dipole_vector
+                # Create rotated YamboExcitonDB
+                # Flatten Ak_rot back to eigenvectors format
+                eigenvectors_rot = ibz_db.flatten_Akcv(Ak_rot)
 
-                    if dipdb.dipoles.ndim == 4:
-                        # Properly rotate dipoles using dedicated function
-                        nk_fbz = len(latdb.kmap)
-                        electronic_dipoles = np.zeros((nk_fbz, 3, nc_bse, nv_bse), dtype=electronic_dipoles_base.dtype)
+                # Create a temporary DB to compute dipoles at this Q
+                temp_db = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
+                                        ibz_db.l_residual, ibz_db.r_residual,
+                                        spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
+                                        table=ibz_db.table, eigenvectors=eigenvectors_rot)
+                temp_db.Akcv = Ak_rot # Set expanded Akcv directly
 
-                        time_rev_list = latdb.time_rev_list if hasattr(latdb, 'time_rev_list') else \
-                                       [i >= len(latdb.sym_car) / (1 + int(latdb.time_rev)) for i in range(len(latdb.sym_car))]
-
-                        for i_fbz in range(nk_fbz):
-                            i_ibz = latdb.kmap[i_fbz, 0]
-                            i_sym = latdb.kmap[i_fbz, 1]
-                            rot_mat = latdb.sym_car[i_sym]
-                            trev = time_rev_list[i_sym]
-
-                            # Rotate dipole for each c-v pair
-                            for ic_idx in range(nc_bse):
-                                for iv_idx in range(nv_bse):
-                                    d_cvk = electronic_dipoles_base[i_ibz, :, ic_idx, iv_idx]
-                                    electronic_dipoles[i_fbz, :, ic_idx, iv_idx] = rotate_dipole_vector(d_cvk, rot_mat, trev)
+                # Compute exciton dipoles at this Q if dipdb is present
+                exc_dipoles_Q = None
+                electronic_dipoles = None
+                if dipdb is not None:
+                    # Use bs_bands from the original DB for consistency
+                    bse_bands = ibz_db.bs_bands
+                    exc_dipoles_Q = temp_db.compute_exciton_dipoles(dipdb, bands_range=bse_bands)
+                    
+                    # We also want to save the electronic dipoles (cv part)
+                    # Use the same logic as in compute_exciton_dipoles to get the correct slice
+                    Akcv_tmp = ibz_db.get_Akcv()
+                    nc_bse = Akcv_tmp.shape[4]
+                    nv_bse = Akcv_tmp.shape[5]
+                    
+                    # Identify correct slice for transitions
+                    if dipdb.dipoles.shape[2:] == (nc_bse, nv_bse):
+                        iv, ic = 0, 0
                     else:
-                        # Spin polarized - rotate for each spin
-                        nspin = electronic_dipoles_base.shape[0]
-                        nk_fbz = len(latdb.kmap)
-                        electronic_dipoles = np.zeros((nspin, nk_fbz, 3, nc_bse, nv_bse), dtype=electronic_dipoles_base.dtype)
+                        # Always use bse_bands to align dipoles with eigenvectors
+                        iv = bse_bands[0] - dipdb.min_band
+                        ic = (latdb.nbandsv + 1) - dipdb.min_band
+                    
+                    # dipdb.dipoles can be (nkIBZ, 3, nc, nv) or (nspin, nkIBZ, 3, nc, nv)
+                    if dipdb.dipoles.ndim == 4:
+                        electronic_dipoles_base = dipdb.dipoles[:, :, ic:ic+nc_bse, iv:iv+nv_bse]
+                    else:
+                        electronic_dipoles_base = dipdb.dipoles[:, :, :, ic:ic+nc_bse, iv:iv+nv_bse]
+                    
+                    # If it's IBZ, we need to expand it to FBZ to be consistent with Ak_rot
+                    if not dipdb.expand:
+                        from yambopy.bse.rotate_dipoles import rotate_dipole_vector
 
-                        time_rev_list = latdb.time_rev_list if hasattr(latdb, 'time_rev_list') else \
-                                       [i >= len(latdb.sym_car) / (1 + int(latdb.time_rev)) for i in range(len(latdb.sym_car))]
+                        if dipdb.dipoles.ndim == 4:
+                            # Properly rotate dipoles using dedicated function
+                            nk_fbz = len(latdb.kmap)
+                            electronic_dipoles = np.zeros((nk_fbz, 3, nc_bse, nv_bse), dtype=electronic_dipoles_base.dtype)
 
-                        for i_fbz in range(nk_fbz):
-                            i_ibz = latdb.kmap[i_fbz, 0]
-                            i_sym = latdb.kmap[i_fbz, 1]
-                            rot_mat = latdb.sym_car[i_sym]
-                            trev = time_rev_list[i_sym]
+                            time_rev_list = latdb.time_rev_list if hasattr(latdb, 'time_rev_list') else \
+                                        [i >= len(latdb.sym_car) / (1 + int(latdb.time_rev)) for i in range(len(latdb.sym_car))]
 
-                            for i_spin in range(nspin):
+                            for i_fbz in range(nk_fbz):
+                                i_ibz = latdb.kmap[i_fbz, 0]
+                                i_sym = latdb.kmap[i_fbz, 1]
+                                rot_mat = latdb.sym_car[i_sym]
+                                trev = time_rev_list[i_sym]
+
+                                # Rotate dipole for each c-v pair
                                 for ic_idx in range(nc_bse):
                                     for iv_idx in range(nv_bse):
-                                        d_cvk = electronic_dipoles_base[i_spin, i_ibz, :, ic_idx, iv_idx]
-                                        electronic_dipoles[i_spin, i_fbz, :, ic_idx, iv_idx] = rotate_dipole_vector(d_cvk, rot_mat, trev)
-                    
-                    # Apply 1/Nk normalization for intensive quantity
-                    #electronic_dipoles = electronic_dipoles / latdb.nkpoints
-                else:
-                    print('Electronic dipoles are already in FBZ')
-                    electronic_dipoles = electronic_dipoles_base
+                                        d_cvk = electronic_dipoles_base[i_ibz, :, ic_idx, iv_idx]
+                                        electronic_dipoles[i_fbz, :, ic_idx, iv_idx] = rotate_dipole_vector(d_cvk, rot_mat, trev)
+                        else:
+                            # Spin polarized - rotate for each spin
+                            nspin = electronic_dipoles_base.shape[0]
+                            nk_fbz = len(latdb.kmap)
+                            electronic_dipoles = np.zeros((nspin, nk_fbz, 3, nc_bse, nv_bse), dtype=electronic_dipoles_base.dtype)
 
-            #temp_db = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
-            #                         ibz_db.l_residual, ibz_db.r_residual,
-            #                         spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
-            #                         table=ibz_db.table, eigenvectors=eigenvectors_rot)            
-            full_exdb = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
-                                       ibz_db.l_residual, ibz_db.r_residual,
-                                       spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
-                                       table=ibz_db.table, eigenvectors=eigenvectors_rot,
-                                       exc_dipoles=exc_dipoles_Q,
-                                       electronic_dipoles=electronic_dipoles)
-            full_exdbs.append(full_exdb)
+                            time_rev_list = latdb.time_rev_list if hasattr(latdb, 'time_rev_list') else \
+                                        [i >= len(latdb.sym_car) / (1 + int(latdb.time_rev)) for i in range(len(latdb.sym_car))]
+
+                            for i_fbz in range(nk_fbz):
+                                i_ibz = latdb.kmap[i_fbz, 0]
+                                i_sym = latdb.kmap[i_fbz, 1]
+                                rot_mat = latdb.sym_car[i_sym]
+                                trev = time_rev_list[i_sym]
+
+                                for i_spin in range(nspin):
+                                    for ic_idx in range(nc_bse):
+                                        for iv_idx in range(nv_bse):
+                                            d_cvk = electronic_dipoles_base[i_spin, i_ibz, :, ic_idx, iv_idx]
+                                            electronic_dipoles[i_spin, i_fbz, :, ic_idx, iv_idx] = rotate_dipole_vector(d_cvk, rot_mat, trev)
+                        
+                        # Apply 1/Nk normalization for intensive quantity
+                        #electronic_dipoles = electronic_dipoles / latdb.nkpoints
+                    else:
+                        print('Electronic dipoles are already in FBZ')
+                        electronic_dipoles = electronic_dipoles_base
+
+                #temp_db = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
+                #                         ibz_db.l_residual, ibz_db.r_residual,
+                #                         spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
+                #                         table=ibz_db.table, eigenvectors=eigenvectors_rot)            
+                full_exdb = YamboExcitonDB(latdb, str(iQ+1), ibz_db.eigenvalues, 
+                                        ibz_db.l_residual, ibz_db.r_residual,
+                                        spin_pol=ibz_db.spin_pol, red_qpoint=Qpt,
+                                        table=ibz_db.table, eigenvectors=eigenvectors_rot,
+                                        exc_dipoles=exc_dipoles_Q,
+                                        electronic_dipoles=electronic_dipoles)
+                full_exdbs.append(full_exdb)
 
         YamboExcitonDB.save_excitons_nc(full_exdbs, filename)
 

@@ -168,6 +168,15 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
              print('[WARNING] ndb.dipoles not found. Dipoles will not be saved.')
              save_dipoles = False
 
+    if save_excitons:
+        bse_bnds_range = [wfdb.min_bnd, wfdb.min_bnd + wfdb.nbands]
+        dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=False,debug=False)
+
+        YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, save_excitons, dipdb=dipdb if save_dipoles else None, bands_range=bse_bnds_range)
+    
+    if save_lattice:
+        print('Saving lattice to lattice.nc...')
+        latdb.save_nc('lattice.nc')
     # Calculation
     print('Calculating EXCPH matrix elements...')
     exph_mat = []
@@ -181,15 +190,6 @@ def exciton_phonon_matelem(latdb,elphdb,wfdb,Qrange=None,BSE_dir='bse',BSE_Lin_d
     if len(exph_mat)<2: exph_mat = exph_mat[0] # single Q-point calculation (suppress axis)
     else:               exph_mat = np.array(exph_mat) #[nQ,nq,nmodes,nexc_in (Qexc),nexc_out (Qexc+q)]
     
-    if save_excitons:
-        bse_bnds_range = [wfdb.min_bnd, wfdb.min_bnd + wfdb.nbands]
-        dipdb = YamboDipolesDB.from_db_file(latdb, filename=dipoles_path, bands_range=bse_bands, project=False, expand=False,debug=False)
-
-        YamboExcitonDB.expand_and_save_nc(exdbs, wfdb, Dmats, save_excitons, dipdb=dipdb if save_dipoles else None, bands_range=bse_bnds_range)
-    
-    if save_lattice:
-        print('Saving lattice to lattice.nc...')
-        latdb.save_nc('lattice.nc')
 
     if save_files:
         if exph_file.endswith('.nc'):
