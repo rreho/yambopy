@@ -36,6 +36,8 @@ def exc_ph_raman(ph_energies, exc_energies, exc_dipoles, exc_ph_mat_el, laser_en
     i: incoming, j: scattered polarization. No Bose factor and no w*w_s^3 prefactor
     are included in R (as in the source); see `exc_ph_raman_intensity`.
     Modes with |W_m| <= ph_fre_th (cm-1) get R=0.
+    The photon prefactor sqrt(|w-W_m|/w) is kept exactly as in the source; it only
+    rescales profiles vs laser energy, not mode ratios at fixed w.
 
     Normalization: the source uses un-normalised exciton dipoles
     D = sum_kcv A^S_kcv d_kcv together with nkpts = N_k. yambopy's `exc_dipoles_pol`
