@@ -14,7 +14,8 @@ from yambopy.tools.citations import citation
 def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_el,\
                         exc_energies_in=None,exc_temp=None,ph_channels='b',\
                         PL_energy_prefactor='PT',nexc_out='all',nexc_in='all',\
-                        emin=0,emax=10,estep=0.01,broad=0.1,broad_0=None):
+                        emin=0,emax=10,estep=0.01,broad=0.1,broad_0=None,\
+                        omega_min=None,res_min=None):
     """
     This function calculates the phonon-assisted satellites (phonon replica) in the 
     luminescence of indirect materials (i.e., phonon-mediated exciton recombination process).
@@ -59,7 +60,9 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
         'b' -> both channels (default)
     PL_energy_prefactor : str
         'PT' -> prefactor from time-dependent perturbation theory (default)
-        'RS' -> prefactor from van Roosbroeck-Shockley relation (not including refraction index).
+        'RS' -> prefactor from van Roosbroeck-Shockley relation, w^3 at the photon energy
+                (not including refraction index). Note: PRM 7, 024006 Eq. 17 uses w(w-/+2w_q)^2
+                for the satellites, which does not follow from RS at the photon energy.
         None or any other str -> no prefactor is used
     nexc_out : int
         Number of finite-q excitons in the sum. Default: all available states.
@@ -71,6 +74,14 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
         Broadening parameter in eV.
     broad_0 : float
         Broadening parameter used inside satellite oscillator strengths in eV. Default is broad.
+    omega_min : float, optional
+        Phonon modes with energy below omega_min (eV) are excluded. Default: None (all modes).
+    res_min : float, optional
+        Terms with |E_out(q) -/+ omega_q - E_in| < res_min (eV) are excluded from the satellite
+        amplitude. These on-shell (double-pole) terms appear in direct-gap materials, where
+        finite-q states are nearly resonant with the bright exciton; they belong to the
+        zero-phonon line width/shift, not to the replicas. Use together with
+        exc_direct_luminescence. Default: None (no cutoff, original formula).
     """
     def get_PL_satellite(W,ph_sign=-1):
         """ Actual calculation of PL satellites at each frequency.
@@ -87,6 +98,8 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
                             + ph_sign*ph_energies[:,:,None,None] + 1j*broad_0
         satellite_energy_Ha = satellite_energy/ha2ev
         satellite_weight = exc_ph_mat_el/satellite_energy_Ha
+        if res_min is not None:
+            satellite_weight = np.where(np.abs(satellite_energy.real)<res_min, 0., satellite_weight)
     
         # Phonon emission/absorption factor: if em --> ph_occ+1, if abs --> ph_occ
         ph_fac = ph_occ - (ph_sign-1)/2.
@@ -107,7 +120,7 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
         if 'PT' in PL_energy_prefactor: # [nqpts,nmodes,nexc_out]
             light_fac = light_fac * 1./pole_energy_Ha
         if 'RS' in PL_energy_prefactor: # [nqpts,nmodes,nexc_out]
-            light_fac = light_fac * W * (W-ph_sign*ph_energies[:,:,None])**2.
+            light_fac = light_fac * W**3
 
         # Energy conservation
         delta_funct = 1./((W-pole_energy_Ha)**2.+ broad_Ha**2.)
@@ -127,10 +140,10 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
     assert ph_channels in ['b', 'e', 'a'], "Allowed values for phonon channels are 'b', 'e', 'a'"
     nexc_out_avail = min(exc_energies.shape[1],exc_ph_mat_el.shape[3])
     nexc_in_avail  = min(len(exc_energies_in),exc_dipoles.shape[-1],exc_ph_mat_el.shape[2])
-    assert nexc_out <= nexc_out_avail, "less exciton states than requested (nexc_out)"
-    assert nexc_in  <= nexc_in_avail,  "less exciton states than requested (nexc_in)"
     if nexc_out =='all': nexc_out = nexc_out_avail
     if nexc_in  =='all': nexc_in  = nexc_in_avail
+    assert nexc_out <= nexc_out_avail, "less exciton states than requested (nexc_out)"
+    assert nexc_in  <= nexc_in_avail,  "less exciton states than requested (nexc_in)"
     exc_energies    = exc_energies[:,:nexc_out]
     exc_energies_in = exc_energies_in[:nexc_in]
     exc_dipoles     = exc_dipoles[...,:nexc_in]
@@ -144,6 +157,8 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
     # We extend the projected dipoles for compatibility
     if exc_dipoles.ndim==1: exc_dipoles = np.broadcast_to(exc_dipoles, (3, nexc_in)) 
     # Acoustic phonons at q=0: they are already excluded as exc_ph_mat_el[0,0:3,...]=czero
+    if omega_min is not None:
+        exc_ph_mat_el = exc_ph_mat_el*(ph_energies>=omega_min)[:,:,None,None]
 
     # Occupation functions
     exc_min_energy = np.min(exc_energies)
@@ -167,3 +182,92 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
             PL_satellites[w] += get_PL_satellite(light_energies_Ha[w],ph_sign=+1)
 
     return light_energies, PL_satellites
+
+
+@citation("M. Zanfrognini et al. Phys. Rev. Lett. 131, 206902 (2023)")
+def exc_direct_luminescence(exc_temp,exc_energies_in,exc_dipoles,exc_min_energy=None,\
+                            PL_energy_prefactor='PT',nexc_in='all',R_lambda=None,\
+                            emin=0,emax=10,estep=0.01,broad=0.1):
+    """
+    Direct (zero-phonon, first-order) luminescence from Q=0 excitons.
+
+        I_0(w) = sum_l |T_l|^2/3 * (1-R_l) * N_l * P(E_l) * L(w-E_l)
+
+    T_l    : exciton dipoles (same as in exc_ph_luminescence)
+    N_l    : Boltzmann population exp[-(E_l-E_min)/kT_exc]
+    P(E_l) : 'PT' -> 1/E_l (same convention as the satellites), 'RS' -> E_l^3
+    L      : Lorentzian with FWHM broad (eV), or per-state widths if broad is an array
+    R_l    : optional weight transferred to the satellites (exc_ph_renormalisation),
+             PRM 7, 024006 Eqs. 14-15. With it, direct + satellite weights obey the sum rule.
+
+    Same units and normalisation as exc_ph_luminescence, so the two spectra can be
+    summed. To use with direct-gap materials, compute the satellites with res_min
+    (on-shell terms removed) and give here the zero-phonon linewidths, e.g. from the
+    imaginary part of the exciton-phonon self-energy.
+    Important: pass exc_min_energy = min over ALL exciton energies (finite Q included)
+    so that populations are consistent with exc_ph_luminescence.
+
+    Parameters
+    ----------
+    exc_temp : float
+        Excitonic temperature in kelvin
+    exc_energies_in : float ndarray [nexc_in], Q=0 exciton energies in eV
+    exc_dipoles : cmplx ndarray [3,nexc_in] or [nexc_in], bohr
+    exc_min_energy : float, optional. Reference energy for populations. Default min(exc_energies_in)
+    broad : float or float ndarray [nexc_in], FWHM in eV
+
+    Returns
+    ----------
+    * Energy axis (eV), direct luminescence intensity
+    """
+    exc_energies_in = np.real(exc_energies_in)
+    if nexc_in=='all': nexc_in = min(len(exc_energies_in),exc_dipoles.shape[-1])
+    E = exc_energies_in[:nexc_in]
+    D = exc_dipoles[...,:nexc_in]
+    if D.ndim==1: D = np.broadcast_to(D,(3,nexc_in))
+    if exc_min_energy is None: exc_min_energy = np.min(E)
+    occ  = boltzman_f(E-exc_min_energy,exc_temp)
+    osc  = np.sum(np.abs(D)**2,axis=0)/3.          # polarization average
+    E_Ha = E/ha2ev
+    light_fac = np.ones(nexc_in)
+    if 'PT' in PL_energy_prefactor: light_fac = light_fac/E_Ha
+    if 'RS' in PL_energy_prefactor: light_fac = light_fac*E_Ha**3
+    hwhm_Ha = np.broadcast_to(np.asarray(broad)/2.,(nexc_in,))/ha2ev
+    light_energies = np.arange(emin,emax,estep,dtype=np.float32)
+    W = light_energies[:,None]/ha2ev
+    lor = hwhm_Ha[None,:]/np.pi/((W-E_Ha[None,:])**2+hwhm_Ha[None,:]**2)
+    # same dimensional factor as the satellites (ha2ev**2, no 1/Nq: Q=0 only)
+    if R_lambda is not None: osc = osc*(1.-np.asarray(R_lambda)[:nexc_in])
+    PL_direct = np.einsum('wl,l->w',lor,osc*occ*light_fac)*ha2ev**2
+    return light_energies, PL_direct
+
+
+def exc_ph_renormalisation(ph_temp,ph_energies,exc_energies,exc_ph_mat_el,exc_energies_in=None,\
+                           nexc_out='all',nexc_in='all',omega_min=None,res_min=None):
+    """
+    Weight transferred from the direct line of each Q=0 exciton l to its phonon satellites
+    (diagonal approximation, PRM 7, 024006 Eq. 15 with 1/N_q):
+
+        R_l = 1/N_q sum_{q,m,b} |G_m[q,l,b]|^2 [ (n_qm+1)/(E_l-E_qb+w_qm)^2 + n_qm/(E_l-E_qb-w_qm)^2 ]
+
+    Same inputs, units and cutoffs (omega_min, res_min) as exc_ph_luminescence, so that
+    R_l equals the total satellite weight of state l: the sum rule (1-R_l) + sum_sat = 1
+    holds term by term. Returns R [nexc_in].
+    """
+    Nqpts = ph_energies.shape[0]
+    exc_energies = np.real(exc_energies)
+    if exc_energies_in is None: exc_energies_in = exc_energies[0]
+    exc_energies_in = np.real(exc_energies_in)
+    if nexc_out=='all': nexc_out = min(exc_energies.shape[1],exc_ph_mat_el.shape[3])
+    if nexc_in =='all': nexc_in  = min(len(exc_energies_in),exc_ph_mat_el.shape[2])
+    G2 = np.abs(exc_ph_mat_el[...,:nexc_in,:nexc_out])**2           # [q,m,l,b] Ha^2
+    if omega_min is not None: G2 = G2*(ph_energies>=omega_min)[:,:,None,None]
+    n  = bose(ph_energies,ph_temp)[:,:,None,None]
+    dE = exc_energies_in[None,None,:nexc_in,None]-exc_energies[:,None,None,:nexc_out]  # E_l-E_qb
+    w  = ph_energies[:,:,None,None]
+    R = 0.
+    for sgn,occ in ((+1,n+1.),(-1,n)):
+        den = dE+sgn*w
+        inv = np.where(np.abs(den)<(res_min if res_min is not None else 0.),0.,1./np.where(den==0,1.,den)**2)
+        R = R + np.sum(G2*occ*inv*ha2ev**2,axis=(0,1,3))
+    return R/Nqpts

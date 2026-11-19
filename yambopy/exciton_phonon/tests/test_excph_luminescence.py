@@ -1,0 +1,80 @@
+#
+# License-Identifier: GPL
+#
+# Copyright (C) 2026 University of Luxembourg
+#
+# This file is part of the yambopy project
+#
+import unittest
+import numpy as np
+from yambopy.units import ha2ev
+from yambopy.tools.funcs import boltzman_f
+from yambopy.exciton_phonon.excph_luminescence import exc_ph_luminescence, exc_direct_luminescence, exc_ph_renormalisation
+
+
+def _inputs(seed=3, nq=4, nm=6, nin=3, nout=4):
+    rng = np.random.default_rng(seed)
+    ph  = 0.02 + 0.15*rng.random((nq, nm))
+    Eo  = 2.0 + 0.3*rng.random((nq, nout))
+    Ei  = 2.0 + 0.3*rng.random(nin)
+    D   = rng.normal(size=(3, nin)) + 1j*rng.normal(size=(3, nin))
+    G   = (rng.normal(size=(nq, nm, nin, nout)) + 1j*rng.normal(size=(nq, nm, nin, nout)))*1e-3
+    return ph, Eo, Ei, D, G
+
+
+class TestExcPhLuminescence(unittest.TestCase):
+
+    kw = dict(emin=1.5, emax=2.5, estep=0.005, broad=0.01)
+
+    def test_cutoffs_off_by_default(self):
+        """omega_min=0 and a vanishing res_min must reproduce the original formula."""
+        ph, Eo, Ei, D, G = _inputs()
+        _, ref = exc_ph_luminescence(30, ph, Eo, D, G, exc_energies_in=Ei, **self.kw)
+        _, a   = exc_ph_luminescence(30, ph, Eo, D, G, exc_energies_in=Ei, omega_min=0., res_min=1e-12, **self.kw)
+        np.testing.assert_allclose(a, ref, rtol=1e-12)
+
+    def test_res_min_removes_onshell_term(self):
+        """A finite-q state resonant with E_in + omega must be removed by res_min only."""
+        ph, Eo, Ei, D, G = _inputs()
+        Ei[0] = Eo.min() - ph[1, 2]          # make the resonant final state the lowest (populated)
+        Eo[1, 0] = Ei[0] + ph[1, 2]          # exact double pole (emission)
+        _, a = exc_ph_luminescence(30, ph, Eo, D, G, exc_energies_in=Ei, broad_0=1e-3, **self.kw)
+        _, b = exc_ph_luminescence(30, ph, Eo, D, G, exc_energies_in=Ei, broad_0=1e-3, res_min=1e-4, **self.kw)
+        _, c = exc_ph_luminescence(30, ph, Eo, D, G, exc_energies_in=Ei, broad_0=2e-3, res_min=1e-4, **self.kw)
+        self.assertGreater(a.max(), 10*b.max())          # artefact dominated without cutoff
+        # with the cutoff only off-resonant terms remain: eta-dependence O(eta^2/Delta^2) ~ 1%
+        np.testing.assert_allclose(b, c, rtol=5e-2, atol=1e-6*b.max())
+
+    def test_omega_min(self):
+        ph, Eo, Ei, D, G = _inputs()
+        G2 = G.copy(); G2[ph < 0.05] = 0.
+        _, a = exc_ph_luminescence(30, ph, Eo, D, G,  exc_energies_in=Ei, omega_min=0.05, **self.kw)
+        _, b = exc_ph_luminescence(30, ph, Eo, D, G2, exc_energies_in=Ei, **self.kw)
+        np.testing.assert_allclose(a, b, rtol=1e-12)
+
+    def test_direct_area(self):
+        """Integrated direct PL = sum_l |D_l|^2/3 N_l / E_l(Ha) * ha2ev**3 (same units as satellites)."""
+        _, _, Ei, D, _ = _inputs()
+        w, I = exc_direct_luminescence(30, Ei, D, emin=0., emax=5., estep=1e-4, broad=0.002)
+        occ  = boltzman_f(Ei-Ei.min(), 30)
+        ref  = np.sum(np.sum(np.abs(D)**2, axis=0)/3.*occ*ha2ev/Ei)*ha2ev**3  # (1/E_Ha) * Lorentzian area in eV * ha2ev**2
+        self.assertAlmostEqual(np.trapezoid(I, w)/ref, 1., delta=2e-3)
+
+    def test_sum_rule(self):
+        """(1-R) direct + satellites = bare direct weight (one Q=0 state, flat populations,
+        no energy prefactor, eta_0 -> 0): R is exactly the satellite weight."""
+        ph, Eo, Ei, D, G = _inputs(nin=1)
+        Ei[0] = Eo.min() - 0.05                       # no near-resonant terms
+        kw = dict(emin=0., emax=5., estep=2e-4, broad=0.002)
+        Texc = 1e9                                    # flat Boltzmann populations
+        R = exc_ph_renormalisation(30, ph, Eo, G, exc_energies_in=Ei)
+        w, sat = exc_ph_luminescence(30, ph, Eo, D, G, exc_energies_in=Ei, exc_temp=Texc,
+                                     PL_energy_prefactor='', broad_0=1e-9, **kw)
+        _, d0  = exc_direct_luminescence(Texc, Ei, D, PL_energy_prefactor='', **kw)
+        _, dR  = exc_direct_luminescence(Texc, Ei, D, PL_energy_prefactor='', R_lambda=R, **kw)
+        self.assertGreater(R[0], 1e-4)
+        self.assertAlmostEqual(np.trapezoid(sat, w)/np.trapezoid(d0, w), R[0], delta=2e-3*R[0])
+        self.assertAlmostEqual(np.trapezoid(dR+sat, w)/np.trapezoid(d0, w), 1., delta=1e-3)
+
+if __name__ == '__main__':
+    unittest.main()
