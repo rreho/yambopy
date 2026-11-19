@@ -67,14 +67,15 @@ class TestExcPhLuminescence(unittest.TestCase):
         Ei[0] = Eo.min() - 0.05                       # no near-resonant terms
         kw = dict(emin=0., emax=5., estep=2e-4, broad=0.002)
         Texc = 1e9                                    # flat Boltzmann populations
-        R = exc_ph_renormalisation(30, ph, Eo, G, exc_energies_in=Ei)
-        w, sat = exc_ph_luminescence(30, ph, Eo, D, G, exc_energies_in=Ei, exc_temp=Texc,
-                                     PL_energy_prefactor='', broad_0=1e-9, **kw)
         _, d0  = exc_direct_luminescence(Texc, Ei, D, PL_energy_prefactor='', **kw)
-        _, dR  = exc_direct_luminescence(Texc, Ei, D, PL_energy_prefactor='', R_lambda=R, **kw)
-        self.assertGreater(R[0], 1e-4)
-        self.assertAlmostEqual(np.trapezoid(sat, w)/np.trapezoid(d0, w), R[0], delta=2e-3*R[0])
-        self.assertAlmostEqual(np.trapezoid(dR+sat, w)/np.trapezoid(d0, w), 1., delta=1e-3)
+        for eta in (1e-9, 5e-3):                      # same regularisation in R and satellites
+            R = exc_ph_renormalisation(30, ph, Eo, G, exc_energies_in=Ei, broad_0=eta)
+            w, sat = exc_ph_luminescence(30, ph, Eo, D, G, exc_energies_in=Ei, exc_temp=Texc,
+                                         PL_energy_prefactor='', broad_0=eta, **kw)
+            _, dR  = exc_direct_luminescence(Texc, Ei, D, PL_energy_prefactor='', R_lambda=R, **kw)
+            self.assertGreater(R[0], 1e-4)
+            self.assertAlmostEqual(np.trapezoid(sat, w)/np.trapezoid(d0, w), R[0], delta=2e-3*R[0])
+            self.assertAlmostEqual(np.trapezoid(dR+sat, w)/np.trapezoid(d0, w), 1., delta=1e-3)
 
 if __name__ == '__main__':
     unittest.main()

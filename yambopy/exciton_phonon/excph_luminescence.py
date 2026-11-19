@@ -243,16 +243,19 @@ def exc_direct_luminescence(exc_temp,exc_energies_in,exc_dipoles,exc_min_energy=
 
 
 def exc_ph_renormalisation(ph_temp,ph_energies,exc_energies,exc_ph_mat_el,exc_energies_in=None,\
-                           nexc_out='all',nexc_in='all',omega_min=None,res_min=None):
+                           nexc_out='all',nexc_in='all',omega_min=None,res_min=None,broad_0=0.):
     """
     Weight transferred from the direct line of each Q=0 exciton l to its phonon satellites
     (diagonal approximation, PRM 7, 024006 Eq. 15 with 1/N_q):
 
-        R_l = 1/N_q sum_{q,m,b} |G_m[q,l,b]|^2 [ (n_qm+1)/(E_l-E_qb+w_qm)^2 + n_qm/(E_l-E_qb-w_qm)^2 ]
+        R_l = 1/N_q sum_{q,m,b} |G_m[q,l,b]|^2 [ (n_qm+1)/|E_l-E_qb+w_qm+i eta|^2 + n_qm/|E_l-E_qb-w_qm+i eta|^2 ]
 
-    Same inputs, units and cutoffs (omega_min, res_min) as exc_ph_luminescence, so that
-    R_l equals the total satellite weight of state l: the sum rule (1-R_l) + sum_sat = 1
-    holds term by term. Returns R [nexc_in].
+    Same inputs, units and cutoffs (omega_min, res_min, broad_0=eta in eV) as
+    exc_ph_luminescence, so that R_l equals the total satellite weight of state l and
+    the sum rule (1-R_l) + sum_sat = 1 holds term by term. Use the same broad_0 in both.
+    The perturbative weight transfer is meaningful only for R_l << 1. R_l >~ 1 signals
+    strong coupling to a nearby exciton+phonon threshold (breakdown of second order).
+    Returns R [nexc_in].
     """
     Nqpts = ph_energies.shape[0]
     exc_energies = np.real(exc_energies)
@@ -268,6 +271,8 @@ def exc_ph_renormalisation(ph_temp,ph_energies,exc_energies,exc_ph_mat_el,exc_en
     R = 0.
     for sgn,occ in ((+1,n+1.),(-1,n)):
         den = dE+sgn*w
-        inv = np.where(np.abs(den)<(res_min if res_min is not None else 0.),0.,1./np.where(den==0,1.,den)**2)
+        inv = np.where(np.abs(den)<(res_min if res_min is not None else 0.),0.,1./(den**2+broad_0**2+1e-300))
         R = R + np.sum(G2*occ*inv*ha2ev**2,axis=(0,1,3))
-    return R/Nqpts
+    R = R/Nqpts
+    if np.max(R)>0.3: print(f"[WARNING] max R = {np.max(R):.2f}: second-order weight transfer not reliable (R should be << 1)")
+    return R
