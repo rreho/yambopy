@@ -21,7 +21,7 @@
 - Enough eigenvalues (`BSSNEig`) to close every multiplet you analyse.
 
 ```
-python tcam_lz.py <calc_dir_with_SAVE> <bse_dir> <out_dir>
+python tcam_lz.py <calc_dir_with_SAVE> <bse_dir> <out_dir> [ewin_eV=1.0]
 ```
 
 ## Expected output (12×12×1, no SOC, BSEBands 2–5, BSSmod = "d")
@@ -35,6 +35,10 @@ S2 sigma- : <L_z> about the hole = -1.54 hbar
 ```
 σ+ goes with j = +1, because e₊ = (x + iy)/√2 transforms with λ = e^{-2πi/3}.
 On the real-space grid this gives Ψ(C3 r) = e^{+2πi/3} Ψ(r) about the hole axis.
+
+Outputs: density/Re/Im/L_z cubes for the lowest sigma+/- doublet and the lowest j=0 pair of the
+lowest dark multiplet (dark multiplets are first rotated to the C3 eigenbasis), plus `tcam_summary.npz`
+(energies, irreps, j, <C3>, sigma+ fraction, dipole strength, <L_z> of the cube states).
 
 ## Notes
 - Re/Im cubes of Ψ depend on the gauge (the global phase of each eigenvector), so they cannot

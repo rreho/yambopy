@@ -65,19 +65,30 @@ symm = Crystal_Symmetries(lat, tol=1e-4)
 ic3 = find_rotation(symm.rotations, 3)
 R3, t3 = symm.rotations[ic3], symm.translations[ic3]
 dmats = wfdb.Dmat(symm_mat=R3[None], frac_vec=t3[None], time_rev=False)[0]
-Ak = exc.get_Akcv()[:nstates]
+Ak = exc.get_Akcv()[:nstates].copy()
 D3 = exciton_rotation_rep(Ak, R3, wfdb, dmats, tau_cart=t3)
-c3diag = np.diag(D3)
-j_state = np.full(nstates, np.nan)
+c3diag = np.diag(D3).copy()
+j_state = -3 * np.angle(c3diag) / (2 * np.pi)
+dark_blocks = []
 print("\nTCAM per multiplet (eigenvalues of D(C3) in the block):")
 for blk in find_degeneracy_evs(E[:nstates], atol=degen_tol):
     blk = np.sort(blk)
-    j, lam, _ = tcam_from_rotation(D3[np.ix_(blk, blk)], 3)
-    # per-state label: diagonal j when the state is a C3 eigenstate, else block value
-    jd = -3 * np.angle(c3diag[blk]) / (2 * np.pi)
-    j_state[blk] = np.where(np.abs(np.abs(c3diag[blk]) - 1) < 1e-2, jd, np.nan)
+    j, lam, V = tcam_from_rotation(D3[np.ix_(blk, blk)], 3)
     print("  states %-16s E=%.4f eV  j = %s" % ((blk + 1).tolist(), E[blk].mean(),
                                                  np.round(j, 3).tolist()))
+    if s2[blk].max() < 1e-2 * s2.max():
+        dark_blocks.append(blk)
+        # dark multiplet: rotate to the C3 (TCAM) eigenbasis |j> = sum_m V[m,j] |m>
+        # (bright blocks are already C3 eigenstates after the circular rotation)
+        if np.any(np.abs(np.abs(c3diag[blk]) - 1) > 1e-2):
+            Ak[blk] = np.tensordot(V.T, Ak[blk], axes=(1, 0))
+            dip[:, blk] = dip[:, blk] @ V
+            c3diag[blk], j_state[blk] = lam, j
+sp = np.abs(dip.T @ np.conj(E_PLUS))**2
+sm = np.abs(dip.T @ np.conj(E_MINUS))**2
+s2 = (np.abs(dip)**2).sum(0)
+splus = np.where(sp + sm > 1e-8 * s2.max(), sp / np.maximum(sp + sm, 1e-300), np.nan)
+j_state[np.abs(np.abs(c3diag) - 1) > 1e-2] = np.nan   # not a C3 eigenstate
 print("\n  S    E (eV)   |D|^2/max  sigma+ frac  <C3> (|.|, deg)   j")
 for n in range(nstates):
     print(" %3d  %8.4f  %8.4f   %8.3f    (%.3f, %7.1f)  %+5.2f"
@@ -86,7 +97,7 @@ for n in range(nstates):
 
 # 4) Real space (hole 1 bohr above N): lowest sigma+/- doublet and lowest dark pair
 bright = [n for n in range(nstates) if s2[n] > 1e-2 * s2.max()][:2]
-dark = [n for n in range(nstates) if s2[n] < 1e-2 * s2.max()][:2]
+dark = [n for n in dark_blocks[0] if abs(j_state[n]) < 0.5][:2] if dark_blocks else []
 sel = dark + bright
 iN = int(np.where(lat.atomic_numbers == 7)[0][0])
 hole = np.linalg.solve(lat.lat.T, lat.car_atomic_positions[iN]) % 1
@@ -97,7 +108,7 @@ scl, at_nums, at_pos, wf = ex_wf2Real(Ak[sel], np.zeros(3), wfdb,
                                       wfcCutoffRy=cutoff_Ry)
 Lz_sel = []
 for i, n in enumerate(sel):
-    kind = 'dark' if n in dark else ('sigma_plus' if sp[n] > sm[n] else 'sigma_minus')
+    kind = ('dark_j%+d' % round(j_state[n])) if n in dark else ('sigma_plus' if sp[n] > sm[n] else 'sigma_minus')
     lab = 'S%d_%s_%.4feV' % (n + 1, kind, E[n])
     psi = wf[i].reshape((-1,) + wf.shape[-3:])          # spinor channels
     dens = (np.abs(psi)**2).sum(0)
