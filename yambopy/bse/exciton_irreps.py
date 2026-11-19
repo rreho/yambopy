@@ -134,9 +134,9 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     ## for q = 0, Lkind = "bar" is recommended as "full" will 
     ## break symmetries (depends on the chosen direction)
     if excdb.Lkind is not None: # compatibility with old databases
-        if iqpt==0 and 'bar' not in excdb.Lkind:
+        if iqpt==1 and 'bar' not in excdb.Lkind:
             print(f"Warning: You are using Lkind={excdb.Lkind} at q=0, but 'Lbar' is recommended. Symmetries are broken in this way.")
-        if iqpt!=0 and 'full' not in excdb.Lkind:
+        if iqpt!=1 and 'full' not in excdb.Lkind:
             print(f"Warning: You are using Lkind={excdb.Lkind} at q!=0, but 'Lfull' should be used.")
 
     # Load the wavefunction database
