@@ -106,12 +106,18 @@ class YamboExcitonDB(object):
             raise FileNotFoundError("File %s not found in YamboExcitonDB"%path_filename)
 
         # Qpoint
-        Qpt = filename.split("Q",1)[1]
+        # Parse from the basename only: splitting the full path on the first "Q"
+        # breaks whenever a parent directory name contains a "Q" (e.g. "workQE").
+        Qpt = os.path.basename(filename).split("Q",1)[1]
 
         with Dataset(path_filename) as database:
             #energies
             eig =  database.variables['BS_Energies'][...].data*ha2ev
-            is_coupling = database.variables['COUPLING'][...].data
+            # COUPLING flag is absent in databases written by older yambo versions
+            if 'COUPLING' in database.variables:
+                is_coupling = database.variables['COUPLING'][...].data
+            else:
+                is_coupling = False
             eigenvalues = eig[:,0]+eig[:,1]*I
             neig_full = len(eigenvalues)
             ## in the case of Coupling, we override partial loading. This is because, the energies are 
@@ -159,6 +165,15 @@ class YamboExcitonDB(object):
             elif 'Q-point' in list(database.variables.keys()):
                 car_qpoint = database.variables['Q-point'][...].data/lattice.alat # Yambo compatibility
             if Qpt=="1": car_qpoint = np.zeros(3)
+            if car_qpoint is None:
+                # Neither BS_Q nor Q-point written to this database (older yambo
+                # versions without finite-momentum RT/BSE support). Fall back on
+                # the assumption Q_iQ = k_iQ, i.e. the BSE Q-grid follows the same
+                # ordering as the lattice's IBZ k-points.
+                # NB: use get_ibz_kpoints(), NOT lattice.red_kpoints -- the latter
+                # is the FULL-BZ list, whose leading entries are the star of the
+                # first shell rather than the irreducible representatives.
+                car_qpoint = lattice.get_ibz_kpoints(units='car')[int(Qpt)-1]
 
             #eigenvectors
             table = None
@@ -177,6 +192,10 @@ class YamboExcitonDB(object):
                spin_pol = 'no'
 
             #check Coulomb cutoff
+            # W_Cutoff is only written when a screened interaction was computed
+            # (e.g. BSKmod=SEX). Kernels without W (IP, HARTREE) have no such
+            # variable, which means no Coulomb cutoff was applied.
+            cutoff = 'none'
             if 'W_Cutoff' in database.variables:
                 cutoff = str(database.variables['W_Cutoff'][:][0],'UTF-8').strip()
 
