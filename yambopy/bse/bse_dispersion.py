@@ -15,7 +15,7 @@ from yambopy.units import *
 from yambopy.plot.plotting import add_fig_kwargs, BZ_Wigner_Seitz, shifted_grids_2D
 from yambopy.lattice import replicate_red_kmesh, calculate_distances, car_red, red_car
 from yambopy.dbs.latticedb import YamboLatticeDB
-from yambopy.kpoints import get_path
+from yambopy.kpoints import get_path, build_ktree, find_kpt
 from yambopy.tools.band_interpolation import (
     interp_cubic_spline_1d, interp_rbf_2d, interp_skw, interp_nn,
     interp_spin_along_1d_path
@@ -719,7 +719,7 @@ class ExcitonDispersion():
         Compute orbital-projected exciton weights.
 
         For each Q-point and exciton state S, computes:
-            W^S(Q) = sum_{kvc} |A^S_{kvc}(Q)|^2 * w_orb(k, v, c)
+            W^S(Q) = sum_{kvc} |A^S_{kvc}(Q)|^2 * w_orb(c,k ; v,k-Q)
         where w_orb is the sum of |<psi_kn|phi_o>|^2 over selected_orbitals,
         with n = v, c, or their average depending on `contribution`.
 
@@ -738,26 +738,36 @@ class ExcitonDispersion():
 
         w_qe = projwfc.get_weights(selected_orbitals=selected_orbitals)  # (nk, nbands)
 
+        if contribution not in ('valence', 'conduction', 'both'):
+            raise ValueError("contribution must be 'valence', 'conduction', or 'both'")
+
+        # Yambo convention: |S,Q> = sum_kcv A_kcv |c,k> (x) |v,k-Q>*
+        # i.e. the electron (c) sits at k and the hole (v) at k-Q.
         k_idx = self.exc_table[:, 0] - 1  # (ntransitions,) 0-based, full-BZ indices
         v_idx = self.exc_table[:, 1] - 1
         c_idx = self.exc_table[:, 2] - 1
 
+        red_kpts = self.lattice.red_kpoints
+        ktree    = build_ktree(red_kpts)
+
         # If projwfc was run on the IBZ only, map full-BZ k-indices to IBZ.
-        # Orbital projections are invariant under crystal symmetry operations.
+        # Valid for orbital groups closed under the point group (e.g. full l-shells
+        # of one species); single m-channels are mixed by rotations.
+        to_ibz = lambda ik: ik
         if w_qe.shape[0] == self.lattice.ibz_nkpoints and hasattr(self.lattice, 'kpoints_indexes'):
-            k_idx = self.lattice.kpoints_indexes[k_idx]
+            to_ibz = lambda ik: self.lattice.kpoints_indexes[ik]
 
-        if contribution == 'valence':
-            w_t = w_qe[k_idx, v_idx]
-        elif contribution == 'conduction':
-            w_t = w_qe[k_idx, c_idx]
-        elif contribution == 'both':
-            w_t = 0.5 * (w_qe[k_idx, v_idx] + w_qe[k_idx, c_idx])
-        else:
-            raise ValueError("contribution must be 'valence', 'conduction', or 'both'")
-
-        A2 = np.abs(self.exc_eigenvectors) ** 2          # (nq, nexcitons, ntransitions)
-        return np.einsum('qst,t->qs', A2, w_t)           # (nq, nexcitons)
+        w_c = w_qe[to_ibz(k_idx), c_idx]
+        A2  = np.abs(self.exc_eigenvectors) ** 2          # (nq, nexcitons, ntransitions)
+        weights = np.zeros(A2.shape[:2])
+        for iq in range(self.nqpoints):
+            kmq_idx = find_kpt(ktree, red_kpts[k_idx] - self.red_qpoints[iq])
+            w_v = w_qe[to_ibz(kmq_idx), v_idx]
+            if contribution == 'valence':      w_t = w_v
+            elif contribution == 'conduction': w_t = w_c
+            else:                              w_t = 0.5 * (w_v + w_c)
+            weights[iq] = A2[iq] @ w_t
+        return weights                                     # (nq, nexcitons)
 
     def plot_orbital_projected_dispersion(
         self, path, projwfc, orbital_groups,

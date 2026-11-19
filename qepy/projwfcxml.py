@@ -522,7 +522,7 @@ class ProjwfcXML(object):
         self.eigen  = scissored_bands
 
     def __str__(self):
-        version_number = float(re.findall(r"([0-9.]+)",self.qe_version)[0])
+        version_number = float('.'.join(re.findall(r"([0-9.]+)",self.qe_version)[0].split('.')[:2]))
         lines = []; app = lines.append
         app(marquee(self.__class__.__name__))
 
