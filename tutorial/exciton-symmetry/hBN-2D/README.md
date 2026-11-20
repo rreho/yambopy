@@ -48,3 +48,17 @@ lowest dark multiplet (dark multiplets are first rotated to the C3 eigenbasis), 
   the hole is placed (+1.54 with the hole on N, +1.19 with the hole on B).
 - With spinors (`Dmat` includes SU(2)), j is the total angular momentum, orbital plus spin.
   l_z is orbital only and is summed over the spinor channels.
+
+## Degeneracy tolerance (important)
+- Rotations (circular basis, C3 eigenbasis) are legitimate only inside a manifold that is
+  degenerate by symmetry, i.e. a single irrep (e.g. an E' pair). Never rotate across
+  different irreps: the result is not an eigenstate of the BSE Hamiltonian.
+- Measure the numerical noise floor as the splitting of a symmetry-protected pair (e.g. the
+  bright E' doublet, which must be exactly degenerate). Choose the degeneracy tolerance above
+  this noise and below the physical splittings between irreps.
+- Example: in a spin-orbit hBN run the spin-triplet partner of the bright E' exciton
+  (E' x (A2' + E'') = E' + A1'' + A2'' + E'') shows internal splittings of 0.1-0.4 meV,
+  comparable to the 0.24 meV numerical splitting of E'. Its fine structure is not resolved;
+  rotating it to the C3 basis mixes A1''/A2'' (both j=0, opposite sigma_v parity, <L_z>=0 each)
+  into non-stationary states with spurious <L_z> = +-1.3 hbar.
+- For light-element systems (BN, diamond) spin-orbit coupling is negligible: use collinear runs.
