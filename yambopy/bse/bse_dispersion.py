@@ -440,13 +440,14 @@ class ExcitonDispersion():
 
     def _compute_spin_full_bz(self, save_dir, bse_dir, contribution,
                                sz=0.5 * np.array([[1, 0], [0, -1]]),
-                               dmat_mode='run', dmat_file='Dmats.npy'):
+                               dmat_mode='run', dmat_file='Dmats.npy', degen_atol=1e-4):
         """
         Compute S_z at all full-BZ Q-points by explicitly rotating the exciton
         wavefunctions to each symmetry-equivalent Q-point.
         Returns spin_full of shape (nq_full, nexcitons).
         """
-        from yambopy.bse.exciton_spin import compute_exciton_spin, get_spinvals
+        from yambopy.bse.exciton_spin import compute_exciton_spin
+        from yambopy.tools.degeneracy_finder import find_degeneracy_evs
         from yambopy.exciton_phonon.excph_matrix_elements import rotate_Akcv_Q, save_or_load_dmat
 
         excdb_q1 = YamboExcitonDB.from_db_file(
@@ -480,17 +481,20 @@ class ExcitonDispersion():
             smat = compute_exciton_spin(
                 self.lattice, excdb, wfdb, elec_sz, contribution=contribution, diagonal=False
             )
-            smat = get_spinvals(smat, excdb.eigenvalues, atol=1e-2)
             excdb.get_Akcv = original_get_Akcv
 
-            vals = [v for group in smat for v in group]
-            spin_full[iq_full] = np.array(vals)[:self.nexcitons].real
+            # S_z eigenvalues inside each degenerate manifold, stored at the
+            # indices of that manifold (sorted within it)
+            evals = np.real(excdb.eigenvalues[:self.nexcitons])
+            for grp in find_degeneracy_evs(evals, atol=degen_atol, rtol=0.0):
+                grp = np.asarray(grp)
+                spin_full[iq_full, grp] = np.sort(np.linalg.eigvalsh(smat[np.ix_(grp, grp)]))
 
         return spin_full
 
     def get_spin_along_path(self, path, tol=1e-3, expand_bz=True,
                             save_dir='SAVE', bse_dir='BSE', contribution='b',
-                            dmat_mode='run', dmat_file='Dmats.npy'):
+                            dmat_mode='run', dmat_file='Dmats.npy', degen_atol=1e-4):
         """
         Compute S_z expectation values at the Q-points that lie along the path.
 
@@ -498,6 +502,9 @@ class ExcitonDispersion():
         ----------
         expand_bz : must match the value used in get_dispersion / get_dispersion_interpolated
                     so that the returned array aligns with the scatter data
+        degen_atol : energy window (eV) defining a degenerate manifold, inside which S_z is
+                    diagonalised. Must lie above the numerical noise and below physical
+                    splittings (default 0.1 meV).
 
         Returns
         -------
@@ -512,7 +519,7 @@ class ExcitonDispersion():
         _, q_indices, _, _, _ = self._project_qpts_onto_path(path, tol=tol, expand_bz=expand_bz)
         spin_full = self._compute_spin_full_bz(
             save_dir, bse_dir, contribution,
-            dmat_mode=dmat_mode, dmat_file=dmat_file
+            dmat_mode=dmat_mode, dmat_file=dmat_file, degen_atol=degen_atol
         )
         return spin_full[q_indices]
 
