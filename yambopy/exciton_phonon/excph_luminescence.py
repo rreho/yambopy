@@ -197,8 +197,10 @@ def exc_direct_luminescence(exc_temp,exc_energies_in,exc_dipoles,exc_min_energy=
     N_l    : Boltzmann population exp[-(E_l-E_min)/kT_exc]
     P(E_l) : 'PT' -> 1/E_l (same convention as the satellites), 'RS' -> E_l^3
     L      : Lorentzian with FWHM broad (eV), or per-state widths if broad is an array
-    R_l    : optional weight transferred to the satellites (exc_ph_renormalisation),
-             PRM 7, 024006 Eqs. 14-15. With it, direct + satellite weights obey the sum rule.
+    R_l    : optional zero-phonon-line depletion 1-Z_l (exc_ph_zpl_depletion): the
+             direct line carries the quasiparticle weight Z_l = 1-R_l. Passing instead
+             the replica weight (exc_ph_renormalisation, PRM 7, 024006 Eqs. 14-15)
+             enforces the satellite sum rule; the two differ by the n <-> n+1 pairing.
 
     Same units and normalisation as exc_ph_luminescence, so the two spectra can be
     summed. To use with direct-gap materials, compute the satellites with res_min
@@ -242,37 +244,76 @@ def exc_direct_luminescence(exc_temp,exc_energies_in,exc_dipoles,exc_min_energy=
     return light_energies, PL_direct
 
 
-def exc_ph_renormalisation(ph_temp,ph_energies,exc_energies,exc_ph_mat_el,exc_energies_in=None,\
-                           nexc_out='all',nexc_in='all',omega_min=None,res_min=None,broad_0=0.):
-    """
-    Weight transferred from the direct line of each Q=0 exciton l to its phonon satellites
-    (diagonal approximation, PRM 7, 024006 Eq. 15 with 1/N_q):
-
-        R_l = 1/N_q sum_{q,m,b} |G_m[q,l,b]|^2 [ (n_qm+1)/|E_l-E_qb+w_qm+i eta|^2 + n_qm/|E_l-E_qb-w_qm+i eta|^2 ]
-
-    Same inputs, units and cutoffs (omega_min, res_min, broad_0=eta in eV) as
-    exc_ph_luminescence, so that R_l equals the total satellite weight of state l and
-    the sum rule (1-R_l) + sum_sat = 1 holds term by term. Use the same broad_0 in both.
-    The perturbative weight transfer is meaningful only for R_l << 1. R_l >~ 1 signals
-    strong coupling to a nearby exciton+phonon threshold (breakdown of second order).
-    Returns R [nexc_in].
-    """
-    Nqpts = ph_energies.shape[0]
+def _excph_resonances(ph_temp,ph_energies,exc_energies,exc_ph_mat_el,exc_energies_in,
+                      nexc_out,nexc_in,omega_min):
+    """ |G|^2 (eV^2), n, E_l-E_qb (eV), w (eV), each broadcast to [q,m,l,b]. """
     exc_energies = np.real(exc_energies)
     if exc_energies_in is None: exc_energies_in = exc_energies[0]
     exc_energies_in = np.real(exc_energies_in)
     if nexc_out=='all': nexc_out = min(exc_energies.shape[1],exc_ph_mat_el.shape[3])
     if nexc_in =='all': nexc_in  = min(len(exc_energies_in),exc_ph_mat_el.shape[2])
-    G2 = np.abs(exc_ph_mat_el[...,:nexc_in,:nexc_out])**2           # [q,m,l,b] Ha^2
+    G2 = np.abs(exc_ph_mat_el[...,:nexc_in,:nexc_out])**2*ha2ev**2   # [q,m,l,b] eV^2
     if omega_min is not None: G2 = G2*(ph_energies>=omega_min)[:,:,None,None]
     n  = bose(ph_energies,ph_temp)[:,:,None,None]
-    dE = exc_energies_in[None,None,:nexc_in,None]-exc_energies[:,None,None,:nexc_out]  # E_l-E_qb
-    w  = ph_energies[:,:,None,None]
+    dE = exc_energies_in[None,None,:nexc_in,None]-exc_energies[:,None,None,:nexc_out]
+    return G2, n, dE, ph_energies[:,:,None,None]
+
+
+def exc_ph_renormalisation(ph_temp,ph_energies,exc_energies,exc_ph_mat_el,exc_energies_in=None,\
+                           nexc_out='all',nexc_in='all',omega_min=None,res_min=None,broad_0=0.):
+    """
+    Replica weight of each Q=0 exciton l: total weight of its phonon satellites
+    (diagonal approximation, PRM 7, 024006 Eq. 15 with 1/N_q):
+
+        R_l = 1/N_q sum_{q,m,b} |G_m[q,l,b]|^2 [ (n_qm+1)/|E_l-E_qb+w_qm+i eta|^2 + n_qm/|E_l-E_qb-w_qm+i eta|^2 ]
+
+    Emission pairing: the replica at E_qb-w (state qb emits phonon + photon) carries
+    n+1 and the denominator E_qb-w-E_l. This is the satellite sum rule, NOT the
+    zero-phonon-line depletion 1-Z_l (exc_ph_zpl_depletion: n <-> n+1 swapped).
+    Same inputs, units and cutoffs (omega_min, res_min, broad_0=eta in eV) as
+    exc_ph_luminescence, so (1-R_l) + sum_sat = 1 holds term by term with the same broad_0.
+    Meaningful only for R_l << 1. Returns R [nexc_in].
+    Alias: exc_ph_replica_weight.
+    """
+    G2, n, dE, w = _excph_resonances(ph_temp,ph_energies,exc_energies,exc_ph_mat_el,
+                                     exc_energies_in,nexc_out,nexc_in,omega_min)
     R = 0.
     for sgn,occ in ((+1,n+1.),(-1,n)):
         den = dE+sgn*w
         inv = np.where(np.abs(den)<(res_min if res_min is not None else 0.),0.,1./(den**2+broad_0**2+1e-300))
-        R = R + np.sum(G2*occ*inv*ha2ev**2,axis=(0,1,3))
-    R = R/Nqpts
+        R = R + np.sum(G2*occ*inv,axis=(0,1,3))
+    R = R/ph_energies.shape[0]
     if np.max(R)>0.3: print(f"[WARNING] max R = {np.max(R):.2f}: second-order weight transfer not reliable (R should be << 1)")
     return R
+
+exc_ph_replica_weight = exc_ph_renormalisation
+
+
+def exc_ph_zpl_depletion(ph_temp,ph_energies,exc_energies,exc_ph_mat_el,exc_energies_in=None,\
+                         nexc_out='all',nexc_in='all',omega_min=None,res_min=None,broad_0=0.):
+    """
+    Zero-phonon-line depletion 1-Z_l of each Q=0 exciton l from the Fan-Migdal
+    exciton-phonon self-energy (excitons unoccupied, f=0 in the (n+1-f), (n+f) factors):
+
+        Sigma_l(w) = 1/N_q sum_{q,m,b} |G_m[q,l,b]|^2 [ (n_qm+1)/(w-E_qb-w_qm+i eta) + n_qm/(w-E_qb+w_qm+i eta) ]
+
+        1-Z_l = -dRe Sigma_l/dw |_{E_l}
+              = 1/N_q sum |G|^2 [ (n+1) (x_-^2-eta^2)/(x_-^2+eta^2)^2 + n (x_+^2-eta^2)/(x_+^2+eta^2)^2 ],
+        x_-+ = E_l-E_qb-+w_qm   (eta -> 0: (n+1)/x_-^2 + n/x_+^2)
+
+    i.e. (n+1) pairs with E_l-E_qb-w (l emits a phonon), n with E_l-E_qb+w.
+    Inputs and cutoffs as exc_ph_renormalisation (terms with |x| < res_min dropped).
+    The direct line carries Z_l = 1-(1-Z_l): pass the result as R_lambda to
+    exc_direct_luminescence. Meaningful only for 1-Z_l << 1. Returns 1-Z [nexc_in].
+    """
+    G2, n, dE, w = _excph_resonances(ph_temp,ph_energies,exc_energies,exc_ph_mat_el,
+                                     exc_energies_in,nexc_out,nexc_in,omega_min)
+    dZ = 0.
+    for sgn,occ in ((-1,n+1.),(+1,n)):
+        x2 = (dE+sgn*w)**2
+        f = np.where(np.sqrt(x2)<(res_min if res_min is not None else 0.),0.,
+                     (x2-broad_0**2)/((x2+broad_0**2)**2+1e-300))
+        dZ = dZ + np.sum(G2*occ*f,axis=(0,1,3))
+    dZ = dZ/ph_energies.shape[0]
+    if np.max(dZ)>0.3: print(f"[WARNING] max 1-Z = {np.max(dZ):.2f}: second-order depletion not reliable (should be << 1)")
+    return dZ

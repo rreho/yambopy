@@ -9,7 +9,9 @@ import unittest
 import numpy as np
 from yambopy.units import ha2ev
 from yambopy.tools.funcs import boltzman_f
-from yambopy.exciton_phonon.excph_luminescence import exc_ph_luminescence, exc_direct_luminescence, exc_ph_renormalisation
+from yambopy.exciton_phonon.excph_luminescence import (exc_ph_luminescence, exc_direct_luminescence,
+                                                   exc_ph_renormalisation, exc_ph_zpl_depletion)
+from yambopy.tools.funcs import bose
 
 
 def _inputs(seed=3, nq=4, nm=6, nin=3, nout=4):
@@ -76,6 +78,43 @@ class TestExcPhLuminescence(unittest.TestCase):
             self.assertGreater(R[0], 1e-4)
             self.assertAlmostEqual(np.trapezoid(sat, w)/np.trapezoid(d0, w), R[0], delta=2e-3*R[0])
             self.assertAlmostEqual(np.trapezoid(dR+sat, w)/np.trapezoid(d0, w), 1., delta=1e-3)
+
+class TestZPLDepletion(unittest.TestCase):
+    """Two-level toy: Q=0 state l, one finite-q state b, one mode w, one q."""
+    El, Eb, w, g = 4.10, 4.25, 0.17, 0.004        # eV (g in eV)
+
+    def args(self, T):
+        G = np.array([[[[self.g/ha2ev]]]])
+        return (T, np.array([[self.w]]), np.array([[self.Eb]]), G), dict(exc_energies_in=np.array([self.El]))
+
+    def test_exact_two_level_T0(self):
+        """T=0: |l> couples to |b + 1 phonon>; Z = |<l|psi>|^2 of the exact 2x2 eigenstate."""
+        a, kw = self.args(0.)
+        H = np.array([[self.El, self.g], [self.g, self.Eb + self.w]])
+        e, v = np.linalg.eigh(H)
+        Z = np.abs(v[0, np.argmax(np.abs(v[0]))])**2
+        dZ = exc_ph_zpl_depletion(*a, **kw)[0]
+        self.assertAlmostEqual(dZ, self.g**2/(self.El - self.Eb - self.w)**2, places=12)
+        self.assertAlmostEqual(dZ, 1 - Z, delta=5*dZ**2)
+        # replica weight pairs n+1 with E_l-E_b+w instead
+        R = exc_ph_renormalisation(*a, **kw)[0]
+        self.assertAlmostEqual(R, self.g**2/(self.El - self.Eb + self.w)**2, places=12)
+
+    def test_derivative_of_sigma(self):
+        """1-Z = -dRe Sigma/dw at E_l, with eta and phonon occupation."""
+        T, eta = 300., 0.01
+        a, kw = self.args(T)
+        n = bose(np.array([self.w]), T)[0]
+        sig = lambda x: np.real(self.g**2*((n + 1)/(x - self.Eb - self.w + 1j*eta) + n/(x - self.Eb + self.w + 1j*eta)))
+        h = 1e-6
+        ref = -(sig(self.El + h) - sig(self.El - h))/(2*h)
+        dZ = exc_ph_zpl_depletion(*a, broad_0=eta, **kw)[0]
+        self.assertAlmostEqual(dZ, ref, delta=1e-7*abs(ref))
+        # res_min drops the near-resonant term (|E_l-E_b+w| = 20 meV)
+        dZ1 = exc_ph_zpl_depletion(*a, broad_0=eta, res_min=0.03, **kw)[0]
+        x = self.El - self.Eb - self.w
+        self.assertAlmostEqual(dZ1, self.g**2*(n + 1)*(x**2 - eta**2)/(x**2 + eta**2)**2, places=12)
+
 
 if __name__ == '__main__':
     unittest.main()
