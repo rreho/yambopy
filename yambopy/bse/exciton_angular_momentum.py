@@ -32,6 +32,21 @@ Selection rule: j_S' = j_S + j_lambda (mod n). The in-plane photon e_+ =
 D_S = sum A^S_kcv <v|r|c> is along e_+ (circular_basis.E_PLUS) has j = +1.
 With spinor Dmats j is the total (orbital + spin) quantum number.
 
+Phonons: for g = {R|t} with Rq = q + G, atom kappa -> R tau_k + t = tau_k' + L_k
+(L_k a lattice vector). With u_k(R_l) = e_k e^{iq.R_l} (QE/LetzElPhC 'cell'
+gauge) the actively rotated mode is
+
+    [g e]_k' = e^{-i q.L_k} R e_k,       D_{nu mu}(g) = <e_nu| g e_mu>.
+
+In the 'atom' gauge u_k(R_l) = e~_k e^{iq.(R_l+tau_k)} one uses e = e~ e^{iq.tau}
+(same D; the two differ only if g permutes atoms, otherwise the per-atom phase
+commutes with g). lambda_nu = exp(-2 pi i j_nu / n) defines the phonon pseudo-angular
+momentum; it depends on the rotation centre (t), which must be the same one
+used for the excitons. dV_nu is linear in e_nu, so U dV_nu U^+ = sum D dV and
+
+    G^nu_{S'S} = <S'|dV_nu|S> = lam*_{S'} lam_nu lam_S G^nu_{S'S}
+    ->  G^nu_{S'S} = 0  unless  j_S' = j_S + j_nu (mod n).
+
 Real space: Psi_S(r_e; r_h) = sum_kcv A^S_kcv psi_ck(r_e) psi*_vk(r_h) is
 defined only up to a global phase, so Re/Im cubes are gauge dependent. The
 gauge-invariant hole-centred angular-momentum density (atomic units, hbar=1)
@@ -122,6 +137,90 @@ def exciton_rotation_rep(Akcv, R_cart, wfdb, dmats, Qpt_crys=None,
     left = Akcv if Akcv_left is None else Akcv_left
     phase = np.exp(2j * np.pi * (np.linalg.inv(lat) @ Q) @ tau)
     return phase * np.einsum('m...,n...->mn', left.conj(), rot, optimize=True)
+
+
+def tcam_basis(D_Cn, n, unit_tol=1e-2):
+    """
+    tcam_from_rotation with an orthonormal eigenbasis (QR within equal j):
+    returns j (N,), U (N, N) unitary, |j_a> = sum_m U[m, a] |m>.
+    """
+    j, _, V = tcam_from_rotation(D_Cn, n, unit_tol)
+    for jj in np.unique(np.rint(j)):
+        s = np.rint(j) == jj
+        V[:, s] = np.linalg.qr(V[:, s])[0]
+    return j, V
+
+
+def phonon_tcam(ph_eigvecs, ph_energies, atom_pos, lat, R_cart, n, q_crys=None,
+                t_cart=None, gauge='cell', degen_tol=1e-4):
+    """
+    Phonon pseudo-angular momentum j_nu for the C_n rotation {R_cart|t_cart}.
+
+    Parameters
+    ----------
+    ph_eigvecs : (nm, nat, 3) complex, Cartesian (eigenvectors or e/sqrt(M))
+    ph_energies : (nm,) any unit, used only for degenerate blocks (degen_tol)
+    atom_pos : (nat, 3) Cartesian positions, same units as lat
+    lat : (3, 3) lattice vectors as ROWS (YamboLatticeDB.lat)
+    R_cart : (3, 3) Cartesian rotation; n its order
+    q_crys : phonon momentum in crystal units (default Gamma)
+    t_cart : translation of the operation x -> Rx + t (default 0)
+    gauge : 'cell' (e^{iq.R}, QE/LetzElPhC) or 'atom' (e^{iq.(R+tau)})
+
+    Returns
+    -------
+    j : (nm,) j_nu in (-n/2, n/2]
+    W : (nm, nm) unitary within degenerate blocks: mode a = sum_mu W[mu, a] e_mu
+    """
+    e = np.asarray(ph_eigvecs, complex)
+    tau = np.asarray(atom_pos, float)
+    lat = np.asarray(lat, float)
+    q = np.zeros(3) if q_crys is None else np.asarray(q_crys, float)
+    t = np.zeros(3) if t_cart is None else np.asarray(t_cart, float)
+    q_cart = 2 * np.pi * np.linalg.inv(lat) @ q
+    dG = lat @ (R_cart - np.eye(3)) @ q_cart / (2 * np.pi)         # Rq - q, crystal
+    assert np.allclose(dG, np.rint(dG), atol=1e-5), "R q != q + G"
+    if gauge == 'atom': e = e * np.exp(1j * tau @ q_cart)[None, :, None]
+    gE = np.zeros_like(e)
+    for k in range(len(tau)):
+        new = R_cart @ tau[k] + t
+        fr = np.linalg.solve(lat.T, (new[None, :] - tau).T).T     # crystal units
+        kp = np.where(np.all(np.abs(fr - np.rint(fr)) < 1e-4, axis=1))[0]
+        assert len(kp) == 1, "atom %d not mapped onto an atom" % k
+        L = new - tau[kp[0]]
+        gE[:, kp[0]] = np.exp(-1j * q_cart @ L) * e[:, k] @ R_cart.T
+    nm = e.shape[0]
+    E, gE = e.reshape(nm, -1).T, gE.reshape(nm, -1).T
+    D = np.linalg.lstsq(E, gE, rcond=None)[0]          # g e_mu = sum_nu e_nu D_{nu mu}
+    j, W = np.zeros(nm), np.zeros((nm, nm), complex)
+    w = np.asarray(ph_energies, float)
+    for b in np.split(np.arange(nm), np.where(np.diff(w) > degen_tol)[0] + 1):
+        j[b], W[np.ix_(b, b)] = tcam_basis(D[np.ix_(b, b)], n)
+    return j, W
+
+
+def check_tcam_conservation(G, j_out, j_in, j_ph, n, tol=0.1):
+    """
+    Diagnostic of the TCAM selection rule j_out = j_in + j_ph (mod n).
+
+    G : (nmodes, n_in, n_out), Ex-ph.npy order, G[nu, i, o] = <o|dV_nu|i>,
+        already in TCAM bases: G_j = einsum('ma,nb,oc,mno->abc', W, U_in,
+        U_out.conj(), G) with W from phonon_tcam, U from tcam_basis.
+    tol : |j_out - j_in - j_ph| mod n below tol counts as allowed.
+
+    Returns the violating |G|^2 weight fraction, max violating |G| and its
+    index (nu, i, o).
+    """
+    G = np.asarray(G)
+    dj = (np.asarray(j_out)[None, None, :] - np.asarray(j_in)[None, :, None]
+          - np.asarray(j_ph)[:, None, None])
+    dj = np.abs((dj + n / 2.0) % n - n / 2.0)
+    G2 = np.abs(G)**2
+    bad = np.broadcast_to(dj > tol, G.shape)
+    frac = G2[bad].sum() / max(G2.sum(), 1e-300)
+    if frac == 0: return 0.0, 0.0, None
+    idx = np.unravel_index(np.argmax(np.where(bad, G2, -1)), G.shape)
+    return frac, np.abs(G[idx]), idx
 
 
 def lz_density(psi, lat_vec, center, sigma=None):
