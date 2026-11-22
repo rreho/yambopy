@@ -54,7 +54,7 @@ Script: `/scratch/users/rreho/paper_runs_v2/zpl_raman/raman_ar.py`; log `raman_a
 | hermiticity defect ‖G−G^H‖/‖G‖ of the stored modes | A1′ 9e-7, E′ 1e-5 (the LetzElPhC Γ eigenvectors are real) |
 | stored A1′, E′a, E′b: max \|I_cur − I_alt\| / max I (xx, xy, σ+σ+, σ+σ−) | ≤ 5e-6 (identical) |
 | E′± = (E′a ± i E′b)/√2: xx, xy, σ+σ+, σ+σ− | ≤ 1.3e-3; ratio \|AR\|/\|R\| 0.24 (port) vs 0.20 (alt) |
-| E′+ in the forbidden σ+σ− channel (TCAM forbidden: j_in + j_ph = 1 + 1 = −1 = j_out does hold for σ+ → σ−, so this channel is σ+σ− with e_out = σ−) | port 2.2e-5 at 0.9 eV; alt integral 4 % of the port's |
+| E′+ with e_in = σ+, e_out = σ− (symmetry-forbidden; the allowed E′− channel peaks at 21.1) | port 2.2e-5 (at 0.9 eV); alt integral 4 % of the port's: the port leaks weight into a forbidden channel |
 | A1′ × e^{0.7i} (a pure gauge change) | port changes by 2.2e-3 at the peak (\|AR\|/\|R\| 0.33 → 0.56); alt is invariant |
 
 With the present real Γ eigenvectors the two forms agree to round-off. The port becomes gauge dependent once
