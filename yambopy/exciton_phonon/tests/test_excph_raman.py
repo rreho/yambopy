@@ -44,6 +44,7 @@ class TestExcPhRaman(unittest.TestCase):
         ph_eV = np.array([0.0002, 0.015, 0.025, 0.036])   # first mode below 5 cm-1 threshold
         dip = rng.normal(size=(3, nexc)) + 1j * rng.normal(size=(3, nexc))
         G = rng.normal(size=(nmodes, nexc, nexc)) + 1j * rng.normal(size=(nmodes, nexc, nexc))
+        G = G + np.conj(G.transpose(0, 2, 1))   # hermitian (real eigenvectors): both AR forms agree
         laser = np.linspace(1.4, 2.6, 23)
         broad, nk, vol = 0.08, 36, 312.7
 
@@ -58,6 +59,18 @@ class TestExcPhRaman(unittest.TestCase):
         self.assertTrue(np.all(R[:, 0] == 0))
         rel = np.max(np.abs(R - R_ref)) / np.max(np.abs(R_ref))
         self.assertLess(rel, 1e-10, msg=f'max rel. diff {rel:.2e}')
+
+    def test_phonon_phase_invariance(self):
+        # e_m -> e^{i phi} e_m multiplies G_m by e^{i phi}: R must only pick up a global phase
+        rng = np.random.default_rng(5)
+        nexc = 9
+        exc_eV = np.sort(rng.uniform(1.5, 2.5, nexc))
+        dip = rng.normal(size=(3, nexc)) + 1j * rng.normal(size=(3, nexc))
+        G = rng.normal(size=(1, nexc, nexc)) + 1j * rng.normal(size=(1, nexc, nexc))
+        laser = np.linspace(1.0, 2.8, 31)
+        R0 = exc_ph_raman(np.array([0.03]), exc_eV, dip, G, laser, broadening=0.1)
+        R1 = exc_ph_raman(np.array([0.03]), exc_eV, dip, np.exp(0.7j) * G, laser, broadening=0.1)
+        np.testing.assert_allclose(R1, np.exp(-0.7j) * R0, atol=1e-12 * np.abs(R0).max())
 
     def test_symmetric_mode_isotropic_dipoles(self):
         # Excitons in degenerate triplets (x,y,z); fully symmetric mode couples

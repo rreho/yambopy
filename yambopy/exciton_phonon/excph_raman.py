@@ -19,8 +19,8 @@ def exc_ph_raman(ph_energies, exc_energies, exc_dipoles, exc_ph_mat_el, laser_en
     """
     One-phonon (Stokes) excitonic resonant Raman tensor at q=0.
 
-    Direct port of `compute_Raman_oneph_exc` (PhdScripts, M. Nalabothula).
-    Only the two time orderings with the phonon vertex between the two photon
+    Port of `compute_Raman_oneph_exc` (PhdScripts, M. Nalabothula), with the
+    gauge-invariant anti-resonant vertex (see below). Only the two time orderings with the phonon vertex between the two photon
     vertices are kept (resonant + fully anti-resonant), TDA excitons at Q=0.
 
     In the code notation (Hartree atomic units inside):
@@ -31,7 +31,13 @@ def exc_ph_raman(ph_energies, exc_energies, exc_dipoles, exc_ph_mat_el, laser_en
 
         R[w,m,i,j] = 1/(nkpts*sqrt(cell_vol)) * sqrt(|w-W_m|/w) * sum_{S,S'} [
               conj(D_iS) conj(G_m[S',S]) D_jS' / ((w - E_S + i eta)(w - E_S' - W_m + i eta))
-            + D_iS       G_m[S',S]  conj(D_jS') / ((w + E_S - i eta)(w + E_S' - W_m - i eta)) ]
+            + D_iS  conj(G_m[S,S']) conj(D_jS') / ((w + E_S - i eta)(w + E_S' - W_m - i eta)) ]
+
+    Both terms carry the phonon-emission vertex <B|dV_m^+|A> = conj(<A|dV_m|B>) for the
+    exciton transition A -> B (resonant: S -> S', anti-resonant: S' -> S), so R only
+    changes by a global phase under e_m -> e^{i phi} e_m. The original source has G_m[S',S]
+    in the anti-resonant term, equal to conj(G_m[S,S']) only for hermitian G_m (real
+    Gamma eigenvectors). See tutorial/raman/MoTe2/NOTES_antiresonant.md.
 
     i: incoming, j: scattered polarization. No Bose factor and no w*w_s^3 prefactor
     are included in R (as in the source); see `exc_ph_raman_intensity`.
@@ -91,8 +97,8 @@ def exc_ph_raman(ph_energies, exc_energies, exc_dipoles, exc_ph_mat_el, laser_en
         # resonant:      sum_{S,S'} x_res[p,S] conj(G[S',S]) y_res[p',S']
         tmp = (x_res.reshape(-1, nexc) @ np.conj(GmT)).reshape(x_res.shape)
         term1 = np.einsum('wpb,wqb->wpq', tmp, y_res)
-        # anti-resonant: sum_{S,S'} x_ares[p,S] G[S',S] y_ares[p',S']
-        tmp = (x_ares.reshape(-1, nexc) @ GmT).reshape(x_ares.shape)
+        # anti-resonant: sum_{S,S'} x_ares[p,S] conj(G[S,S']) y_ares[p',S']
+        tmp = (x_ares.reshape(-1, nexc) @ np.conj(G[m]).astype(np.complex128)).reshape(x_ares.shape)
         term2 = np.einsum('wpb,wqb->wpq', tmp, y_ares)
         scale = np.sqrt(np.abs(w - Om[m]) / w) * ram_fac
         R[:, m, :npol, :npol] = (term1 + term2) * scale[:, None, None]
