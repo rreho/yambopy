@@ -120,17 +120,13 @@ class TestDirectZPLWeights(unittest.TestCase):
 
     def test_zpl_depletion_weights_and_cutoff(self):
         E = np.array([2.0, 2.5, 3.0]); D = np.ones((3, 3), complex)
-        kw = dict(emin=1.5, emax=3.5, estep=0.001, broad=0.01)
-        w, I0 = exc_direct_luminescence(1e9, E, D, **kw)
-        _, I1 = exc_direct_luminescence(1e9, E, D, zpl_depletion=[0.1, 0.5, 0.3], **kw)
-        a0 = [np.trapezoid(I0*(np.abs(w-e) < 0.2), w) for e in E]
-        a1 = [np.trapezoid(I1*(np.abs(w-e) < 0.2), w) for e in E]
-        self.assertAlmostEqual(a1[0]/a0[0], 0.9, places=6)   # Z = 0.9
-        self.assertEqual(a1[1], 0.)                          # 1-Z = 0.5 > 0.3: omitted
-        self.assertAlmostEqual(a1[2]/a0[2], 0.7, places=6)   # 1-Z = 0.3 <= 0.3: kept
-        _, I2 = exc_direct_luminescence(1e9, E, D, zpl_depletion=[0.1, 0.5, 0.3], max_depletion=1., **kw)
-        self.assertAlmostEqual(np.trapezoid(I2*(np.abs(w-2.5) < 0.2), w)/a0[1], 0.5, places=6)
-
+        kw = dict(emin=1.5, emax=3.5, estep=0.001, broad=0.01, exc_min_energy=2.0)
+        one = [exc_direct_luminescence(300., E[[l]], D[:, [l]], **kw)[1] for l in range(3)]
+        _, I1 = exc_direct_luminescence(300., E, D, zpl_depletion=[0.1, 0.5, 0.3], **kw)
+        # Z = 0.9 kept; 1-Z = 0.5 > 0.3 omitted; 1-Z = 0.3 <= 0.3 kept with Z = 0.7
+        np.testing.assert_allclose(I1, 0.9*one[0] + 0.7*one[2], rtol=1e-6, atol=1e-12*one[0].max())
+        _, I2 = exc_direct_luminescence(300., E, D, zpl_depletion=[0.1, 0.5, 0.3], max_depletion=1., **kw)
+        np.testing.assert_allclose(I2, 0.9*one[0] + 0.5*one[1] + 0.7*one[2], rtol=1e-6, atol=1e-12*one[0].max())
 
 if __name__ == '__main__':
     unittest.main()
