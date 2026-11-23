@@ -116,5 +116,21 @@ class TestZPLDepletion(unittest.TestCase):
         self.assertAlmostEqual(dZ1, self.g**2*(n + 1)*(x**2 - eta**2)/(x**2 + eta**2)**2, places=12)
 
 
+class TestDirectZPLWeights(unittest.TestCase):
+
+    def test_zpl_depletion_weights_and_cutoff(self):
+        E = np.array([2.0, 2.5, 3.0]); D = np.ones((3, 3), complex)
+        kw = dict(emin=1.5, emax=3.5, estep=0.001, broad=0.01)
+        w, I0 = exc_direct_luminescence(1e9, E, D, **kw)
+        _, I1 = exc_direct_luminescence(1e9, E, D, zpl_depletion=[0.1, 0.5, 0.3], **kw)
+        a0 = [np.trapezoid(I0*(np.abs(w-e) < 0.2), w) for e in E]
+        a1 = [np.trapezoid(I1*(np.abs(w-e) < 0.2), w) for e in E]
+        self.assertAlmostEqual(a1[0]/a0[0], 0.9, places=6)   # Z = 0.9
+        self.assertEqual(a1[1], 0.)                          # 1-Z = 0.5 > 0.3: omitted
+        self.assertAlmostEqual(a1[2]/a0[2], 0.7, places=6)   # 1-Z = 0.3 <= 0.3: kept
+        _, I2 = exc_direct_luminescence(1e9, E, D, zpl_depletion=[0.1, 0.5, 0.3], max_depletion=1., **kw)
+        self.assertAlmostEqual(np.trapezoid(I2*(np.abs(w-2.5) < 0.2), w)/a0[1], 0.5, places=6)
+
+
 if __name__ == '__main__':
     unittest.main()

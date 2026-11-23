@@ -187,7 +187,7 @@ def exc_ph_luminescence(ph_temp,ph_energies,exc_energies,exc_dipoles,exc_ph_mat_
 @citation("M. Zanfrognini et al. Phys. Rev. Lett. 131, 206902 (2023)")
 def exc_direct_luminescence(exc_temp,exc_energies_in,exc_dipoles,exc_min_energy=None,\
                             PL_energy_prefactor='PT',nexc_in='all',R_lambda=None,\
-                            emin=0,emax=10,estep=0.01,broad=0.1):
+                            emin=0,emax=10,estep=0.01,broad=0.1,zpl_depletion=None,max_depletion=0.3):
     """
     Direct (zero-phonon, first-order) luminescence from Q=0 excitons.
 
@@ -197,10 +197,13 @@ def exc_direct_luminescence(exc_temp,exc_energies_in,exc_dipoles,exc_min_energy=
     N_l    : Boltzmann population exp[-(E_l-E_min)/kT_exc]
     P(E_l) : 'PT' -> 1/E_l (same convention as the satellites), 'RS' -> E_l^3
     L      : Lorentzian with FWHM broad (eV), or per-state widths if broad is an array
-    R_l    : optional zero-phonon-line depletion 1-Z_l (exc_ph_zpl_depletion): the
-             direct line carries the quasiparticle weight Z_l = 1-R_l. Passing instead
-             the replica weight (exc_ph_renormalisation, PRM 7, 024006 Eqs. 14-15)
-             enforces the satellite sum rule; the two differ by the n <-> n+1 pairing.
+    R_l    : optional weight removed from the line, factor (1-R_l) (R_lambda, no cutoff).
+             The replica weight (exc_ph_renormalisation, PRM 7, 024006 Eqs. 14-15)
+             enforces the satellite sum rule.
+    zpl_depletion : optional 1-Z_l from exc_ph_zpl_depletion (same T, cutoffs and eta
+             as the satellites). The line of state l is weighted by Z_l = 1-(1-Z_l) if
+             1-Z_l <= max_depletion; states with 1-Z_l > max_depletion (second order
+             not reliable) are omitted from the direct line and printed.
 
     Same units and normalisation as exc_ph_luminescence, so the two spectra can be
     summed. To use with direct-gap materials, compute the satellites with res_min
@@ -240,6 +243,14 @@ def exc_direct_luminescence(exc_temp,exc_energies_in,exc_dipoles,exc_min_energy=
     lor = hwhm_Ha[None,:]/np.pi/((W-E_Ha[None,:])**2+hwhm_Ha[None,:]**2)
     # same dimensional factor as the satellites (ha2ev**2, no 1/Nq: Q=0 only)
     if R_lambda is not None: osc = osc*(1.-np.asarray(R_lambda)[:nexc_in])
+    if zpl_depletion is not None:
+        assert R_lambda is None, "give either R_lambda or zpl_depletion"
+        dZ = np.asarray(zpl_depletion)[:nexc_in]
+        drop = dZ > max_depletion
+        if np.any(drop):
+            print('[direct PL] omitted states (1-Z > %.2f): %s' % (max_depletion, ', '.join(
+                  'S%d E=%.4f eV 1-Z=%.3g' % (l+1, E[l], dZ[l]) for l in np.where(drop)[0])))
+        osc = np.where(drop, 0., osc*(1.-dZ))
     PL_direct = np.einsum('wl,l->w',lor,osc*occ*light_fac)*ha2ev**2
     return light_energies, PL_direct
 
