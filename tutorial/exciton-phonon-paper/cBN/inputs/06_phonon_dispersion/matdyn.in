@@ -1,0 +1,14 @@
+&INPUT
+  asr = "crystal"
+  flfrc = "cbn.fc"
+  flfrq = "cbn.freq"
+  flvec = "cbn.modes"
+  q_in_band_form = .true.
+  q_in_cryst_coord = .false.
+/
+5
+ 0.500 0.500 0.500 87
+ 0.000 0.000 0.000 100
+ 0.000 1.000 0.000 50
+ 0.500 1.000 0.000 35
+ 0.750 0.750 0.000 1

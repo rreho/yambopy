@@ -1,0 +1,5 @@
+&INPUT
+  fildyn = "../02_dfpt/cbn.dyn"
+  zasr = "crystal"
+  flfrc = "cbn.fc"
+/

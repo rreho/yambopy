@@ -1,0 +1,26 @@
+&control
+   calculation = 'scf'
+   prefix = 'cbn'
+   outdir = './'
+   pseudo_dir = '../../pseudo'
+   verbosity = 'high'
+/
+&system
+   ibrav = 2
+   celldm(1) = 6.767372434
+   nat = 2
+   ntyp = 2
+   ecutwfc = 80
+   force_symmorphic = .true.
+/
+&electrons
+   conv_thr = 1e-14
+/
+ATOMIC_SPECIES
+   B   10.81   B_LDA_SR.SG15v1.2.UPF
+   N   14.007  N_LDA_SR.SG15v1.2.UPF
+ATOMIC_POSITIONS (crystal)
+B   0.00 0.00 0.00
+N   0.25 0.25 0.25
+K_POINTS { automatic }
+8 8 8 0 0 0

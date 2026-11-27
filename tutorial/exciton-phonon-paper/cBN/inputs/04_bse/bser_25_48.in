@@ -1,0 +1,51 @@
+optics
+bse
+bsk
+bss
+em1s
+rim_cut
+NLogCPUs=1
+BS_CPU= "4 64 1"
+BS_ROLEs= "eh k t"
+X_and_IO_CPU= "1 1 32 4"
+X_and_IO_ROLEs= "q k c v"
+DIP_CPU= "1 32 4"
+DIP_ROLEs= "k c v"
+RandQpts=1000000
+RandGvec=100 RL
+Chimod= "HARTREE"
+% BndsRnXs
+    1 | 100 |
+%
+NGsBlkXs= 8 Ry
+% LongDrXs
+ 1.000000 | 1.000000 | 1.000000 |
+%
+BSKmod= "SEX"
+BSEmod= "resonant"
+BSSmod= "s"
+BSSNEig= 12
+BSSSlepcMaxIt=10000000
+BSSSlepcMatrix
+WRbsWF
+DBsIOoff= "BS"
+BSENGexx= 30 Ry
+BSENGBlk= 8 Ry
+Lkind= "full"
+% BSEBands
+  2 | 8 |
+%
+% BSEQptR
+  25 | 48 |
+%
+KfnQPdb= "E < ./GW/ndb.QP"
+% BDmRange
+  0.010000 | 0.010000 | eV
+%
+% BEnRange
+  4.000000 | 12.000000 | eV
+%
+BEnSteps= 200
+% BLongDir
+  1.000000 | 1.000000 | 1.000000
+%

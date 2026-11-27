@@ -1,0 +1,8 @@
+nqpool      = 8
+nkpool      = 8
+start_bnd   = 2
+end_bnd     = 8
+save_dir    = ./SAVE
+kernel      = dfpt
+ph_save_dir = ./ph_save
+convention  = yambo

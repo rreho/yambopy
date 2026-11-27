@@ -1,0 +1,21 @@
+{
+ "save": "runs/01_nscf/SAVE",
+ "elph": "runs/05_elph",
+ "bse_out": "runs/04_bse/BSE_all",
+ "bse_in": "runs/04_bse/BSE_bar600",
+ "dipoles": "runs/03_gw/GW",
+ "nmax": 600,
+ "nexc_out": 12,
+ "nlist": [
+  400,
+  500,
+  600
+ ],
+ "T": [
+  10,
+  300
+ ],
+ "broad": 0.005,
+ "estep": 0.0005,
+ "out": "data/cBN_PL_nexc600_conv_16k.npz"
+}

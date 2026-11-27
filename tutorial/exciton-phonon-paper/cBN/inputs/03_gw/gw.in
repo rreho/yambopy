@@ -1,0 +1,36 @@
+dyson
+gw0
+ppa
+HF_and_locXC
+em1d
+rim_cut
+NLogCPUs=1
+X_and_IO_CPU= "1 1 64 4"
+X_and_IO_ROLEs= "q k c v"
+DIP_CPU= "1 64 4"
+DIP_ROLEs= "k c v"
+SE_CPU= "1 64 4"
+SE_ROLEs= "q qp b"
+Chimod= "HARTREE"
+RandQpts=1000000
+RandGvec=100 RL
+% BndsRnXp
+    1 | 100 |
+%
+NGsBlkXp= 10 Ry
+% LongDrXp
+ 1.000000 | 1.000000 | 1.000000 |
+%
+PPAPntXp= 27.21138 eV
+XTermKind= "none"
+% GbndRnge
+    1 | 100 |
+%
+GDamping= 0.100000 eV
+GTermKind= "BG"
+GTermEn= 40.81708 eV
+DysSolver= "n"
+QPExpand
+%QPkrange
+1|145|2|8|
+%

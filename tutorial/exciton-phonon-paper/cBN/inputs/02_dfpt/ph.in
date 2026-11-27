@@ -1,0 +1,14 @@
+phonons on a grid
+ &inputph
+  prefix = 'cbn'
+  outdir = './'
+  tr2_ph = 1e-17
+  fildyn = 'cbn.dyn'
+  fildvscf = 'dvscf'
+  electron_phonon = 'dvscf'
+  trans = .true.
+  ldisp = .true.
+  nq1 = 16, nq2 = 16, nq3 = 16
+  reduce_io = .true.
+  recover = .true.
+ /
