@@ -81,13 +81,14 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
         Electronic representation matrices from spglib symmetry operations.
 
     Note :
-    Currently projective representations are not implemented and left for future.
+    At zone-boundary Q of non-symmorphic space groups (projective representations of the
+    little co-group) the multiplets are reduced with the small irreps of the space group
+    computed with spgrep (labels P1, P2, ..., characters printed).
 
     Raises
     ------
     AssertionError
         1) If no positive-energy exciton eigenvalues are found.
-        2) Projective representations for non-symmorphic symmetires at boundary Q points
 
     Examples
     --------
@@ -221,6 +222,18 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
     trace_all_imag = []
     little_group = []
     #
+    # Zone-boundary Q of a non-symmorphic space group: the representation of the little
+    # group cannot be reduced with point-group tables (projective representation).
+    # In that case we keep the full representation of {R|tau}, including the translation
+    # phase, and reduce it with the small irreps of the space group at Q (spgrep).
+    projective = False
+    if not use_save_symmetries:
+        projective = symm.is_projective(excQpt)
+    if projective:
+        print("Q is a zone-boundary point of a non-symmorphic space group:")
+        print("reducing with small representations of the space group (projective irreps).")
+        small_irr, small_idx, small_chars = symm.small_irreps(excQpt)
+        full_traces = {}
     #
     for isym in range(nsym_spatial):
         symm_mat = Rotation_matrices_symm[isym]
@@ -238,15 +251,23 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
         #assert(np.linalg.norm(Sq_minus_q)<10**-5)
         rot_Akcv = rotate_exc_wf(Ak_r, symm_mat_red, wfdb.kBZ, excQpt,
                                  dmats[isym], False, ktree=wfdb.ktree)
-        rep = tau_dot_k*np.einsum('m...,n...->mn',Ak_l,rot_Akcv,optimize=True)
-        # NM : In case of non-trivial projective irrep, we cannot do this,
-        # so this fails for boundary Q points, for example (0,0,0.5) in bulk hBN.
-        ## Check if this is projective rep and exit as it is yet not implemented.
+        rep_full = np.einsum('m...,n...->mn',Ak_l,rot_Akcv,optimize=True)
+        if projective:
+            # full representation of {R|tau} (Dmats include tau): traces of each multiplet
+            irrep_sum = 0
+            tr = []
+            for idegen in degen_eigs:
+                tr.append(np.trace(rep_full[irrep_sum:irrep_sum + idegen, irrep_sum:irrep_sum + idegen]))
+                irrep_sum += idegen
+            full_traces[isym] = np.array(tr)
+            continue
+        # symmorphic or interior Q: remove exp(-i Q.tau) and use point-group tables
+        rep = tau_dot_k*rep_full
         G0_tmp = np.einsum('ji,j->i', symm_mat, excdb.car_qpoint) - excdb.car_qpoint
         G0_tau_tmp = G0_tmp.dot(frac_trans_symm[isym])
         G0_tau_tmp = G0_tau_tmp-np.rint(G0_tau_tmp)
         if np.abs(G0_tau_tmp) > 1e-3:
-            exit("Error : Projective representations are not implemented")
+            exit("Error : Projective representations require spglib symmetries (use_save_symmetries=False)")
         #print('Symmetry number : ',isym + 1)
         ## print characters
         irrep_sum = 0
@@ -265,6 +286,11 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
         trace_all_imag.append(imag_trace)
 
     little_group = np.array(little_group, dtype=int)
+    #
+    if projective:
+        decompose_projective(full_traces, small_idx, small_chars, uni_eigs, degen_eigs,
+                             symm, little_group, tol=symm_tol)
+        return None
     #
     pg_label, classes, class_dict, char_tab, irreps = get_pg_info(
         Rotation_matrices_symm[little_group - 1])
@@ -293,6 +319,42 @@ def compute_exc_rep(path='.', bse_dir='SAVE', iqpt=1, nstates=-1, degen_tol = 1e
         print('%.4f        %9d  : ' % (uni_eigs[i], degen_eigs[i]), rep_str_tmp)
     print('*' * 40)
 
+
+
+def decompose_projective(full_traces, small_idx, small_chars, uni_eigs, degen_eigs,
+                         symm, little_group, tol=1e-2):
+    """
+    Reduce exciton multiplets at a zone-boundary Q of a non-symmorphic space group
+    into small irreps of the space group, n_a = (1/|G_Q|) sum_g conj(chi_a(g)) chi(g),
+    with the sum over the coset representatives {R|tau} of the little group.
+
+    The irreps are labelled P1, P2, ... (dimension in brackets) in the order returned
+    by spgrep; their characters are printed so that they can be matched with tables.
+    """
+    small_idx = np.asarray(small_idx)
+    assert set(small_idx.tolist()) == set((little_group - 1).tolist()), \
+        "little group of spgrep and of the exciton rotation differ"
+    nlg = len(small_idx)
+    labels = ['P%d(%d)' % (i + 1, int(np.rint(small_chars[i, 0].real))) for i in range(len(small_chars))]
+    print('Little group : %d operations, small representations of space group %s' % (nlg, symm.international_symbol))
+    print('Little group symmetries : ', small_idx + 1)
+    print('Characters of the small irreps (operations in the order above, {R|tau} with spglib tau):')
+    for lab, ch in zip(labels, small_chars):
+        print('%10s : ' % lab, ' '.join('%5.2f%+5.2fj' % (c.real, c.imag) for c in ch))
+    print()
+    print("====== Exciton representations ======")
+    print("Energy (eV),  degeneracy  : representation")
+    print('-' * 40)
+    chi = np.array([full_traces[i] for i in small_idx])          # (nlg, n_multiplets)
+    for im in range(len(uni_eigs)):
+        coef = (small_chars.conj() @ chi[:, im]) / nlg
+        if np.max(np.abs(coef - np.rint(coef.real))) > tol:
+            rep_str = 'Not integer: ' + ', '.join('%s %.3f' % (l, c.real) for l, c in zip(labels, coef))
+        else:
+            rep_str = ' + '.join(('%d%s' % (n, l) if n > 1 else l)
+                                 for l, n in zip(labels, np.rint(coef.real).astype(int)) if n > 0)
+        print('%.4f        %9d  : ' % (uni_eigs[im], degen_eigs[im]), rep_str)
+    print('*' * 40)
 
 
 if __name__ == "__main__":

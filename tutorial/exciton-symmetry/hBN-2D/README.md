@@ -36,8 +36,8 @@ S2 sigma- : <L_z> about the hole = -1.54 hbar
 σ+ goes with j = +1, because e₊ = (x + iy)/√2 transforms with λ = e^{-2πi/3}.
 On the real-space grid this gives Ψ(C3 r) = e^{+2πi/3} Ψ(r) about the hole axis.
 
-Outputs: density/Re/Im/L_z cubes for the lowest sigma+/- doublet and the lowest j=0 pair of the
-lowest dark multiplet (dark multiplets are first rotated to the C3 eigenbasis), plus `tcam_summary.npz`
+Outputs: density/Re/Im/L_z cubes for the lowest sigma+/- doublet and the lowest nondegenerate state of the
+dark spectrum (a dark multiplet is rotated to its C3 eigenbasis only when its j values are distinct), plus `tcam_summary.npz`
 (energies, irreps, j, <C3>, sigma+ fraction, dipole strength, <L_z> of the cube states).
 
 ## Notes

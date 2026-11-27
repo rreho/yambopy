@@ -2,11 +2,13 @@
 # Exciton symmetry analysis of monolayer hBN at Q = Gamma:
 #   irreps -> circular (sigma+/-) basis -> TCAM j (C3) -> hole-centred L_z cubes
 #
-# Usage:  python tcam_lz.py [calc_dir] [bse_dir] [out_dir] [ewin_eV]
+# Usage:  python tcam_lz.py [calc_dir] [bse_dir] [out_dir] [ewin_eV] [degen_tol_eV]
 #   calc_dir : folder containing SAVE/            (default '.')
 #   bse_dir  : folder with ndb.BS_diago_Q1 and ndb.dipoles, Lkind="bar"
 #   out_dir  : where cubes and tcam_summary.npz are written (default '.')
 #   ewin_eV  : analyse all multiplets within ewin of the lowest exciton (default 1.0)
+#   degen_tol_eV : degeneracy tolerance; keep it above the numerical noise floor (splitting of the
+#              lowest bright E' pair, printed below) and below the real splittings (default 1e-3)
 #
 import os, sys, io, re, contextlib
 import numpy as np
@@ -27,7 +29,7 @@ path    = sys.argv[1] if len(sys.argv) > 1 else '.'
 bse_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.join(path, 'bse_bar')
 out_dir = sys.argv[3] if len(sys.argv) > 3 else '.'
 ewin    = float(sys.argv[4]) if len(sys.argv) > 4 else 1.0
-degen_tol = 1e-2    # eV
+degen_tol = float(sys.argv[5]) if len(sys.argv) > 5 else 1e-3   # eV
 supercell = [7, 7, 1]
 cutoff_Ry = 40.0
 os.makedirs(out_dir, exist_ok=True)
@@ -78,9 +80,13 @@ for blk in find_degeneracy_evs(E[:nstates], atol=degen_tol):
                                                  np.round(j, 3).tolist()))
     if s2[blk].max() < 1e-2 * s2.max():
         dark_blocks.append(blk)
-        # dark multiplet: rotate to the C3 (TCAM) eigenbasis |j> = sum_m V[m,j] |m>
+        # dark multiplet: rotate to the C3 (TCAM) eigenbasis |j> = sum_m V[m,j] |m>, but only if
+        # the j's are all distinct (otherwise C3 cannot separate the irreps: never mix them)
         # (bright blocks are already C3 eigenstates after the circular rotation)
-        if np.any(np.abs(np.abs(c3diag[blk]) - 1) > 1e-2):
+        distinct = len(blk) == len(np.unique(np.round(j).astype(int)))
+        if not distinct and np.any(np.abs(np.abs(c3diag[blk]) - 1) > 1e-2):
+            print("    [warning] repeated j in block: not rotated (lower degen_tol)")
+        if distinct and np.any(np.abs(np.abs(c3diag[blk]) - 1) > 1e-2):
             Ak[blk] = np.tensordot(V.T, Ak[blk], axes=(1, 0))
             dip[:, blk] = dip[:, blk] @ V
             c3diag[blk], j_state[blk] = lam, j
@@ -95,9 +101,11 @@ for n in range(nstates):
           % (n + 1, E[n], s2[n] / s2.max(), splus[n], abs(c3diag[n]),
              np.degrees(np.angle(c3diag[n])), j_state[n]))
 
-# 4) Real space (hole 1 bohr above N): lowest sigma+/- doublet and lowest dark pair
+# 4) Real space (hole 1 bohr above N): lowest sigma+/- doublet and lowest nondegenerate dark state
 bright = [n for n in range(nstates) if s2[n] > 1e-2 * s2.max()][:2]
-dark = [n for n in dark_blocks[0] if abs(j_state[n]) < 0.5][:2] if dark_blocks else []
+print("noise floor: splitting of the lowest bright pair = %.3f meV (degen_tol %.3f meV)"
+      % (1e3 * abs(E[bright[1]] - E[bright[0]]), 1e3 * degen_tol))
+dark = [b[0] for b in dark_blocks if len(b) == 1][:1]
 sel = dark + bright
 iN = int(np.where(lat.atomic_numbers == 7)[0][0])
 hole = np.linalg.solve(lat.lat.T, lat.car_atomic_positions[iN]) % 1

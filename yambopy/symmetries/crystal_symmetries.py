@@ -78,6 +78,72 @@ class Crystal_Symmetries:
         self.spacegroup_number = self.dataset.number
     #
     #
+    def little_group(self, kpt_crys, tol=1e-5):
+        """
+        Indices of the operations {R|tau} that leave k invariant, Rk = k + G.
+
+        Parameters
+        ----------
+        kpt_crys : array (3)
+            k point in crystal (reduced) coordinates of the reciprocal lattice.
+
+        Returns
+        -------
+        idx : ndarray(int)
+            0-based indices into self.rotations / self.translations.
+        """
+        # spglib rotations act on direct crystal coordinates; on reduced k they act as (R^-1)^T
+        rot_k = np.linalg.inv(self.dataset.rotations.astype(float)).transpose(0, 2, 1)
+        dk = np.einsum('sij,j->si', rot_k, kpt_crys) - kpt_crys[None, :]
+        return np.where(np.linalg.norm(dk - np.rint(dk), axis=-1) < tol)[0]
+    #
+    def is_projective(self, kpt_crys, tol=1e-3):
+        """
+        True if the small representations at k are projective representations of the
+        little co-group, i.e. exp(-i G.tau) != 1 for some {R|tau} in the little group,
+        with G = R^-1 k - k (zone-boundary k of a non-symmorphic space group).
+        """
+        idx = self.little_group(kpt_crys)
+        rot_k = np.linalg.inv(self.dataset.rotations[idx].astype(float)).transpose(0, 2, 1)
+        G = np.einsum('sij,j->si', rot_k, kpt_crys) - kpt_crys[None, :]
+        # G in reduced reciprocal units, tau in reduced direct units: G.tau is in units of 2 pi
+        Gtau = np.einsum('si,si->s', G, self.dataset.translations[idx])
+        return bool(np.any(np.abs(Gtau - np.rint(Gtau)) > tol))
+    #
+    @citation("K. Shinohara, A. Togo, and I. Tanaka, J. Open Source Softw. 8, 5269 (2023)")
+    def small_irreps(self, kpt_crys):
+        """
+        Irreducible small representations of the space group at k (spgrep).
+
+        These are the irreps of the little group G_k of the space group with
+        D({E|t}) = exp(-i k.t) 1. For symmorphic groups, or k inside the Brillouin zone,
+        they reduce to the point-group irreps times exp(-i k.tau); at zone-boundary k of
+        non-symmorphic groups they are projective representations of the little co-group.
+
+        Parameters
+        ----------
+        kpt_crys : array (3)
+            k point in crystal (reduced) coordinates.
+
+        Returns
+        -------
+        irreps : list of ndarray (n_littlegroup, dim, dim)
+            Representation matrices, ordered as `idx`.
+        idx : ndarray(int)
+            0-based indices of the little-group operations into self.rotations.
+        characters : ndarray (n_irreps, n_littlegroup)
+            Characters of each irrep for the operations in `idx`.
+        """
+        # k points read from Yambo databases are single precision; spgrep compares with
+        # tight tolerances, so snap k to the nearest rational point of a fine grid
+        kpt = np.asarray(kpt_crys, dtype=float)
+        k_snap = np.rint(kpt * 240.0) / 240.0
+        if np.allclose(k_snap, kpt, atol=1e-5): kpt = k_snap
+        irreps, idx = spgrep.get_spacegroup_irreps_from_primitive_symmetry(
+            self.dataset.rotations, self.dataset.translations, kpt)
+        characters = np.array([np.trace(ir, axis1=1, axis2=2) for ir in irreps])
+        return irreps, np.asarray(idx, dtype=int), characters
+    #
     def write_symmetry_info_to_file(self, filename="sym_ops.dat"):
         """Write symmetries in cart units to file."""
         sym_matrices = self.rotations
