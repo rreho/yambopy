@@ -539,17 +539,24 @@ def pg_to_chartab(PG):
         mr5 = 0.5 * (1.0 - np.sqrt(5.0))
         if pg.family == "T":
             if pg.subfamily == "h":
+                # E split into its two complex-conjugate 1D irreps (as for C_n, S_n):
+                # chi(C3) = w, w^2 with w = exp(2 pi i/3); S6 = i C3^2, S6^5 = i C3, sigma_h = i C2,
+                # chi(i R) = +/- chi(R) for g/u.  (The MolSym table had chi_E(C3) = 0.5 and
+                # chi_Tg(i) = 1, chi_Tu(i) = -1, chi_Eg(sigma_h) = 1.)
+                w = np.exp(2j * np.pi / 3); w2 = w * w
                 irreps, classes, chars = (
-                    ["Ag", "Au", "Eg", "Eu", "Tg", "Tu"], [
+                    ["Ag", "Au", "E_1g", "E_2g", "E_1u", "E_2u", "Tg", "Tu"], [
                         "E", "4C_3", "4C_3^2", "3C_2", "i", "S_6", "S_6^5",
                         "3sigma_h"
                     ],
-                    np.array([[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-                              [1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0],
-                              [2.0, cp3, cp3, 2.0, 2.0, cp3, cp3, 1.0],
-                              [2.0, cp3, cp3, 2.0, -2.0, -cp3, -cp3, -1.0],
-                              [3.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, -1.0],
-                              [3.0, 0.0, 0.0, -1.0, -1.0, 0.0, 0.0, 1.0]]))
+                    np.array([[1, 1, 1, 1, 1, 1, 1, 1],
+                              [1, 1, 1, 1, -1, -1, -1, -1],
+                              [1, w, w2, 1, 1, w2, w, 1],
+                              [1, w2, w, 1, 1, w, w2, 1],
+                              [1, w, w2, 1, -1, -w2, -w, -1],
+                              [1, w2, w, 1, -1, -w, -w2, -1],
+                              [3, 0, 0, -1, 3, 0, 0, -1],
+                              [3, 0, 0, -1, -3, 0, 0, 1]], dtype=complex))
             elif pg.subfamily == "d":
                 irreps, classes, chars = (["A1", "A2", "E", "T1", "T2"], [
                     "E", "8C_3", "3C_2", "6S_4", "6sigma_d"
@@ -561,11 +568,15 @@ def pg_to_chartab(PG):
                                                     [3.0, 0.0, -1.0, -1.0,
                                                      1.0]]))
             else:
-                irreps, classes, chars = (["A", "E", "T"],
+                # E split into its two complex-conjugate 1D irreps (as for C_n);
+                # the MolSym table had a single E with chi(C3) = 0.5
+                w = np.exp(2j * np.pi / 3)
+                irreps, classes, chars = (["A", "E_1", "E_2", "T"],
                                           ["E", "4C_3", "4C_3^2", "3C_2"],
-                                          np.array([[1.0, 1.0, 1.0, 1.0],
-                                                    [2.0, cp3, cp3, 2.0],
-                                                    [3.0, 0.0, 0.0, -1.0]]))
+                                          np.array([[1, 1, 1, 1],
+                                                    [1, w, w * w, 1],
+                                                    [1, w * w, w, 1],
+                                                    [3, 0, 0, -1]], dtype=complex))
         elif pg.family == "O":
             if pg.subfamily == "h":
                 irreps, classes, chars = (
@@ -2000,6 +2011,11 @@ def generate_symel_to_class_map(symels, ctab):
                 cn_class_map(class_map, pg.n, 2, 0)  # Cn
                 class_map[pg.n + 2:3 * ns + 2] = ns + 1  # C2'
                 class_map[3 * ns + 2:2 * pg.n + 2] = ns + 2  # C2''
+                if pg.n == 2:
+                    # D2h table orders the classes C2(z), C2(y), C2(x); the symels C2'(1) and
+                    # C2''(1) are the rotations about x and y, so they go to classes 3 and 2
+                    class_map[pg.n + 2] = 3
+                    class_map[pg.n + 3] = 2
                 for i in range(2 * pg.n + 2,
                                3 * pg.n):  # = 2*pg.n+3:3*pg.n+1 # Sn
                     if i > 3 * pg.n - ns:
