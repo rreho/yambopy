@@ -76,6 +76,8 @@ def get_pg_info(symm_mats):
 
 def decompose_rep2irrep(red_rep, char_table, pg_order, class_order,
                         irrep_labels, tol=1e-3):
+    # C1 character table is stored as a 1D array; make it (n_irreps, n_classes)
+    char_table = np.atleast_2d(char_table)
     irrep_coeff = np.einsum(
         'j,j,rj->r', class_order, red_rep, char_table, optimize=True) / pg_order
     assert np.abs(irrep_coeff.imag).max() < tol, print(
